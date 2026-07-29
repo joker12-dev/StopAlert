@@ -1,0 +1,68 @@
+name: stopalert
+description: Toplu tasimada inecegin duragi asla kacirma.
+publish_to: "none"
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+
+dependencies:
+  cloud_firestore: ^6.7.1
+  firebase_analytics: ^12.0.0
+  firebase_auth: ^6.5.6
+  firebase_core: ^4.12.1
+  firebase_crashlytics: ^5.0.0
+  flutter:
+    sdk: flutter
+  flutter_foreground_task: ^10.0.0
+  flutter_local_notifications: ^22.0.1
+  flutter_map: ^8.3.1
+  flutter_riverpod: ^2.6.1
+  geolocator: ^14.0.3
+  google_mobile_ads: ^9.0.0
+  http: ^1.6.0
+  crypto: ^3.0.6
+  latlong2: ^0.10.1
+  live_activities: ^2.5.0
+  path_provider: ^2.1.5
+  permission_handler: ^12.0.3
+  sensors_plus: ^6.1.1
+  shared_preferences: ^2.5.5
+  sqflite: ^2.4.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_launcher_icons: ^0.14.3
+  flutter_lints: ^5.0.0
+  sqflite_common_ffi: ^2.3.4
+
+# Uygulama simgesi: StopAlertLogo'dan uretilen kaynaklar (tool: make_icon.py).
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: assets/icon/app_icon.png
+  adaptive_icon_background: "#F0201A"
+  adaptive_icon_foreground: assets/icon/app_icon_fg.png
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/data/
+    - assets/mascot/
+    - assets/banners/
+    - assets/types/
+    - assets/images/
+
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700

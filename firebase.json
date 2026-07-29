@@ -1,0 +1,40 @@
+{
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "hosting": {
+    "public": "firebase_hosting",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "headers": [
+      {
+        "source": "**/*.sqlite",
+        "headers": [{ "key": "Cache-Control", "value": "public, max-age=86400" }]
+      },
+      {
+        "source": "**/manifest.json",
+        "headers": [{ "key": "Cache-Control", "value": "no-cache, max-age=60" }]
+      }
+    ]
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "stopalert-15716",
+          "appId": "1:781116536900:android:3234b5a713a3ac41386411",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "stopalert-15716",
+          "configurations": {
+            "android": "1:781116536900:android:3234b5a713a3ac41386411",
+            "ios": "1:781116536900:ios:ba8574ca5f3d772a386411",
+            "web": "1:781116536900:web:ed74eea05b98d331386411"
+          }
+        }
+      }
+    }
+  }
+}

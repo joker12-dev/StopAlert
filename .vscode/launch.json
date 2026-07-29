@@ -1,0 +1,30 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "StopAlert Web (LAN 8080)",
+      "request": "launch",
+      "type": "dart",
+      "deviceId": "chrome",
+      "toolArgs": [
+        "--web-port",
+        "8080",
+        "--web-hostname",
+        "0.0.0.0"
+      ]
+    },
+    {
+      "name": "StopAlert Web Server Release (LAN 8080)",
+      "request": "launch",
+      "type": "dart",
+      "deviceId": "web-server",
+      "flutterMode": "release",
+      "toolArgs": [
+        "--web-port",
+        "8080",
+        "--web-hostname",
+        "0.0.0.0"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "781116536900",
+    "project_id": "stopalert-15716",
+    "storage_bucket": "stopalert-15716.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:781116536900:android:3234b5a713a3ac41386411",
+        "android_client_info": {
+          "package_name": "com.originstudios.stopalert"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAYxFNAHOsRR4vqZkTrSmZhjburZjWV890"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:781116536900:android:fb2171c5f6d944cf386411",
+        "android_client_info": {
+          "package_name": "com.stopalert.stopalert"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAYxFNAHOsRR4vqZkTrSmZhjburZjWV890"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
