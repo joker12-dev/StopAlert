@@ -73,6 +73,25 @@ class TransitDb {
     return [for (final r in rows) _stop(r)];
   }
 
+  /// Haritanın GÖRÜNEN alanındaki duraklar (viewport sorgusu). Tüm durakları
+  /// belleğe almak yerine yalnızca ekrandaki parça çekilir; harita hareket
+  /// ettikçe yeniden çağrılır.
+  Future<List<Stop>> stopsInBounds(
+    double minLat,
+    double maxLat,
+    double minLon,
+    double maxLon, {
+    int limit = 200,
+  }) async {
+    final db = _db;
+    if (db == null) return const [];
+    final rows = await db.query('stops',
+        where: 'lat BETWEEN ? AND ? AND lon BETWEEN ? AND ?',
+        whereArgs: [minLat, maxLat, minLon, maxLon],
+        limit: limit);
+    return [for (final r in rows) _stop(r)];
+  }
+
   Future<List<Stop>> searchStops(String query, {int limit = 20}) async {
     final db = _db;
     final q = query.trim();

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -32,6 +34,15 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
   List<LatLng> _walk = const [];
   bool _walkLoading = false;
 
+  /// Görünen alandaki duraklar (viewport sorgusu) + yükleme durumu.
+  List<MapStop> _visible = const [];
+  bool _loadingStops = false;
+  bool _tooFar = false;
+  Timer? _debounce;
+
+  /// Bu zoom'un altında durak yüklenmez (çok geniş alan → anlamsız kalabalık).
+  static const _minZoomForStops = 12.0;
+
   // Sürüklenebilir panel (Alarm Kur ekranındaki gibi).
   static const _minFraction = 0.28;
   static const _maxFraction = 0.75;
@@ -41,6 +52,96 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
   LatLng? get _userLoc {
     final p = ref.read(currentLocationProvider).valueOrNull?.point;
     return p == null ? null : LatLng(p.latitude, p.longitude);
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    super.dispose();
+  }
+
+  /// Harita her oynadığında değil, durduktan kısa süre sonra sorgula.
+  void _scheduleReload() {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 350), _reloadVisible);
+  }
+
+  /// Görünen alandaki durakları yükle (otobüs = SQLite bbox, ray/vapur =
+  /// bellekteki hatlardan filtre). Tüm şehri değil, YALNIZCA ekrandaki parçayı.
+  Future<void> _reloadVisible() async {
+    if (!_mapReady || !mounted) return;
+    final cam = _map.camera;
+    if (cam.zoom < _minZoomForStops) {
+      setState(() {
+        _tooFar = true;
+        _visible = const [];
+      });
+      return;
+    }
+    final b = cam.visibleBounds;
+    setState(() {
+      _tooFar = false;
+      _loadingStops = true;
+    });
+
+    const distance = Distance();
+    final origin = _userLoc ?? cam.center;
+    final out = <MapStop>[];
+
+    // Ray/vapur — bellekteki hatlar, aynı adlı durağı tekilleştir.
+    final lines = ref.read(linesProvider).valueOrNull ?? const <TransitLine>[];
+    final rail = <String, MapStop>{};
+    for (final line in lines) {
+      for (final s in line.stops) {
+        if (s.lat == 0 && s.lon == 0) continue;
+        if (!b.contains(LatLng(s.lat, s.lon))) continue;
+        final d = distance.as(LengthUnit.Meter, origin, LatLng(s.lat, s.lon));
+        final key = s.name.toLowerCase();
+        final cur = rail[key];
+        if (cur == null || d < cur.meters) {
+          rail[key] = MapStop(stop: s, meters: d, line: line);
+        }
+      }
+    }
+    out.addAll(rail.values);
+
+    // Otobüs — yalnızca görünen dikdörtgen (indeksli sorgu).
+    if (TransitDb.instance.isReady) {
+      final busStops = await TransitDb.instance.stopsInBounds(
+        b.south,
+        b.north,
+        b.west,
+        b.east,
+        limit: 250,
+      );
+      final bus = <String, MapStop>{};
+      for (final s in busStops) {
+        final d = distance.as(LengthUnit.Meter, origin, LatLng(s.lat, s.lon));
+        final key = '${s.name.toLowerCase()}|${s.direction.toLowerCase()}';
+        final cur = bus[key];
+        if (cur == null || d < cur.meters) {
+          bus[key] = MapStop(stop: s, meters: d, line: null);
+        }
+      }
+      out.addAll(bus.values);
+    }
+
+    out.sort((a, b) => a.meters.compareTo(b.meters));
+    if (!mounted) return;
+    setState(() {
+      _visible = out.take(200).toList();
+      _loadingStops = false;
+    });
+  }
+
+  /// Kullanıcının konumu kapsam dışındaysa (ör. Kocaeli) en yakın durağa git.
+  Future<void> _goToNearest() async {
+    final nearest = ref.read(nearbyMapProvider).valueOrNull;
+    if (nearest == null || nearest.isEmpty || !_mapReady) return;
+    Haptics.light();
+    final s = nearest.first.stop;
+    _map.move(LatLng(s.lat, s.lon), 15);
+    await _reloadVisible();
   }
 
   Future<void> _selectStop(MapStop m) async {
@@ -112,15 +213,28 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
       ? '${(m / 1000).toStringAsFixed(1).replaceAll('.', ',')} km'
       : '${m.round()} m';
 
+  bool _isSelected(MapStop m) => _selected?.stop.id == m.stop.id;
+
+  /// Çizilecek işaretler: görünen alandakiler + (listede yoksa) seçili durak.
+  List<MapStop> _markerStops(List<MapStop> visible) {
+    final sel = _selected;
+    if (sel == null || visible.any((m) => m.stop.id == sel.stop.id)) {
+      return visible;
+    }
+    return [...visible, sel];
+  }
+
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    final async = ref.watch(nearbyMapProvider);
-    final stops = async.valueOrNull ?? const <MapStop>[];
+    // Panel + markerlar GÖRÜNEN alandan gelir (viewport/chunk yükleme).
+    final stops = _visible;
+    // Yakın duraklar yalnızca "en yakına git" kısayolu için okunur.
+    final nearest = ref.watch(nearbyMapProvider).valueOrNull ?? const <MapStop>[];
     final user = _userLoc;
     final center = user ??
-        (stops.isNotEmpty
-            ? LatLng(stops.first.stop.lat, stops.first.stop.lon)
+        (nearest.isNotEmpty
+            ? LatLng(nearest.first.stop.lat, nearest.first.stop.lon)
             : const LatLng(41.0082, 28.9784));
 
     return Scaffold(
@@ -143,7 +257,10 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
                     onMapReady: () {
                       _mapReady = true;
                       if (user != null) _map.move(user, 15);
+                      _reloadVisible(); // ilk parçayı yükle
                     },
+                    // Harita her kaydırma/zoom sonrası görünen parçayı tazeler.
+                    onPositionChanged: (_, __) => _scheduleReload(),
                   ),
                   children: [
                     TileLayer(
@@ -164,18 +281,19 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
                           borderColor: Colors.white.withValues(alpha: 0.4),
                         ),
                       ]),
-                    // Durak işaretleri
+                    // Durak işaretleri (yalnızca görünen alandakiler). Seçili
+                    // durak listede olmasa da (kaydırıldıysa) işaretli kalır.
                     MarkerLayer(
                       markers: [
-                        for (final m in stops)
+                        for (final m in _markerStops(stops))
                           Marker(
                             point: LatLng(m.stop.lat, m.stop.lon),
-                            width: m == _selected ? 38 : 18,
-                            height: m == _selected ? 38 : 18,
+                            width: _isSelected(m) ? 38 : 18,
+                            height: _isSelected(m) ? 38 : 18,
                             child: GestureDetector(
                               onTap: () => _selectStop(m),
                               child: _StopMarker(
-                                  selected: m == _selected, isBus: m.isBus),
+                                  selected: _isSelected(m), isBus: m.isBus),
                             ),
                           ),
                       ],
@@ -231,7 +349,7 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
                 right: 0,
                 bottom: 0,
                 height: panelH,
-                child: _panel(text, async, stops),
+                child: _panel(text, stops, nearest.isNotEmpty),
               ),
             ],
           );
@@ -240,8 +358,7 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
     );
   }
 
-  Widget _panel(TextTheme text, AsyncValue<List<MapStop>> async,
-      List<MapStop> stops) {
+  Widget _panel(TextTheme text, List<MapStop> stops, bool hasNearest) {
     return Container(
       decoration: BoxDecoration(
         color: VigilantColors.surfaceContainerLow,
@@ -283,13 +400,40 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
           ),
           // Seçili durak eylem çubuğu
           if (_selected case final sel?) _selectedBar(text, sel),
+          // Görünen alandaki durak sayısı + yükleme göstergesi
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 0, 18, 8),
+            child: Row(
+              children: [
+                Icon(Icons.map_outlined,
+                    size: 15, color: VigilantColors.onSurfaceVariant),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    _tooFar
+                        ? 'Durakları görmek için yakınlaş'
+                        : 'Bu alanda ${stops.length} durak',
+                    style: text.labelMedium
+                        ?.copyWith(color: VigilantColors.onSurfaceVariant),
+                  ),
+                ),
+                if (_loadingStops)
+                  const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: VigilantColors.primary),
+                  ),
+              ],
+            ),
+          ),
           Expanded(
-            child: async.isLoading && stops.isEmpty
+            child: _loadingStops && stops.isEmpty
                 ? const Center(
                     child: CircularProgressIndicator(
                         color: VigilantColors.primary))
                 : stops.isEmpty
-                    ? _empty(text)
+                    ? _empty(text, hasNearest)
                     : ListView.separated(
                         padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
                         itemCount: stops.length,
@@ -299,7 +443,7 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
                           return _StopTile(
                             m: m,
                             distanceText: _fmt(m.meters),
-                            selected: m == _selected,
+                            selected: _isSelected(m),
                             onTap: () => _selectStop(m),
                           );
                         },
@@ -367,28 +511,41 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
     );
   }
 
-  /// Boş durum — konum kapalıysa ayrı, konum varken durak yoksa ayrı mesaj
-  /// (haritada konum görünürken "konum kapalı" demek kafa karıştırıyordu).
-  Widget _empty(TextTheme text) {
-    final noLocation = _userLoc == null;
+  /// Boş durum — görünen alanda durak yok. Çok uzaktaysa "yakınlaş", kapsam
+  /// dışındaysa "en yakın durağa git" kısayolu sunar.
+  Widget _empty(TextTheme text, bool hasNearest) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(noLocation ? Icons.location_off_rounded : Icons.explore_off_rounded,
+            Icon(_tooFar ? Icons.zoom_in_map_rounded : Icons.explore_off_rounded,
                 size: 34, color: VigilantColors.onSurfaceVariant),
             const SizedBox(height: 12),
             Text(
-              noLocation
-                  ? 'Konum kapalı — yakındaki durakları görmek için konum izni ver.'
-                  : 'Çevrende durak bulunamadı. Otobüs verisi İstanbul’u '
-                      'kapsar; başka şehirdeysen aramadan hat seçebilirsin.',
+              _tooFar
+                  ? 'Harita çok uzakta — durakları görmek için yakınlaş.'
+                  : 'Bu alanda durak yok. Haritayı kaydırabilir ya da en yakın '
+                      'durağa gidebilirsin.',
               textAlign: TextAlign.center,
               style: text.bodyMedium
                   ?.copyWith(color: VigilantColors.onSurfaceVariant),
             ),
+            if (!_tooFar && hasNearest) ...[
+              const SizedBox(height: 14),
+              FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: VigilantColors.primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: _goToNearest,
+                icon: const Icon(Icons.near_me_rounded, size: 18),
+                label: const Text('En yakın durağa git'),
+              ),
+            ],
           ],
         ),
       ),
