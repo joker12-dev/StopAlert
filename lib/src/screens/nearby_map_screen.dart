@@ -367,17 +367,33 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
     );
   }
 
-  Widget _empty(TextTheme text) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Text(
-            'Konum kapalı ya da çevrede durak bulunamadı.',
-            textAlign: TextAlign.center,
-            style: text.bodyMedium
-                ?.copyWith(color: VigilantColors.onSurfaceVariant),
-          ),
+  /// Boş durum — konum kapalıysa ayrı, konum varken durak yoksa ayrı mesaj
+  /// (haritada konum görünürken "konum kapalı" demek kafa karıştırıyordu).
+  Widget _empty(TextTheme text) {
+    final noLocation = _userLoc == null;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(noLocation ? Icons.location_off_rounded : Icons.explore_off_rounded,
+                size: 34, color: VigilantColors.onSurfaceVariant),
+            const SizedBox(height: 12),
+            Text(
+              noLocation
+                  ? 'Konum kapalı — yakındaki durakları görmek için konum izni ver.'
+                  : 'Çevrende durak bulunamadı. Otobüs verisi İstanbul’u '
+                      'kapsar; başka şehirdeysen aramadan hat seçebilirsin.',
+              textAlign: TextAlign.center,
+              style: text.bodyMedium
+                  ?.copyWith(color: VigilantColors.onSurfaceVariant),
+            ),
+          ],
         ),
-      );
+      ),
+    );
+  }
 }
 
 class _StopTile extends StatelessWidget {

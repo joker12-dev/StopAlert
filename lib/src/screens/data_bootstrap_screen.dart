@@ -96,7 +96,7 @@ class _DataBootstrapScreenState extends State<DataBootstrapScreen> {
                   _PackageCard(
                     icon: Icons.directions_bus_filled_rounded,
                     title: 'İstanbul · Otobüs (İETT)',
-                    subtitle: '~2.900 hat · ~15.000 durak',
+                    subtitle: '785 hat · ~13.000 durak · resmi veri',
                     status: _busDone
                         ? (_phase == BusDataPhase.offline
                             ? _PkgStatus.offline

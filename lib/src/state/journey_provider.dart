@@ -133,20 +133,24 @@ class MapStop {
 
 /// Konum çevresindeki duraklar (ray/vapur + otobüs), en yakından uzağa.
 /// Yakındaki-duraklar HARİTASI ekranı bunu kullanır.
+///
+/// Sabit yarıçap YOK: kullanıcı veri kapsamının dışındaysa (ör. Kocaeli —
+/// İETT yalnızca İstanbul) ekran boş kalmasın diye otobüs araması kademeli
+/// genişler ve ray/vapur her hâlükârda en yakınlardan doldurulur. Ekran
+/// mesafeyi zaten gösterir; uzaklık kararını kullanıcı verir.
 final nearbyMapProvider = FutureProvider<List<MapStop>>((ref) async {
   final loc = (await ref.watch(currentLocationProvider.future)).point;
   if (loc == null) return const [];
   const distance = Distance();
   final out = <MapStop>[];
 
-  // Ray/vapur (bellekteki hatlar) — aynı adlı durağı tekilleştir.
+  // Ray/vapur (bellekteki hatlar) — aynı adlı durağı tekilleştir, sınır yok.
   final lines = await ref.watch(linesProvider.future);
   final bestRail = <String, MapStop>{};
   for (final line in lines) {
     for (final stop in line.stops) {
       if (stop.lat == 0 && stop.lon == 0) continue;
       final d = distance.as(LengthUnit.Meter, loc, LatLng(stop.lat, stop.lon));
-      if (d > 3000) continue;
       final key = stop.name.toLowerCase();
       final cur = bestRail[key];
       if (cur == null || d < cur.meters) {
@@ -154,23 +158,31 @@ final nearbyMapProvider = FutureProvider<List<MapStop>>((ref) async {
       }
     }
   }
-  out.addAll(bestRail.values);
+  final rail = bestRail.values.toList()
+    ..sort((a, b) => a.meters.compareTo(b.meters));
+  out.addAll(rail.take(20));
 
-  // Otobüs (yerel SQLite bounding-box) — ad+yön tekilleştir.
-  final busStops = TransitDb.instance.isReady
-      ? await TransitDb.instance
-          .nearbyStops(loc.latitude, loc.longitude, 1500, limit: 100)
-      : const <Stop>[];
-  final bestBus = <String, MapStop>{};
-  for (final s in busStops) {
-    final d = distance.as(LengthUnit.Meter, loc, LatLng(s.lat, s.lon));
-    final key = '${s.name.toLowerCase()}|${s.direction.toLowerCase()}';
-    final cur = bestBus[key];
-    if (cur == null || d < cur.meters) {
-      bestBus[key] = MapStop(stop: s, meters: d, line: null);
+  // Otobüs (yerel SQLite bbox) — yakında yoksa yarıçapı kademeli genişlet.
+  if (TransitDb.instance.isReady) {
+    var busStops = const <Stop>[];
+    for (final radius in [1500.0, 5000.0, 20000.0, 60000.0]) {
+      busStops = await TransitDb.instance
+          .nearbyStops(loc.latitude, loc.longitude, radius, limit: 120);
+      if (busStops.isNotEmpty) break;
     }
+    final bestBus = <String, MapStop>{};
+    for (final s in busStops) {
+      final d = distance.as(LengthUnit.Meter, loc, LatLng(s.lat, s.lon));
+      final key = '${s.name.toLowerCase()}|${s.direction.toLowerCase()}';
+      final cur = bestBus[key];
+      if (cur == null || d < cur.meters) {
+        bestBus[key] = MapStop(stop: s, meters: d, line: null);
+      }
+    }
+    final bus = bestBus.values.toList()
+      ..sort((a, b) => a.meters.compareTo(b.meters));
+    out.addAll(bus.take(40));
   }
-  out.addAll(bestBus.values);
 
   out.sort((a, b) => a.meters.compareTo(b.meters));
   return out.take(60).toList();
