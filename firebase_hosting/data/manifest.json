@@ -1,9 +1,9 @@
 {
-  "version": "20260729e",
-  "file": "bus_20260729e.sqlite",
-  "bytes": 4976640,
-  "sha256": "8e5b884fa0550119976d9a81a15e2836bd26575db6130bd4b5bc8ca22486e8ca",
-  "lines": 2269,
-  "stops": 15386,
-  "source": "IETT GTFS - data.ibb.gov.tr"
+  "version": "20260731",
+  "file": "bus_20260731.sqlite",
+  "bytes": 6856704,
+  "sha256": "83575604df364605943a40a78d6c511c2df0b1fbaf557ea057b104880484ef48",
+  "lines": 2425,
+  "stops": 13370,
+  "source": "IETT resmi web servisi (api.ibb.gov.tr) + GTFS depar"
 }

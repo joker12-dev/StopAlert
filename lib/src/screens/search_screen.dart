@@ -542,7 +542,7 @@ class _BusStopTile extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                     stop.direction.isNotEmpty
-                        ? 'Otobüs durağı · ${stop.direction} yönü'
+                        ? 'Otobüs durağı · ${stop.direction}'
                         : 'Otobüs durağı',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,

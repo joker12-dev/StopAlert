@@ -3,6 +3,7 @@
 .env
 *.env
 
+
 # Miscellaneous
 *.class
 *.log
@@ -52,5 +53,9 @@ app.*.map.json
 /android/app/build/
 
 # Barındırılan otobüs DB'si (tools/gtfs ile üretilir, Firebase Hosting'de canlı;
-# repoya 5MB'lık ikili gömmeye gerek yok — manifest.json + index.html kalır)
+# repoya MB'larca ikili gömmeye gerek yok — manifest.json + index.html kalır)
 firebase_hosting/data/*.sqlite
+# Üretim ara çıktıları (fetch_official.py / merge_depar.py) ve ham GTFS
+tools/gtfs/*.sqlite
+tools/gtfs/*.csv
+tools/gtfs/stop_times.txt

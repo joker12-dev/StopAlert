@@ -94,7 +94,7 @@ class StopLinesScreen extends ConsumerWidget {
                   if (stop.direction.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 2),
-                      child: Text('${stop.direction} yönü',
+                      child: Text(stop.direction,
                           style: text.labelMedium
                               ?.copyWith(color: VigilantColors.secondary)),
                     ),
