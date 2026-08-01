@@ -33,6 +33,11 @@ HAT_URL = f'{BASE}/UlasimAnaVeri/HatDurakGuzergah.asmx'
 DURAK_URL = f'{BASE}/ibb/ibb.asmx'
 
 # İstanbul sınırları — bariz hatalı koordinatları ele.
+
+# METROBÜS: İETT işletir ama kendi yolunda (metro gibi) çalışır; kullanıcı için
+# ayrı tür olarak işaretlenir — kaynak veride tür ayrımı yok.
+METROBUS_CODES = {'34', '34A', '34AS', '34BZ', '34C', '34G', '34Z', '34K'}
+
 LAT_MIN, LAT_MAX = 40.5, 42.2
 LON_MIN, LON_MAX = 27.5, 30.2
 
@@ -202,7 +207,8 @@ def build(limit=None, out_path=None):
             lid = f'{code}_{yon}'
             first, last = clean[0][1], clean[-1][1]
             lname = f'{first} - {last}'
-            line_rows.append((lid, code, lname, norm(lname), yon, 0, 'bus'))
+            ltype = 'metrobus' if code in METROBUS_CODES else 'bus'
+            line_rows.append((lid, code, lname, norm(lname), yon, 0, ltype))
             # Segment süresi: resmi sefer süresi / segment sayısı (saniye).
             segs = len(clean) - 1
             sec = int(round(minutes * 60 / segs)) if (minutes > 0 and segs) else 90

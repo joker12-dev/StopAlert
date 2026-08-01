@@ -183,6 +183,7 @@ IconData lineTypeIcon(LineType type) => switch (type) {
       LineType.cableCar => Icons.airline_seat_recline_extra_outlined,
       LineType.ferry => Icons.directions_boat_outlined,
       LineType.bus => Icons.directions_bus_filled_outlined,
+      LineType.metrobus => Icons.airport_shuttle_rounded,
     };
 
 /// Hat türü başına vurgu rengi (tasarımdaki Hızlı Başlat çipleri ile uyumlu:
@@ -195,4 +196,5 @@ Color lineTypeColor(LineType type) => switch (type) {
       LineType.cableCar => VigilantColors.onSurfaceVariant,
       LineType.ferry => VigilantColors.primaryContainer,
       LineType.bus => VigilantColors.secondary,
+      LineType.metrobus => VigilantColors.accentBlue,
     };

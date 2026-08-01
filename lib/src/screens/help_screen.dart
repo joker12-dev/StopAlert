@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
+import '../util/insets.dart';
 import 'privacy_screen.dart';
 
 /// Yardım Merkezi — sık sorulanlar + güvenilirlik ipuçları (özellikle "alarm
@@ -64,7 +65,7 @@ class HelpScreen extends StatelessWidget {
         title: const Text('Yardım Merkezi'),
       ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
+        padding: EdgeInsets.fromLTRB(20, 8, 20, AppInsets.pageBottom(context) + 16),
         children: [
           for (final (q, a) in _faq) ...[
             Container(

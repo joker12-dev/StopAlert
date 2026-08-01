@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
+import '../util/insets.dart';
 
 /// Gizlilik & KVKK — hangi verinin toplandığını, nasıl kullanıldığını ve
 /// kullanıcının haklarını (silme dahil) açıklar.
@@ -54,7 +55,7 @@ class PrivacyScreen extends StatelessWidget {
         title: const Text('Gizlilik & KVKK'),
       ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
+        padding: EdgeInsets.fromLTRB(20, 8, 20, AppInsets.pageBottom(context) + 16),
         children: [
           for (final (title, body) in _sections) ...[
             Text(title, style: text.headlineSmall?.copyWith(fontSize: 18)),

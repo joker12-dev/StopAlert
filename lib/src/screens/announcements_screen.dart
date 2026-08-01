@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../services/iett_service.dart';
 import '../theme/app_theme.dart';
+import '../util/insets.dart';
 import '../util/haptics.dart';
 import '../widgets/mascot.dart';
 
@@ -136,7 +137,7 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen> {
                   : items.isEmpty
                       ? _empty(text, all.isEmpty)
                       : ListView.separated(
-                          padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                          padding: EdgeInsets.fromLTRB(20, 0, 20, AppInsets.pageBottom(context)),
                           itemCount: items.length,
                           separatorBuilder: (_, __) =>
                               const SizedBox(height: 10),

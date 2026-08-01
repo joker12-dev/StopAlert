@@ -12,7 +12,11 @@ enum LineType {
   funicular('Füniküler'),
   cableCar('Teleferik'),
   ferry('Vapur'),
-  bus('Otobüs');
+  bus('Otobüs'),
+
+  /// Metrobüs — İETT işletir (veri otobüs kaynağından gelir) ama kendi
+  /// yolunda, metro gibi çalışır; kullanıcı için ayrı bir tür.
+  metrobus('Metrobüs');
 
   const LineType(this.label);
 

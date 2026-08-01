@@ -72,10 +72,15 @@ class _RouteMapState extends State<RouteMap> {
     _loadRoad();
   }
 
-  /// Hattın duraklarını yollara oturtan rotayı arka planda yükle. Başarısızsa
-  /// (ağ yok) _road boş kalır → düz çizgi çizilir.
+  /// Hattın duraklarını KARAYOLUNA oturtan rotayı arka planda yükle.
+  ///
+  /// YALNIZCA lastikli taşıtlar için anlamlıdır: Marmaray/metro/tramvay kendi
+  /// rayında, vapur denizde gider — onları karayolu rotasına oturtmak saçma
+  /// bir güzergâh çiziyordu. Bu türlerde duraklar arası düz çizgi kullanılır.
   Future<void> _loadRoad() async {
     if (!isMobileDevice) return; // testler/masaüstü: ağ isteği yapma
+    final type = widget.line?.type;
+    if (type != LineType.bus) return;
     final pts = _linePoints;
     if (pts.length < 2) return;
     final road = await RoutingService.instance.route(pts);

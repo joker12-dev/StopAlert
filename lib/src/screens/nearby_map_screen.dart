@@ -13,8 +13,10 @@ import '../state/journey_provider.dart';
 import '../state/settings_provider.dart';
 import '../theme/app_theme.dart';
 import '../util/haptics.dart';
+import '../util/insets.dart';
 import '../util/map_style.dart';
 import 'alarm_setup_screen.dart';
+import 'line_detail_screen.dart';
 import 'stop_lines_screen.dart';
 
 /// Yakındaki Duraklar HARİTASI: üstte harita (yakın duraklar işaretli),
@@ -39,6 +41,10 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
   MapStop? _selected;
   List<LatLng> _walk = const [];
   bool _walkLoading = false;
+
+  /// Seçili otobüs durağından geçen hatlar (panelde rozet olarak listelenir).
+  List<TransitLineBrief> _stopLines = const [];
+  bool _linesLoading = false;
 
   /// Arama noktası çevresindeki duraklar + yükleme durumu.
   List<MapStop> _visible = const [];
@@ -270,44 +276,79 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
     await _reloadVisible();
   }
 
+  /// Durağa dokunulunca: haritayı O DURAĞA yakınlaştır ve panelde durak
+  /// bilgilerini + o duraktan geçen hatları göster.
+  ///
+  /// Yürüme rotası ARTIK OTOMATİK ÇİZİLMEZ — kullanıcı istemediği hâlde
+  /// konumundan rota oluşuyordu; artık panelden "Yol tarifi" ile istenir.
   Future<void> _selectStop(MapStop m) async {
     Haptics.light();
     setState(() {
       _selected = m;
       _walk = const [];
-      _walkLoading = true;
+      _walkLoading = false;
+      _stopLines = const [];
+      _linesLoading = m.isBus;
     });
-    final target = LatLng(m.stop.lat, m.stop.lon);
     if (_mapReady) {
-      // Durak + konumu birlikte sığdır (yolu görebilmek için).
-      // ÖNEMLİ: iki nokta çok yakınsa bounds sıfır alanlı olur ve fitCamera
-      // sonsuz zoom hesaplayıp çöker — o durumda düz move kullanılır.
-      final user = _userLoc;
-      const d = Distance();
-      final farEnough =
-          user != null && d.as(LengthUnit.Meter, user, target) > 60;
       try {
-        if (farEnough) {
-          _map.fitCamera(CameraFit.bounds(
-            bounds: LatLngBounds.fromPoints([user, target]),
-            padding: const EdgeInsets.fromLTRB(60, 80, 60, 40),
-          ));
-        } else {
-          _map.move(target, 16);
-        }
+        _map.move(LatLng(m.stop.lat, m.stop.lon), 16.5);
       } catch (_) {
         // Kamera hesabı başarısızsa haritayı bozma; seçim yine de geçerli.
       }
     }
-    // OSRM yürüme rotası (konum → durak). Ağ yoksa boş (düz çizgi çizilmez).
+    // Otobüs durağıysa geçen hatları getir (panelde rozet olarak listelenir).
+    if (m.isBus) {
+      final lines = await TransitDb.instance.linesForStop(m.stop.id);
+      if (!mounted) return;
+      setState(() {
+        _stopLines = lines;
+        _linesLoading = false;
+      });
+    }
+  }
+
+  /// Seçimi temizle: harita işaretleri ve panel eski hâline döner.
+  void _clearSelection() {
+    Haptics.light();
+    setState(() {
+      _selected = null;
+      _walk = const [];
+      _walkLoading = false;
+      _stopLines = const [];
+      _linesLoading = false;
+    });
+  }
+
+  /// Kullanıcının konumundan seçili durağa YÜRÜME rotası (istek üzerine).
+  Future<void> _drawWalk(MapStop m) async {
     final user = _userLoc;
-    List<LatLng> walk = const [];
-    if (user != null) walk = await RoutingService.instance.walk(user, target);
+    if (user == null) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(
+            content: Text('Yol tarifi için konum izni gerekiyor.')));
+      return;
+    }
+    Haptics.light();
+    setState(() => _walkLoading = true);
+    final target = LatLng(m.stop.lat, m.stop.lon);
+    final walk = await RoutingService.instance.walk(user, target);
     if (!mounted) return;
     setState(() {
       _walk = walk;
       _walkLoading = false;
     });
+    // Rota çizildiyse ikisini birlikte sığdır (çok yakınsa zoom bozulmasın).
+    const d = Distance();
+    if (_mapReady && d.as(LengthUnit.Meter, user, target) > 60) {
+      try {
+        _map.fitCamera(CameraFit.bounds(
+          bounds: LatLngBounds.fromPoints([user, target]),
+          padding: EdgeInsets.fromLTRB(60, 90, 60, _panelHeight + 20),
+        ));
+      } catch (_) {}
+    }
   }
 
   void _startAlarm(MapStop m) {
@@ -588,8 +629,11 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
               ),
             ),
           ),
-          // Seçili durak eylem çubuğu
-          if (_selected case final sel?) _selectedBar(text, sel),
+          // Bir durak seçiliyse panel TAMAMEN durak detayına döner; geri
+          // butonuyla listeye dönülür.
+          if (_selected case final sel?) ...[
+            Expanded(child: _stopDetail(text, sel)),
+          ] else ...[
           // Arama noktası özeti + yarıçap seçimi
           Padding(
             padding: const EdgeInsets.fromLTRB(18, 0, 18, 8),
@@ -667,67 +711,192 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
                         },
                       ),
           ),
+          ],
         ],
       ),
     );
   }
 
-  Widget _selectedBar(TextTheme text, MapStop sel) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: VigilantColors.primary.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(16),
-        border:
-            Border.all(color: VigilantColors.primary.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(sel.stop.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: text.bodyMedium
-                        ?.copyWith(fontWeight: FontWeight.w700)),
-                const SizedBox(height: 2),
-                Row(
-                  children: [
-                    const Icon(Icons.directions_walk,
-                        size: 14, color: VigilantColors.accentBlue),
-                    const SizedBox(width: 4),
-                    Text(
-                        _walkLoading
-                            ? 'Yol çiziliyor…'
-                            : (_walk.length >= 2
-                                ? '${_fmt(sel.meters)} · yürüme rotası çizildi'
-                                : _fmt(sel.meters)),
-                        style: text.labelMedium?.copyWith(
-                            color: VigilantColors.onSurfaceVariant)),
-                  ],
+  /// Seçili durağın detay paneli: geri butonu, durak bilgileri, o duraktan
+  /// geçen hatlar ve eylemler (alarm kur / yol tarifi).
+  Widget _stopDetail(TextTheme text, MapStop sel) {
+    final s = sel.stop;
+    return ListView(
+      padding: EdgeInsets.fromLTRB(16, 0, 16, AppInsets.pageBottom(context)),
+      children: [
+        // Başlık: geri + durak adı
+        Row(
+          children: [
+            GestureDetector(
+              onTap: _clearSelection,
+              behavior: HitTestBehavior.opaque,
+              child: Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: VigilantColors.surfaceContainer,
+                  borderRadius: BorderRadius.circular(12),
                 ),
+                child: const Icon(Icons.arrow_back,
+                    size: 20, color: VigilantColors.onSurface),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(s.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: text.bodyLarge
+                          ?.copyWith(fontWeight: FontWeight.w700)),
+                  if (s.contextLabel.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(s.contextLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: text.labelMedium?.copyWith(
+                              color: VigilantColors.onSurfaceVariant)),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        // Mesafe + tür
+        Row(
+          children: [
+            _chip(text, Icons.directions_walk_rounded, _fmt(sel.meters)),
+            const SizedBox(width: 8),
+            _chip(
+                text,
+                sel.isBus
+                    ? Icons.directions_bus_filled_rounded
+                    : lineTypeIcon(sel.line!.type),
+                sel.isBus ? 'Otobüs durağı' : sel.line!.type.label),
+          ],
+        ),
+        const SizedBox(height: 16),
+        // Buradan geçen hatlar
+        if (sel.isBus) ...[
+          Text('Buradan geçen hatlar',
+              style: text.labelLarge?.copyWith(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          if (_linesLoading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: SizedBox(
+                height: 20,
+                width: 20,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: VigilantColors.primary),
+              ),
+            )
+          else if (_stopLines.isEmpty)
+            Text('Hat bilgisi bulunamadı.',
+                style: text.labelMedium
+                    ?.copyWith(color: VigilantColors.onSurfaceVariant))
+          else
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final l in _stopLines)
+                  GestureDetector(
+                    onTap: () {
+                      Haptics.light();
+                      Navigator.of(context).push(MaterialPageRoute(
+                          builder: (_) => LineDetailScreen(code: l.code)));
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: VigilantColors.primary.withValues(alpha: 0.14),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                            color: VigilantColors.primary
+                                .withValues(alpha: 0.35)),
+                      ),
+                      child: Text(l.code,
+                          style: text.labelLarge?.copyWith(
+                              color: VigilantColors.primary,
+                              fontWeight: FontWeight.w800)),
+                    ),
+                  ),
               ],
             ),
-          ),
-          const SizedBox(width: 8),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: VigilantColors.primary,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-            ),
-            onPressed: () => _startAlarm(sel),
-            child: const Text('Alarm Kur'),
-          ),
+          const SizedBox(height: 16),
         ],
-      ),
+        // Eylemler
+        Row(
+          children: [
+            Expanded(
+              child: SizedBox(
+                height: 46,
+                child: FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: VigilantColors.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () => _startAlarm(sel),
+                  icon: const Icon(Icons.alarm_add_rounded, size: 18),
+                  label: const Text('Alarm Kur'),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            SizedBox(
+              height: 46,
+              child: OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: VigilantColors.onSurface,
+                  side: BorderSide(
+                      color: VigilantColors.surfaceVariant
+                          .withValues(alpha: 0.6)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: _walkLoading ? null : () => _drawWalk(sel),
+                icon: _walkLoading
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: VigilantColors.accentBlue))
+                    : const Icon(Icons.directions_walk_rounded,
+                        size: 18, color: VigilantColors.accentBlue),
+                label: Text(_walk.length >= 2 ? 'Yol çizildi' : 'Yol tarifi'),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
+
+  Widget _chip(TextTheme text, IconData icon, String label) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: VigilantColors.surfaceContainer,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: VigilantColors.onSurfaceVariant),
+            const SizedBox(width: 6),
+            Text(label,
+                style: text.labelMedium
+                    ?.copyWith(color: VigilantColors.onSurfaceVariant)),
+          ],
+        ),
+      );
 
   /// Boş durum — görünen alanda durak yok. Çok uzaktaysa "yakınlaş", kapsam
   /// dışındaysa "en yakın durağa git" kısayolu sunar.

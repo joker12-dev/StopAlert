@@ -23,6 +23,11 @@ import sys
 import time
 
 DEFAULT_SEG = 90
+
+# METROBÜS: İETT işletir ama kendi yolunda (metro gibi) çalışır; kullanıcı için
+# ayrı tür olarak işaretlenir — kaynak veride tür ayrımı yok.
+METROBUS_CODES = {'34', '34A', '34AS', '34BZ', '34C', '34G', '34Z', '34K'}
+
 _TR_MAP = {'İ': 'i', 'I': 'i', 'ı': 'i', 'Ö': 'o', 'ö': 'o', 'Ü': 'u',
            'ü': 'u', 'Ş': 's', 'ş': 's', 'Ç': 'c', 'ç': 'c', 'Ğ': 'g',
            'ğ': 'g'}
@@ -176,7 +181,8 @@ def main(gtfs_dir=None):
                 continue                     # normal güzergâh: resmi veride var
             lid = f'{code}_DEPAR_{rid}'
             name = f'{first} - {last}'
-            line_rows.append((lid, code, name, norm(name), d, 1, 'bus'))
+            ltype = 'metrobus' if code in METROBUS_CODES else 'bus'
+            line_rows.append((lid, code, name, norm(name), d, 1, ltype))
             added += 1
             arrs = [a for (_, a) in clean]
             for i, ((scode, sname, lat, lon), _) in enumerate(clean):

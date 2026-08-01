@@ -7,6 +7,7 @@ import '../services/segment_learning_store.dart';
 import '../state/journey_provider.dart';
 import '../state/settings_provider.dart';
 import '../theme/app_theme.dart';
+import '../util/insets.dart';
 import '../util/haptics.dart';
 import 'help_screen.dart';
 import 'privacy_screen.dart';
@@ -254,7 +255,7 @@ class SettingsScreen extends ConsumerWidget {
         title: const Text('Ayarlar'),
       ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
+        padding: EdgeInsets.fromLTRB(20, 8, 20, AppInsets.pageBottom(context) + 16),
         children: [
           // Profil özeti
           Container(
