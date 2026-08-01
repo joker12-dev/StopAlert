@@ -78,6 +78,67 @@ class IettService {
     }
   }
 
+  static const _filoUrl =
+      'https://api.ibb.gov.tr/iett/FiloDurum/SeferGerceklesme.asmx';
+
+  /// Bir hattın CANLI araç konumları (İETT filo servisi).
+  ///
+  /// ⚠️ Bu servis SAATTE 100 İSTEK ile sınırlıdır; doğrudan çağrılmamalı.
+  /// Uygulama [LiveBusService] üzerinden gider: o, Firestore'da paylaşımlı bir
+  /// önbellek tutar ve aynı hat için tüm kullanıcılar adına tek çekim yapar.
+  Future<List<BusVehicle>> vehiclePositions(String lineCode) async {
+    final code = lineCode.trim();
+    if (code.isEmpty) return const [];
+    // NOT: dokümanda parametre adı `HatNo` yazıyor ama WSDL'de `HatKodu`.
+    final body = '<GetHatOtoKonum_json xmlns="http://tempuri.org/">'
+        '<HatKodu>${_xmlEscape(code)}</HatKodu></GetHatOtoKonum_json>';
+    final envelope = '<?xml version="1.0" encoding="utf-8"?>'
+        '<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">'
+        '<soap:Body>$body</soap:Body></soap:Envelope>';
+    try {
+      final res = await http
+          .post(
+            Uri.parse(_filoUrl),
+            headers: const {
+              'Content-Type': 'text/xml; charset=utf-8',
+              'SOAPAction': 'http://tempuri.org/GetHatOtoKonum_json',
+            },
+            body: envelope,
+          )
+          .timeout(const Duration(seconds: 15));
+      if (res.statusCode != 200) return const [];
+      final xml = utf8.decode(res.bodyBytes);
+      final m = RegExp(
+        r'<GetHatOtoKonum_jsonResult>(.*?)</GetHatOtoKonum_jsonResult>',
+        dotAll: true,
+      ).firstMatch(xml);
+      if (m == null) return const [];
+      final list = jsonDecode(_unescape(m.group(1)!)) as List;
+      final out = <BusVehicle>[];
+      for (final e in list) {
+        final v = e as Map<String, dynamic>;
+        final lat = double.tryParse('${v['enlem']}');
+        final lon = double.tryParse('${v['boylam']}');
+        if (lat == null || lon == null) continue;
+        out.add(BusVehicle(
+          plate: '${v['kapino'] ?? ''}'.trim(),
+          lat: lat,
+          lon: lon,
+          headingTo: '${v['yon'] ?? ''}'.trim(),
+          routeCode: '${v['guzergahkodu'] ?? ''}'.trim(),
+          lastSeen: '${v['son_konum_zamani'] ?? ''}'.trim(),
+          nearestStopCode: '${v['yakinDurakKodu'] ?? ''}'.trim(),
+        ));
+      }
+      return out;
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  static String _xmlEscape(String s) =>
+      s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+
   /// SOAP gövdesindeki XML kaçışlarını çöz (JSON metni gömülü gelir).
   static String _unescape(String s) => s
       .replaceAll('&lt;', '<')
@@ -85,6 +146,55 @@ class IettService {
       .replaceAll('&quot;', '"')
       .replaceAll('&apos;', "'")
       .replaceAll('&amp;', '&');
+}
+
+/// Hat üzerinde seyreden tek bir otobüs (canlı konum).
+class BusVehicle {
+  const BusVehicle({
+    required this.plate,
+    required this.lat,
+    required this.lon,
+    required this.headingTo,
+    required this.routeCode,
+    required this.lastSeen,
+    required this.nearestStopCode,
+  });
+
+  /// Araç kapı numarası (ör. "T1019").
+  final String plate;
+  final double lat;
+  final double lon;
+
+  /// Aracın gittiği yön (son durak adı).
+  final String headingTo;
+
+  /// Güzergâh kodu (ör. "MK13_D_D6622") — gidiş/dönüş ayrımı için.
+  final String routeCode;
+  final String lastSeen;
+  final String nearestStopCode;
+
+  Map<String, dynamic> toMap() => {
+        'plate': plate,
+        'lat': lat,
+        'lon': lon,
+        'headingTo': headingTo,
+        'routeCode': routeCode,
+        'lastSeen': lastSeen,
+        'nearestStopCode': nearestStopCode,
+      };
+
+  factory BusVehicle.fromMap(Map<String, dynamic> m) => BusVehicle(
+        plate: m['plate'] as String? ?? '',
+        lat: (m['lat'] as num?)?.toDouble() ?? 0,
+        lon: (m['lon'] as num?)?.toDouble() ?? 0,
+        headingTo: m['headingTo'] as String? ?? '',
+        routeCode: m['routeCode'] as String? ?? '',
+        lastSeen: m['lastSeen'] as String? ?? '',
+        nearestStopCode: m['nearestStopCode'] as String? ?? '',
+      );
+
+  /// Gidiş yönü mü (güzergâh kodundaki `_G_` / `_D_` işaretinden).
+  bool get isGidis => routeCode.contains('_G_');
 }
 
 /// Tek bir İETT duyurusu.

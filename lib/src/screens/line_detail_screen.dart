@@ -10,6 +10,7 @@ import '../util/insets.dart';
 import '../util/haptics.dart';
 import '../widgets/skeleton.dart';
 import 'alarm_setup_screen.dart';
+import 'live_bus_screen.dart';
 
 /// Tek otobüs hattı sayfası (İETT tarzı): "MK13" → NORMAL gidiş/dönüş +
 /// ayrı DEPAR güzergâhları. Kullanıcı güzergâhı/yönü seçer, ineceği durağa
@@ -261,9 +262,25 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
               ),
             ),
             const SizedBox(width: 12),
-            Text('Otobüs Hattı',
-                style: text.bodyMedium
-                    ?.copyWith(color: VigilantColors.onSurfaceVariant)),
+            Expanded(
+              child: Text('Otobüs Hattı',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: text.bodyMedium
+                      ?.copyWith(color: VigilantColors.onSurfaceVariant)),
+            ),
+            // Canlı araç konumları ("otobüsüm nerede").
+            if (_line case final l?)
+              IconButton(
+                tooltip: 'Otobüsler nerede',
+                onPressed: () {
+                  Haptics.light();
+                  Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => LiveBusScreen(line: l)));
+                },
+                icon: const Icon(Icons.travel_explore_rounded,
+                    color: VigilantColors.primary),
+              ),
           ],
         ),
       );

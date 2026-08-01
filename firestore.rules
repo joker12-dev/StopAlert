@@ -26,6 +26,16 @@ service cloud.firestore {
       allow write: if request.auth != null;
     }
 
+    // Canlı otobüs konumu — PAYLAŞIMLI ÖNBELLEK (bkz. LiveBusService).
+    // İETT filo servisi saatte 100 istekle sınırlı; herkes doğrudan çağırırsa
+    // kota dolar. Bu yüzden sonuç burada 30 sn önbelleklenir: herkes okur,
+    // yalnızca önbellek bayatken bir istemci tazeler. Kişisel veri içermez
+    // (araç kapı no + konum — İBB Açık Veri, kamuya açık).
+    match /live_bus/{lineCode} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
     // Parmak izi verisi (Faz 4): şimdilik kapalı.
     match /fingerprints/{doc} {
       allow read, write: if false;
