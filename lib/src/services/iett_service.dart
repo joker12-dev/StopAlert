@@ -78,6 +78,47 @@ class IettService {
     }
   }
 
+  static const _trafficUrl =
+      'https://api.ibb.gov.tr/tkmservices/api/TrafficData/v1/TrafficIndex';
+
+  int? _trafficIndex;
+  DateTime? _trafficAt;
+
+  /// İstanbul ANLIK trafik yoğunluk indeksi (0-100). İBB Ulaşım Yönetim
+  /// Merkezi yayınlar; kayıt/anahtar gerekmez, 5 dk'da bir güncellenir.
+  ///
+  /// NOT: Bu ŞEHİR GENELİ bir yoğunluk yüzdesidir — Google Maps'teki gibi
+  /// yol-bazlı renkli trafik değildir (İBB o veriyi API olarak vermiyor).
+  Future<int?> trafficIndex({bool force = false}) async {
+    final at = _trafficAt;
+    if (!force &&
+        _trafficIndex != null &&
+        at != null &&
+        DateTime.now().difference(at) < const Duration(minutes: 5)) {
+      return _trafficIndex;
+    }
+    try {
+      // Accept ŞART: servis içerik anlaşması yapıyor; başlık yoksa JSON
+      // yerine XML döndürüyor ve ayrıştırma patlıyor.
+      final res = await http.get(
+        Uri.parse(_trafficUrl),
+        headers: const {'Accept': 'application/json'},
+      ).timeout(const Duration(seconds: 10));
+      if (res.statusCode != 200) return _trafficIndex;
+      final body = utf8.decode(res.bodyBytes).replaceFirst('﻿', '').trim();
+      final json = jsonDecode(body);
+      // {"Result":47} biçiminde döner.
+      final v = json is Map<String, dynamic> ? json['Result'] : null;
+      final idx = (v as num?)?.round();
+      if (idx == null) return _trafficIndex;
+      _trafficIndex = idx.clamp(0, 100);
+      _trafficAt = DateTime.now();
+      return _trafficIndex;
+    } catch (_) {
+      return _trafficIndex;
+    }
+  }
+
   static const _filoUrl =
       'https://api.ibb.gov.tr/iett/FiloDurum/SeferGerceklesme.asmx';
 

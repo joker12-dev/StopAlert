@@ -45,6 +45,14 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
   bool _loadingStops = false;
   Timer? _debounce;
 
+  /// Aynı anda ikinci bir yükleme başlamasın (hızlı harita hareketinde
+  /// üst üste binen sorgular durumu bozuyordu).
+  bool _reloading = false;
+
+  /// Alt panelin kapladığı yükseklik — turuncu nokta ekranın değil, GÖRÜNEN
+  /// harita alanının ortasına konumlanır (panel arkasına düşmesin).
+  double _panelHeight = 0;
+
   /// TURUNCU arama noktası: haritanın merkezi. Haritayı gezdirdikçe taşınır ve
   /// çevresindeki [_radius] metre içindeki duraklar listelenir (mavi nokta =
   /// kullanıcının gerçek konumu, o sabittir).
@@ -71,7 +79,35 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
     super.dispose();
   }
 
-  /// Harita her oynadığında değil, durduktan kısa süre sonra sorgula.
+  /// TURUNCU noktanın coğrafi konumu: ekranın tam ortası DEĞİL, alt panelin
+  /// üstünde kalan GÖRÜNEN harita alanının ortası. Böylece nokta panelin
+  /// arkasına gizlenmez ve kullanıcı neyi aradığını görür.
+  LatLng _probeLatLng() {
+    final cam = _map.camera;
+    final size = cam.nonRotatedSize;
+    if (_panelHeight <= 0 || size.height <= 0) return cam.center;
+    // Görünen alanın ortası, ekran merkezinden panelin yarısı kadar yukarıda.
+    final y = (size.height - _panelHeight) / 2;
+    try {
+      return cam.screenOffsetToLatLng(Offset(size.width / 2, y));
+    } catch (_) {
+      return cam.center;
+    }
+  }
+
+  /// Harita OYNARKEN turuncu noktayı anında taşı (veri yükleme bekler).
+  void _updateProbeLive() {
+    if (!_mapReady || !mounted) return;
+    try {
+      final p = _probeLatLng();
+      if (_probe == p) return;
+      setState(() => _probe = p);
+    } catch (_) {
+      // kamera henüz hazır değil
+    }
+  }
+
+  /// Veri yüklemesi yalnızca hareket durunca yapılır (sorgu israfı olmasın).
   void _scheduleReload() {
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 350), _reloadVisible);
@@ -81,8 +117,16 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
   /// durakları yükle. Tüm şehri belleğe almak yerine yalnızca bu daireyi
   /// sorgular (otobüs = indeksli SQLite bbox + daire filtresi).
   Future<void> _reloadVisible() async {
-    if (!_mapReady || !mounted) return;
-    final probe = _map.camera.center;
+    if (!_mapReady || !mounted || _reloading) return;
+    // Kamera yalnızca harita çizildikten sonra okunabilir; hızlı hareket/çıkış
+    // sırasında erişim hata verebiliyor.
+    final LatLng probe;
+    try {
+      probe = _probeLatLng();
+    } catch (_) {
+      return;
+    }
+    _reloading = true;
     setState(() {
       _probe = probe;
       _loadingStops = true;
@@ -135,6 +179,7 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
     }
 
     out.sort((a, b) => a.meters.compareTo(b.meters));
+    _reloading = false;
     if (!mounted) return;
     setState(() {
       _visible = out.take(200).toList();
@@ -235,14 +280,23 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
     final target = LatLng(m.stop.lat, m.stop.lon);
     if (_mapReady) {
       // Durak + konumu birlikte sığdır (yolu görebilmek için).
+      // ÖNEMLİ: iki nokta çok yakınsa bounds sıfır alanlı olur ve fitCamera
+      // sonsuz zoom hesaplayıp çöker — o durumda düz move kullanılır.
       final user = _userLoc;
-      if (user != null) {
-        _map.fitCamera(CameraFit.bounds(
-          bounds: LatLngBounds.fromPoints([user, target]),
-          padding: const EdgeInsets.fromLTRB(60, 80, 60, 40),
-        ));
-      } else {
-        _map.move(target, 16);
+      const d = Distance();
+      final farEnough =
+          user != null && d.as(LengthUnit.Meter, user, target) > 60;
+      try {
+        if (farEnough) {
+          _map.fitCamera(CameraFit.bounds(
+            bounds: LatLngBounds.fromPoints([user, target]),
+            padding: const EdgeInsets.fromLTRB(60, 80, 60, 40),
+          ));
+        } else {
+          _map.move(target, 16);
+        }
+      } catch (_) {
+        // Kamera hesabı başarısızsa haritayı bozma; seçim yine de geçerli.
       }
     }
     // OSRM yürüme rotası (konum → durak). Ağ yoksa boş (düz çizgi çizilmez).
@@ -323,6 +377,7 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
         builder: (context, constraints) {
           _availableHeight = constraints.maxHeight;
           final panelH = _availableHeight * _panelFraction;
+          _panelHeight = panelH; // turuncu noktanın hizası buna göre
           return Stack(
             children: [
               // Harita
@@ -352,8 +407,12 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
                       }
                       _reloadVisible(); // ilk parçayı yükle
                     },
-                    // Harita her kaydırma/zoom sonrası görünen parçayı tazeler.
-                    onPositionChanged: (_, __) => _scheduleReload(),
+                    // Kaydırma SIRASINDA turuncu nokta anında taşınır; ağır
+                    // durak sorgusu ise hareket durunca (debounce) yapılır.
+                    onPositionChanged: (_, __) {
+                      _updateProbeLive();
+                      _scheduleReload();
+                    },
                   ),
                   children: [
                     TileLayer(

@@ -19,6 +19,7 @@ import '../widgets/bottom_nav_shell.dart';
 import '../widgets/glass_panel.dart';
 import '../widgets/mascot.dart';
 import '../widgets/skeleton.dart';
+import '../widgets/traffic_strip.dart';
 import 'alarm_setup_screen.dart';
 import 'announcements_screen.dart';
 import 'live_tracking_screen.dart';
@@ -95,6 +96,9 @@ class HomeScreen extends ConsumerWidget {
             EntranceFade(delayMs: 180, child: _CategoryRow(onTap: goToRoutes)),
             const SizedBox(height: 28),
             EntranceFade(delayMs: 220, child: _PromoHero(onStart: goToRoutes)),
+            const SizedBox(height: 28),
+            // Şehir trafik yoğunlukları (İstanbul canlı, diğerleri yer tutucu).
+            const EntranceFade(delayMs: 260, child: TrafficStrip()),
             // Sık rota önerisi (bizim özellik) — varsa
             ..._buildSuggestionSection(context, ref, text),
             const SizedBox(height: 28),

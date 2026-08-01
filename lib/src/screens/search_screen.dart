@@ -12,6 +12,7 @@ import '../util/haptics.dart';
 import '../widgets/glass_panel.dart';
 import '../widgets/mascot.dart';
 import '../widgets/skeleton.dart';
+import '../widgets/voice_search_sheet.dart';
 import 'alarm_setup_screen.dart';
 import 'line_detail_screen.dart';
 import 'stop_lines_screen.dart';
@@ -41,6 +42,15 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   bool _speechReady = false;
   bool _listening = false;
 
+  /// Dinleme panelinin durumu (o ana kadar duyulan metin + ses seviyesi).
+  String _heard = '';
+  double _level = 0;
+  bool _sheetOpen = false;
+  bool _sheetListening = false;
+
+  /// Paneli yeniden çizen geri çağırım (panel açıkken atanır).
+  void Function({bool? listening}) _setSheet = ({bool? listening}) {};
+
   @override
   void dispose() {
     _controller.dispose();
@@ -48,11 +58,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     super.dispose();
   }
 
+  /// Sesli arama: mikrofon izni YALNIZCA ilk dokunuşta istenir; dinleme
+  /// süresince ne duyulduğunu gösteren bir alt sayfa açılır.
   Future<void> _toggleVoice() async {
     Haptics.light();
     if (_listening) {
-      await _speech.stop();
-      if (mounted) setState(() => _listening = false);
+      await _stopListening();
       return;
     }
     if (!_speechReady) {
@@ -61,11 +72,14 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         onStatus: (s) {
           if (!mounted) return;
           if (s == 'done' || s == 'notListening') {
+            _setSheet(listening: false);
             setState(() => _listening = false);
           }
         },
         onError: (_) {
-          if (mounted) setState(() => _listening = false);
+          if (!mounted) return;
+          _setSheet(listening: false);
+          setState(() => _listening = false);
         },
       );
       if (!_speechReady) {
@@ -75,20 +89,74 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         return;
       }
     }
-    setState(() => _listening = true);
+
+    setState(() {
+      _listening = true;
+      _heard = '';
+      _level = 0;
+    });
+
+    // Dinleme paneli: duyulan metni ve ses seviyesini canlı gösterir.
+    if (!mounted) return;
+    _sheetOpen = true;
+    final sheet = showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      isDismissible: false,
+      enableDrag: false,
+      backgroundColor: VigilantColors.surfaceContainer,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (_) => StatefulBuilder(
+        builder: (context, setSheetState) {
+          _setSheet = ({bool? listening}) {
+            if (listening != null) _sheetListening = listening;
+            setSheetState(() {});
+          };
+          return VoiceSearchSheet(
+            words: _heard,
+            listening: _sheetListening,
+            level: _level,
+            onStop: () => _stopListening(),
+          );
+        },
+      ),
+    );
+    _sheetListening = true;
+    sheet.whenComplete(() => _sheetOpen = false);
+
     await _speech.listen(
       listenOptions: stt.SpeechListenOptions(localeId: 'tr_TR'),
+      onSoundLevelChange: (v) {
+        // -2..10 civarı geliyor; 0..1'e sıkıştır.
+        _level = ((v + 2) / 12).clamp(0.0, 1.0);
+        _setSheet();
+      },
       onResult: (r) {
         if (!mounted) return;
+        _heard = r.recognizedWords;
+        _setSheet();
         setState(() {
-          _query = r.recognizedWords;
-          _controller.text = r.recognizedWords;
-          _controller.selection = TextSelection.collapsed(
-              offset: _controller.text.length);
-          if (r.finalResult) _listening = false;
+          _query = _heard;
+          _controller.text = _heard;
+          _controller.selection =
+              TextSelection.collapsed(offset: _controller.text.length);
         });
+        if (r.finalResult) _stopListening();
       },
     );
+  }
+
+  /// Dinlemeyi bitir ve paneli kapat (tek çıkış noktası).
+  Future<void> _stopListening() async {
+    await _speech.stop();
+    if (!mounted) return;
+    setState(() => _listening = false);
+    if (_sheetOpen) {
+      _sheetOpen = false;
+      Navigator.of(context).pop();
+    }
   }
 
   @override
