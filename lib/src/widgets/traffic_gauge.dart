@@ -50,18 +50,15 @@ class TrafficGauge extends StatelessWidget {
           track: VigilantColors.surfaceContainerHigh,
         ),
         child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                p == null ? '—' : '%$p',
-                style: text.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  color: p == null ? VigilantColors.onSurfaceVariant : color,
-                  height: 1,
-                ),
-              ),
-            ],
+          child: Text(
+            p == null ? '—' : '%$p',
+            style: text.headlineSmall?.copyWith(
+              // Yazı halka boyutuyla orantılı büyüsün.
+              fontSize: size * 0.28,
+              fontWeight: FontWeight.w800,
+              color: p == null ? VigilantColors.onSurfaceVariant : color,
+              height: 1,
+            ),
           ),
         ),
       ),

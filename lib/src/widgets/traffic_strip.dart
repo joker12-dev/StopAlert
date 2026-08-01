@@ -49,8 +49,8 @@ class TrafficStrip extends ConsumerWidget {
         ),
         const SizedBox(height: 12),
         SizedBox(
-          // Yükseklik, en büyük yazı tipi ayarında da taşmayacak kadar geniş.
-          height: 164,
+          // Halka (96) + yazılar; en büyük yazı tipi ayarında da taşmaz.
+          height: 172,
           child: ListView(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(vertical: 2),
@@ -61,7 +61,7 @@ class TrafficStrip extends ConsumerWidget {
                 live: true,
               ),
               for (final c in _soonCities) ...[
-                const SizedBox(width: 12),
+                const SizedBox(width: 6),
                 _CityCard(city: c, percent: null, live: false),
               ],
             ],
@@ -89,27 +89,17 @@ class _CityCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     final p = percent;
+    // Sade: kutu/çerçeve yok — büyük halka, altında şehir ve durum.
     return Opacity(
-      opacity: live ? 1 : 0.5,
-      child: Container(
-        width: 132,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        decoration: BoxDecoration(
-          color: VigilantColors.surfaceContainer,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: (live && p != null
-                    ? TrafficGauge.colorFor(p)
-                    : VigilantColors.surfaceVariant)
-                .withValues(alpha: live && p != null ? 0.45 : 0.3),
-          ),
-        ),
+      opacity: live ? 1 : 0.45,
+      child: SizedBox(
+        width: 116,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            TrafficGauge(percent: live ? p : null),
-            const SizedBox(height: 10),
+            TrafficGauge(percent: live ? p : null, size: 96, stroke: 9),
+            const SizedBox(height: 12),
             Text(city,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -119,6 +109,8 @@ class _CityCard extends StatelessWidget {
               !live
                   ? 'yakında'
                   : (p == null ? 'veri yok' : TrafficGauge.labelFor(p)),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: text.labelSmall?.copyWith(
                 color: live && p != null
                     ? TrafficGauge.colorFor(p)
