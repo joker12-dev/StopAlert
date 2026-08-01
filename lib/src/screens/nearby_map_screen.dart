@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -20,7 +21,11 @@ import 'stop_lines_screen.dart';
 /// dokununca harita o durağa zoomlanır ve konumundan durağa YÜRÜME ROTASI
 /// (OSRM, yollardan) çizilir — kullanıcı nereden gideceğini görür.
 class NearbyMapScreen extends ConsumerStatefulWidget {
-  const NearbyMapScreen({super.key});
+  const NearbyMapScreen({super.key, this.focusStop});
+
+  /// Verilirse harita bu durağa odaklanır ve durak seçili açılır
+  /// (durak sayfasındaki "Haritada göster" akışı).
+  final Stop? focusStop;
 
   @override
   ConsumerState<NearbyMapScreen> createState() => _NearbyMapScreenState();
@@ -34,14 +39,19 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
   List<LatLng> _walk = const [];
   bool _walkLoading = false;
 
-  /// Görünen alandaki duraklar (viewport sorgusu) + yükleme durumu.
+  /// Arama noktası çevresindeki duraklar + yükleme durumu.
   List<MapStop> _visible = const [];
   bool _loadingStops = false;
-  bool _tooFar = false;
   Timer? _debounce;
 
-  /// Bu zoom'un altında durak yüklenmez (çok geniş alan → anlamsız kalabalık).
-  static const _minZoomForStops = 12.0;
+  /// TURUNCU arama noktası: haritanın merkezi. Haritayı gezdirdikçe taşınır ve
+  /// çevresindeki [_radius] metre içindeki duraklar listelenir (mavi nokta =
+  /// kullanıcının gerçek konumu, o sabittir).
+  LatLng? _probe;
+
+  /// Arama yarıçapı (metre) — kullanıcı çipten değiştirir.
+  double _radius = 500;
+  static const _radiusOptions = [250.0, 500.0, 1000.0];
 
   // Sürüklenebilir panel (Alarm Kur ekranındaki gibi).
   static const _minFraction = 0.28;
@@ -66,36 +76,29 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
     _debounce = Timer(const Duration(milliseconds: 350), _reloadVisible);
   }
 
-  /// Görünen alandaki durakları yükle (otobüs = SQLite bbox, ray/vapur =
-  /// bellekteki hatlardan filtre). Tüm şehri değil, YALNIZCA ekrandaki parçayı.
+  /// TURUNCU arama noktasının (harita merkezi) [_radius] metre çevresindeki
+  /// durakları yükle. Tüm şehri belleğe almak yerine yalnızca bu daireyi
+  /// sorgular (otobüs = indeksli SQLite bbox + daire filtresi).
   Future<void> _reloadVisible() async {
     if (!_mapReady || !mounted) return;
-    final cam = _map.camera;
-    if (cam.zoom < _minZoomForStops) {
-      setState(() {
-        _tooFar = true;
-        _visible = const [];
-      });
-      return;
-    }
-    final b = cam.visibleBounds;
+    final probe = _map.camera.center;
     setState(() {
-      _tooFar = false;
+      _probe = probe;
       _loadingStops = true;
     });
 
     const distance = Distance();
-    final origin = _userLoc ?? cam.center;
+    final r = _radius;
     final out = <MapStop>[];
 
-    // Ray/vapur — bellekteki hatlar, aynı adlı durağı tekilleştir.
+    // Ray/vapur — bellekteki hatlar; daire içi, aynı adlı durak tekilleştirilir.
     final lines = ref.read(linesProvider).valueOrNull ?? const <TransitLine>[];
     final rail = <String, MapStop>{};
     for (final line in lines) {
       for (final s in line.stops) {
         if (s.lat == 0 && s.lon == 0) continue;
-        if (!b.contains(LatLng(s.lat, s.lon))) continue;
-        final d = distance.as(LengthUnit.Meter, origin, LatLng(s.lat, s.lon));
+        final d = distance.as(LengthUnit.Meter, probe, LatLng(s.lat, s.lon));
+        if (d > r) continue;
         final key = s.name.toLowerCase();
         final cur = rail[key];
         if (cur == null || d < cur.meters) {
@@ -105,18 +108,22 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
     }
     out.addAll(rail.values);
 
-    // Otobüs — yalnızca görünen dikdörtgen (indeksli sorgu).
+    // Otobüs — daireyi çevreleyen dikdörtgeni sorgula, sonra daireye kırp.
     if (TransitDb.instance.isReady) {
+      final dLat = r / 111000.0;
+      final cosLat = math.cos(probe.latitude * math.pi / 180).abs();
+      final dLon = r / (111000.0 * (cosLat < 0.01 ? 0.01 : cosLat));
       final busStops = await TransitDb.instance.stopsInBounds(
-        b.south,
-        b.north,
-        b.west,
-        b.east,
-        limit: 250,
+        probe.latitude - dLat,
+        probe.latitude + dLat,
+        probe.longitude - dLon,
+        probe.longitude + dLon,
+        limit: 300,
       );
       final bus = <String, MapStop>{};
       for (final s in busStops) {
-        final d = distance.as(LengthUnit.Meter, origin, LatLng(s.lat, s.lon));
+        final d = distance.as(LengthUnit.Meter, probe, LatLng(s.lat, s.lon));
+        if (d > r) continue;
         final key = '${s.name.toLowerCase()}|${s.direction.toLowerCase()}';
         final cur = bus[key];
         if (cur == null || d < cur.meters) {
@@ -132,6 +139,13 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
       _visible = out.take(200).toList();
       _loadingStops = false;
     });
+  }
+
+  void _setRadius(double r) {
+    if (_radius == r) return;
+    Haptics.selection();
+    setState(() => _radius = r);
+    _reloadVisible();
   }
 
   /// Kullanıcının konumu kapsam dışındaysa (ör. Kocaeli) en yakın durağa git.
@@ -256,7 +270,19 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
                     backgroundColor: VigilantColors.surfaceContainerLowest,
                     onMapReady: () {
                       _mapReady = true;
-                      if (user != null) _map.move(user, 15);
+                      final focus = widget.focusStop;
+                      if (focus != null) {
+                        // Durak sayfasından gelindi: o durağa odaklan + seç.
+                        final target = LatLng(focus.lat, focus.lon);
+                        _map.move(target, 16);
+                        final m = user == null
+                            ? 0.0
+                            : const Distance()
+                                .as(LengthUnit.Meter, user, target);
+                        _selectStop(MapStop(stop: focus, meters: m));
+                      } else if (user != null) {
+                        _map.move(user, 15);
+                      }
                       _reloadVisible(); // ilk parçayı yükle
                     },
                     // Harita her kaydırma/zoom sonrası görünen parçayı tazeler.
@@ -270,6 +296,20 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
                       userAgentPackageName: 'com.originstudios.stopalert',
                       retinaMode: RetinaMode.isHighDensity(context),
                     ),
+                    // TURUNCU arama dairesi (haritayı gezdirdikçe taşınır)
+                    if (_probe case final p?)
+                      CircleLayer(circles: [
+                        CircleMarker(
+                          point: p,
+                          radius: _radius,
+                          useRadiusInMeter: true,
+                          color: VigilantColors.tertiaryContainer
+                              .withValues(alpha: 0.12),
+                          borderColor: VigilantColors.tertiaryContainer
+                              .withValues(alpha: 0.8),
+                          borderStrokeWidth: 2,
+                        ),
+                      ]),
                     // Yürüme rotası (yollardan)
                     if (_walk.length >= 2)
                       PolylineLayer(polylines: [
@@ -305,6 +345,16 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
                           width: 26,
                           height: 26,
                           child: const _UserDot(),
+                        ),
+                      ]),
+                    // Turuncu arama noktası (dairenin merkezi) — en üstte
+                    if (_probe case final p?)
+                      MarkerLayer(markers: [
+                        Marker(
+                          point: p,
+                          width: 22,
+                          height: 22,
+                          child: const _ProbeDot(),
                         ),
                       ]),
                   ],
@@ -400,19 +450,25 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
           ),
           // Seçili durak eylem çubuğu
           if (_selected case final sel?) _selectedBar(text, sel),
-          // Görünen alandaki durak sayısı + yükleme göstergesi
+          // Arama noktası özeti + yarıçap seçimi
           Padding(
             padding: const EdgeInsets.fromLTRB(18, 0, 18, 8),
             child: Row(
               children: [
-                Icon(Icons.map_outlined,
-                    size: 15, color: VigilantColors.onSurfaceVariant),
-                const SizedBox(width: 6),
+                Container(
+                  width: 10,
+                  height: 10,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: VigilantColors.tertiaryContainer,
+                  ),
+                ),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    _tooFar
-                        ? 'Durakları görmek için yakınlaş'
-                        : 'Bu alanda ${stops.length} durak',
+                    'Bu noktanın çevresinde ${stops.length} durak',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: text.labelMedium
                         ?.copyWith(color: VigilantColors.onSurfaceVariant),
                   ),
@@ -424,6 +480,28 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
                     child: CircularProgressIndicator(
                         strokeWidth: 2, color: VigilantColors.primary),
                   ),
+              ],
+            ),
+          ),
+          // Yarıçap çipleri
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 0, 18, 10),
+            child: Row(
+              children: [
+                for (final r in _radiusOptions) ...[
+                  _RadiusChip(
+                    label: r >= 1000
+                        ? '${(r / 1000).toStringAsFixed(0)} km'
+                        : '${r.round()} m',
+                    selected: _radius == r,
+                    onTap: () => _setRadius(r),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                const Spacer(),
+                Text('haritayı gezdir',
+                    style: text.labelSmall
+                        ?.copyWith(color: VigilantColors.onSurfaceVariant)),
               ],
             ),
           ),
@@ -520,19 +598,17 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(_tooFar ? Icons.zoom_in_map_rounded : Icons.explore_off_rounded,
+            const Icon(Icons.explore_off_rounded,
                 size: 34, color: VigilantColors.onSurfaceVariant),
             const SizedBox(height: 12),
             Text(
-              _tooFar
-                  ? 'Harita çok uzakta — durakları görmek için yakınlaş.'
-                  : 'Bu alanda durak yok. Haritayı kaydırabilir ya da en yakın '
-                      'durağa gidebilirsin.',
+              'Turuncu noktanın çevresinde durak yok. Haritayı gezdir, '
+              'yarıçapı büyüt ya da en yakın durağa git.',
               textAlign: TextAlign.center,
               style: text.bodyMedium
                   ?.copyWith(color: VigilantColors.onSurfaceVariant),
             ),
-            if (!_tooFar && hasNearest) ...[
+            if (hasNearest) ...[
               const SizedBox(height: 14),
               FilledButton.icon(
                 style: FilledButton.styleFrom(
@@ -676,6 +752,69 @@ class _StopMarker extends StatelessWidget {
         color: VigilantColors.background,
         shape: BoxShape.circle,
         border: Border.all(color: color, width: 2.5),
+      ),
+    );
+  }
+}
+
+/// Arama yarıçapı çipi (250 m / 500 m / 1 km).
+class _RadiusChip extends StatelessWidget {
+  const _RadiusChip(
+      {required this.label, required this.selected, required this.onTap});
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: selected
+              ? VigilantColors.tertiaryContainer.withValues(alpha: 0.18)
+              : VigilantColors.surfaceContainer,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: selected
+                ? VigilantColors.tertiaryContainer
+                : VigilantColors.surfaceVariant.withValues(alpha: 0.4),
+          ),
+        ),
+        child: Text(label,
+            style: text.labelMedium?.copyWith(
+              color: selected
+                  ? VigilantColors.tertiaryContainer
+                  : VigilantColors.onSurfaceVariant,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+            )),
+      ),
+    );
+  }
+}
+
+/// Turuncu arama noktası — haritanın merkezinde durur, harita gezdirildikçe
+/// taşınır; çevresindeki daire içindeki duraklar listelenir.
+class _ProbeDot extends StatelessWidget {
+  const _ProbeDot();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: VigilantColors.tertiaryContainer,
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white, width: 3),
+        boxShadow: [
+          BoxShadow(
+              color: VigilantColors.tertiaryContainer.withValues(alpha: 0.7),
+              blurRadius: 10),
+        ],
       ),
     );
   }

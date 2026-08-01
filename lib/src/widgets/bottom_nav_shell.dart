@@ -69,16 +69,21 @@ class _BottomNavShellState extends ConsumerState<BottomNavShell> {
         borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-          child: Container(
-            height: 80,
-            decoration: BoxDecoration(
-              color: VigilantColors.surfaceContainer.withValues(alpha: 0.8),
-              border: Border(
-                top: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
+          // Yükseklik = içerik + sistem navigasyon çubuğu payı. Sabit 80 px
+          // verilirse 3 tuşlu/jest çubuğu olan cihazlarda sekmelerin altı
+          // çubuğun ARKASINDA kalıyordu (SafeArea içeriği iter ama kutu
+          // büyümez). Bu yüzden inset kadar büyütüp altına boşluk veriyoruz.
+          child: Builder(builder: (context) {
+            final inset = MediaQuery.viewPaddingOf(context).bottom;
+            return Container(
+              height: 80 + inset,
+              padding: EdgeInsets.only(bottom: inset),
+              decoration: BoxDecoration(
+                color: VigilantColors.surfaceContainer.withValues(alpha: 0.8),
+                border: Border(
+                  top: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
+                ),
               ),
-            ),
-            child: SafeArea(
-              top: false,
               child: Row(
                 children: [
                   for (var i = 0; i < _tabs.length; i++)
@@ -92,8 +97,8 @@ class _BottomNavShellState extends ConsumerState<BottomNavShell> {
                     ),
                 ],
               ),
-            ),
-          ),
+            );
+          }),
         ),
       ),
     );

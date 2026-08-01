@@ -137,6 +137,15 @@ class _DataBootstrapScreenState extends State<DataBootstrapScreen> {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 16),
+                  // Lisans şartı: kaynak atfı (İBB Açık Veri / CC BY 4.0).
+                  Text(
+                    'Otobüs ve durak verileri İETT · İBB Açık Veri Portalı’ndan '
+                    'alınmıştır. Harita © OpenStreetMap katkıcıları.',
+                    textAlign: TextAlign.center,
+                    style: text.labelSmall
+                        ?.copyWith(color: VigilantColors.onSurfaceVariant),
+                  ),
                 ],
               ),
             ),

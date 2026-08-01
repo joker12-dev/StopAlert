@@ -19,6 +19,7 @@ import '../widgets/glass_panel.dart';
 import '../widgets/mascot.dart';
 import '../widgets/skeleton.dart';
 import 'alarm_setup_screen.dart';
+import 'announcements_screen.dart';
 import 'live_tracking_screen.dart';
 import 'nearby_map_screen.dart';
 
@@ -68,7 +69,9 @@ class HomeScreen extends ConsumerWidget {
           SafeArea(
             bottom: false,
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
+              // Alt boşluk = alt menü (80) + sistem çubuğu payı + nefes.
+              padding: EdgeInsets.fromLTRB(
+                  20, 8, 20, 108 + MediaQuery.viewPaddingOf(context).bottom),
               children: [
                 EntranceFade(
                     child: _TopBar(nickname: nickname, dateText: _todayText)),
@@ -518,10 +521,9 @@ class _TopBar extends ConsumerWidget {
               IconButton(
                 onPressed: () {
                   Haptics.light();
-                  ScaffoldMessenger.of(context)
-                    ..hideCurrentSnackBar()
-                    ..showSnackBar(const SnackBar(
-                        content: Text('Bildirim merkezi yakında.')));
+                  // Bildirim merkezi = İETT hat duyuruları (sefer iptali vb.).
+                  Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => const AnnouncementsScreen()));
                 },
                 icon: const ShakeIcon(
                   child: Icon(Icons.notifications_none_rounded,

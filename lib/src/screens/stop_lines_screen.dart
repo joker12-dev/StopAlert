@@ -8,6 +8,7 @@ import '../state/journey_provider.dart';
 import '../theme/app_theme.dart';
 import '../util/haptics.dart';
 import 'alarm_setup_screen.dart';
+import 'nearby_map_screen.dart';
 
 /// Bir otobüs durağından geçen hatları TEMİZ, tam ekran olarak sunar. Kullanıcı
 /// bu durağı hedef seçmiştir; burada "hangi hatla gidiyorum" der, o hatla alarm
@@ -103,6 +104,30 @@ class StopLinesScreen extends ConsumerWidget {
                       'yaklaşınca seni uyarırım.',
                       style: text.bodyMedium
                           ?.copyWith(color: VigilantColors.onSurfaceVariant)),
+                  const SizedBox(height: 12),
+                  // Durağı haritada göster (konumdan yürüme rotasıyla).
+                  SizedBox(
+                    height: 44,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: VigilantColors.onSurface,
+                        side: BorderSide(
+                            color: VigilantColors.surfaceVariant
+                                .withValues(alpha: 0.6)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: () {
+                        Haptics.light();
+                        Navigator.of(context).push(MaterialPageRoute(
+                          builder: (_) => NearbyMapScreen(focusStop: stop),
+                        ));
+                      },
+                      icon: const Icon(Icons.map_rounded,
+                          size: 18, color: VigilantColors.primary),
+                      label: const Text('Haritada görüntüle'),
+                    ),
+                  ),
                 ],
               ),
             ),

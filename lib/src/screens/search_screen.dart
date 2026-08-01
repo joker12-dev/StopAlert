@@ -226,7 +226,8 @@ class _SuggestionsView extends ConsumerWidget {
     final nearby = ref.watch(nearbyStopsProvider);
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 120),
+      padding: EdgeInsets.fromLTRB(
+          20, 0, 20, 108 + MediaQuery.viewPaddingOf(context).bottom),
       children: [
         const _SectionLabel(icon: Icons.history, label: 'SON ARAMALAR'),
         const SizedBox(height: 12),
@@ -384,7 +385,8 @@ class _ResultsView extends StatelessWidget {
     }
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 120),
+      padding: EdgeInsets.fromLTRB(
+          20, 0, 20, 108 + MediaQuery.viewPaddingOf(context).bottom),
       children: children,
     );
   }
