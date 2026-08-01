@@ -4,8 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
-import '../services/iett_service.dart';
-import '../util/platform_check.dart';
 import 'journey_provider.dart';
 
 /// Anlık hava durumu (Open-Meteo — ücretsiz, anahtarsız). Konum yoksa null.
@@ -16,13 +14,6 @@ class Weather {
   final IconData icon;
   final String label;
 }
-
-/// İstanbul anlık trafik yoğunluğu (0-100). Ağ yoksa/başarısızsa null —
-/// gösterge o zaman hiç çizilmez. Kaynak: İBB Ulaşım Yönetim Merkezi.
-final trafficProvider = FutureProvider<int?>((ref) async {
-  if (!isMobileDevice) return null; // test/masaüstü: ağ isteği yok
-  return IettService.instance.trafficIndex();
-});
 
 final weatherProvider = FutureProvider<Weather?>((ref) async {
   final loc = (await ref.watch(currentLocationProvider.future)).point;

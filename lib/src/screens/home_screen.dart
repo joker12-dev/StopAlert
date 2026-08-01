@@ -448,13 +448,6 @@ class _TopBar extends ConsumerWidget {
   final String nickname;
   final String dateText;
 
-  /// Trafik yoğunluğu rengi: akıcı (yeşil) → yoğun (kırmızı).
-  static Color _trafficColor(int index) {
-    if (index < 40) return VigilantColors.secondary;
-    if (index < 70) return VigilantColors.tertiaryContainer;
-    return VigilantColors.primary;
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final text = Theme.of(context).textTheme;
@@ -514,24 +507,6 @@ class _TopBar extends ConsumerWidget {
                         style: text.labelMedium?.copyWith(
                             fontSize: 12,
                             color: VigilantColors.onSurfaceVariant)),
-                  ],
-                  // İstanbul anlık trafik yoğunluğu (İBB UYM).
-                  if (ref.watch(trafficProvider).valueOrNull case final t?) ...[
-                    const SizedBox(width: 8),
-                    Container(
-                        width: 3,
-                        height: 3,
-                        decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: VigilantColors.outline
-                                .withValues(alpha: 0.6))),
-                    const SizedBox(width: 8),
-                    Icon(Icons.traffic_rounded,
-                        size: 14, color: _trafficColor(t)),
-                    const SizedBox(width: 3),
-                    Text('%$t',
-                        style: text.labelMedium?.copyWith(
-                            fontSize: 12, color: _trafficColor(t))),
                   ],
                 ],
               ),
