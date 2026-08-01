@@ -8,6 +8,7 @@ import 'package:latlong2/latlong.dart';
 import '../data/models.dart';
 import '../services/iett_service.dart';
 import '../services/live_bus_service.dart';
+import '../services/routing_service.dart';
 import '../theme/app_theme.dart';
 import '../util/haptics.dart';
 import '../util/map_style.dart';
@@ -37,6 +38,12 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen>
   bool _loading = true;
   DateTime? _updatedAt;
 
+  /// Güzergâhın YOLLARA oturmuş hali (OSRM). Boşsa duraklar arası düz çizgi.
+  List<LatLng> _road = const [];
+
+  /// Haritada seçilen araç — alt kartta detayı gösterilir.
+  BusVehicle? _selected;
+
   /// Yalnızca bu hattın yönüne ait araçları göster (gidiş/dönüş karışmasın).
   bool _onlyThisDirection = true;
 
@@ -50,7 +57,17 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _load();
+    _loadRoad();
     _startTimer();
+  }
+
+  /// Güzergâhı gerçek yollara oturt (OSRM). Ağ yoksa düz çizgiye düşülür —
+  /// alarm/canlı takip haritasındaki davranışın aynısı.
+  Future<void> _loadRoad() async {
+    final pts = _routePoints;
+    if (pts.length < 2) return;
+    final road = await RoutingService.instance.route(pts);
+    if (mounted && road.length >= 2) setState(() => _road = road);
   }
 
   @override
@@ -116,6 +133,8 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen>
     final text = Theme.of(context).textTheme;
     final shown = _shown;
     final route = _routePoints;
+    // Yollara oturmuş rota varsa onu çiz; yoksa duraklar arası düz çizgi.
+    final drawRoute = _road.length >= 2 ? _road : route;
 
     return Scaffold(
       body: Stack(
@@ -150,11 +169,11 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen>
                     subdomains: AppMapStyle.labelSubdomains,
                     userAgentPackageName: 'com.originstudios.stopalert',
                   ),
-                // Hat güzergâhı
-                if (route.length >= 2)
+                // Hat güzergâhı — OSRM ile yollara oturmuş hali (varsa).
+                if (drawRoute.length >= 2)
                   PolylineLayer(polylines: [
                     Polyline(
-                      points: route,
+                      points: drawRoute,
                       strokeWidth: 4,
                       color: VigilantColors.primary.withValues(alpha: 0.75),
                       borderStrokeWidth: 1,
@@ -186,9 +205,17 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen>
                   for (final v in shown)
                     Marker(
                       point: LatLng(v.lat, v.lon),
-                      width: 40,
-                      height: 40,
-                      child: _BusMarker(vehicle: v),
+                      width: 44,
+                      height: 44,
+                      child: GestureDetector(
+                        onTap: () {
+                          Haptics.light();
+                          setState(() => _selected =
+                              _selected?.plate == v.plate ? null : v);
+                        },
+                        child: _BusMarker(
+                            vehicle: v, selected: _selected?.plate == v.plate),
+                      ),
                     ),
                 ]),
               ],
@@ -251,6 +278,8 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen>
               count: shown.length,
               loading: _loading,
               updatedAt: _updatedAt,
+              selected: _selected,
+              onClearSelection: () => setState(() => _selected = null),
               onlyThisDirection: _onlyThisDirection,
               onToggleDirection: () {
                 Haptics.selection();
@@ -269,32 +298,36 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen>
 }
 
 class _BusMarker extends StatelessWidget {
-  const _BusMarker({required this.vehicle});
+  const _BusMarker({required this.vehicle, this.selected = false});
 
   final BusVehicle vehicle;
+  final bool selected;
 
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
-      message: '${vehicle.plate}\n${vehicle.headingTo} yönünde',
-      child: Container(
-        decoration: BoxDecoration(
-          color: VigilantColors.primary,
-          shape: BoxShape.circle,
-          border: Border.all(color: Colors.white, width: 2.5),
-          boxShadow: [
-            BoxShadow(
-                color: VigilantColors.primary.withValues(alpha: 0.55),
-                blurRadius: 12),
-            BoxShadow(
-                color: Colors.black.withValues(alpha: 0.4),
-                blurRadius: 5,
-                offset: const Offset(0, 2)),
-          ],
-        ),
-        child: const Icon(Icons.directions_bus_filled_rounded,
-            color: Colors.white, size: 20),
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 160),
+      margin: EdgeInsets.all(selected ? 0 : 4),
+      decoration: BoxDecoration(
+        color: selected ? Colors.white : VigilantColors.primary,
+        shape: BoxShape.circle,
+        border: Border.all(
+            color: selected ? VigilantColors.primary : Colors.white,
+            width: selected ? 3 : 2.5),
+        boxShadow: [
+          BoxShadow(
+              color: VigilantColors.primary
+                  .withValues(alpha: selected ? 0.75 : 0.55),
+              blurRadius: selected ? 18 : 12),
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.4),
+              blurRadius: 5,
+              offset: const Offset(0, 2)),
+        ],
       ),
+      child: Icon(Icons.directions_bus_filled_rounded,
+          color: selected ? VigilantColors.primary : Colors.white,
+          size: selected ? 22 : 20),
     );
   }
 }
@@ -307,6 +340,8 @@ class _InfoCard extends StatelessWidget {
     required this.onlyThisDirection,
     required this.onToggleDirection,
     required this.onRefresh,
+    this.selected,
+    this.onClearSelection,
   });
 
   final int count;
@@ -315,6 +350,28 @@ class _InfoCard extends StatelessWidget {
   final bool onlyThisDirection;
   final VoidCallback onToggleDirection;
   final VoidCallback onRefresh;
+
+  /// Haritadan seçilen araç — varsa güzergâh detayı gösterilir.
+  final BusVehicle? selected;
+  final VoidCallback? onClearSelection;
+
+  /// Seçili araç detayındaki tek satır (ikon + metin).
+  Widget _row(TextTheme text, IconData icon, String label) => Padding(
+        padding: const EdgeInsets.only(top: 3),
+        child: Row(
+          children: [
+            Icon(icon, size: 14, color: VigilantColors.onSurfaceVariant),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: text.labelMedium
+                      ?.copyWith(color: VigilantColors.onSurfaceVariant)),
+            ),
+          ],
+        ),
+      );
 
   String get _ago {
     final t = updatedAt;
@@ -343,6 +400,51 @@ class _InfoCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Seçili araç: hangi güzergâhta, nereye gidiyor, ne zaman görüldü.
+          if (selected case final v?) ...[
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: VigilantColors.primary.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                    color: VigilantColors.primary.withValues(alpha: 0.35)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.directions_bus_filled_rounded,
+                          size: 18, color: VigilantColors.primary),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(v.plate,
+                            style: text.bodyMedium
+                                ?.copyWith(fontWeight: FontWeight.w800)),
+                      ),
+                      GestureDetector(
+                        onTap: onClearSelection,
+                        behavior: HitTestBehavior.opaque,
+                        child: const Icon(Icons.close_rounded,
+                            size: 18, color: VigilantColors.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  _row(text, Icons.trending_flat_rounded,
+                      '${v.headingTo} yönünde'),
+                  if (v.routeCode.isNotEmpty)
+                    _row(text, Icons.alt_route_rounded,
+                        'Güzergâh: ${v.routeCode}'),
+                  if (v.lastSeen.isNotEmpty)
+                    _row(text, Icons.schedule_rounded,
+                        'Son konum: ${v.lastSeen}'),
+                ],
+              ),
+            ),
+          ],
           Row(
             children: [
               Expanded(
