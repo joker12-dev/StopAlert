@@ -203,9 +203,8 @@ class SettingsScreen extends ConsumerWidget {
         title: 'Harita Stili',
         current: s.mapTileStyle.name,
         options: const {
-          'gece': 'Gece (koyu, minimal)',
-          'geceDetay': 'Gece+ (koyu, detaylı)',
           'canli': 'Canlı (renkli, detaylı)',
+          'gece': 'Gece (koyu)',
           'uydu': 'Uydu görüntüsü',
           'sade': 'Sade (açık)',
         },

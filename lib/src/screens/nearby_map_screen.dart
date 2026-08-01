@@ -182,7 +182,6 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
                       switch (s) {
                         MapTileStyle.gece => Icons.dark_mode_rounded,
                         MapTileStyle.canli => Icons.palette_rounded,
-                        MapTileStyle.geceDetay => Icons.nightlight_rounded,
                         MapTileStyle.uydu => Icons.satellite_alt_rounded,
                         MapTileStyle.sade => Icons.light_mode_rounded,
                       },

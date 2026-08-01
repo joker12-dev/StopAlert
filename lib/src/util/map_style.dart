@@ -7,15 +7,11 @@
 library;
 
 enum MapTileStyle {
-  /// Koyu, minimal (varsayılan; marka rengiyle en uyumlu).
-  gece('Gece'),
-
-  /// Renkli, POI ve arazi detaylı — "sade duruyor" diyene canlı alternatif.
+  /// Renkli, POI ve arazi detaylı — VARSAYILAN (harita sade durmasın).
   canli('Canlı'),
 
-  /// KOYU ama detaylı (Esri Dark Gray + yol/yer adları). Voyager'ın koyu
-  /// sürümü yayınlanmadığı için koyu+detay isteyenlerin karşılığı budur.
-  geceDetay('Gece+'),
+  /// Koyu, minimal (marka rengiyle en uyumlu).
+  gece('Gece'),
 
   /// Uydu görüntüsü (Esri World Imagery).
   uydu('Uydu'),
@@ -28,13 +24,13 @@ enum MapTileStyle {
 
   static MapTileStyle fromName(String name) => MapTileStyle.values.firstWhere(
         (s) => s.name == name,
-        orElse: () => MapTileStyle.gece,
+        orElse: () => MapTileStyle.canli,
       );
 }
 
 abstract final class AppMapStyle {
   /// Aktif stil (Ayarlar'dan değişir).
-  static MapTileStyle style = MapTileStyle.gece;
+  static MapTileStyle style = MapTileStyle.canli;
 
   /// Eski API — true = açık tema. Ayarlardaki 'light'/'dark' ile uyum için.
   static bool get light => style == MapTileStyle.sade;
@@ -50,14 +46,11 @@ abstract final class AppMapStyle {
   static const _esri = 'https://server.arcgisonline.com/ArcGIS/rest/services';
 
   /// Esri tabanlı stiller (raster, {s} ve @2x desteklemez).
-  static bool get _esriStyle =>
-      style == MapTileStyle.uydu || style == MapTileStyle.geceDetay;
+  static bool get _esriStyle => style == MapTileStyle.uydu;
 
   /// Aktif stilin döşeme URL şablonu.
   static String get urlTemplate => switch (style) {
         MapTileStyle.uydu => '$_esri/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-        MapTileStyle.geceDetay =>
-          '$_esri/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
         _ => 'https://{s}.basemaps.cartocdn.com/$tileVariant/{z}/{x}/{y}{r}.png',
       };
 
@@ -71,19 +64,11 @@ abstract final class AppMapStyle {
   /// Döşeme sağlayıcı atfı (lisans şartı).
   static String get attribution => _esriStyle ? '© Esri' : '© OSM · CARTO';
 
-  /// Zemin döşemesinde yol/yer adları yoksa üstüne ince etiket katmanı
-  /// bindirilir (uydu ve Gece+ için).
-  static bool get needsLabelOverlay => _esriStyle;
+  /// Uydu zemininde yol/yer adı yok — üstüne ince etiket katmanı bindirilir.
+  static bool get needsLabelOverlay => style == MapTileStyle.uydu;
 
-  /// Etiket katmanı — zeminle aynı sağlayıcıdan (hizalama ve stil tutarlılığı).
-  static String get labelOverlayUrl => switch (style) {
-        MapTileStyle.geceDetay =>
-          '$_esri/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
-        _ => 'https://{s}.basemaps.cartocdn.com/dark_only_labels/'
-            '{z}/{x}/{y}{r}.png',
-      };
+  static const labelOverlayUrl =
+      'https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png';
 
-  /// Etiket katmanının {s} kullanıp kullanmadığı (Esri kullanmaz).
-  static List<String> get labelSubdomains =>
-      style == MapTileStyle.geceDetay ? const [] : const ['a', 'b', 'c', 'd'];
+  static List<String> get labelSubdomains => const ['a', 'b', 'c', 'd'];
 }

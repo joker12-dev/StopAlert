@@ -20,7 +20,7 @@ class AppSettings {
     this.defaultDistanceIndex = 1, // 500m
     this.defaultStopsIndex = 1, // 2 durak
     this.contributeToCloud = false, // KVKK: anonim kalabalık öğrenmeye katkı
-    this.mapStyle = 'gece', // MapTileStyle adi
+    this.mapStyle = 'canli', // MapTileStyle adi (varsayilan: Canli)
   });
 
   /// Kullanıcının takma adı (Profil + ana sayfa selamlaması).
@@ -118,7 +118,7 @@ class AppSettings {
         defaultDistanceIndex: (m['defaultDistanceIndex'] as num?)?.toInt() ?? 1,
         defaultStopsIndex: (m['defaultStopsIndex'] as num?)?.toInt() ?? 1,
         contributeToCloud: m['contributeToCloud'] as bool? ?? false,
-        mapStyle: m['mapStyle'] as String? ?? 'gece',
+        mapStyle: m['mapStyle'] as String? ?? 'canli',
       );
 }
 
