@@ -27,7 +27,8 @@ class LiveBusScreen extends ConsumerStatefulWidget {
   ConsumerState<LiveBusScreen> createState() => _LiveBusScreenState();
 }
 
-class _LiveBusScreenState extends ConsumerState<LiveBusScreen> {
+class _LiveBusScreenState extends ConsumerState<LiveBusScreen>
+    with WidgetsBindingObserver {
   final _map = MapController();
   bool _mapReady = false;
   Timer? _timer;
@@ -47,14 +48,34 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _load();
-    _timer = Timer.periodic(const Duration(seconds: 30), (_) => _load());
+    _startTimer();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
     super.dispose();
+  }
+
+  /// Yenileme aralığı servisin kota bütçesinden gelir (bkz. LiveBusService).
+  void _startTimer() {
+    _timer?.cancel();
+    _timer = Timer.periodic(
+        LiveBusService.refreshInterval, (_) => _load());
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Uygulama arka plandayken yenileme YAPMA: hem kota hem pil israfı olur.
+    if (state == AppLifecycleState.resumed) {
+      _load();
+      _startTimer();
+    } else {
+      _timer?.cancel();
+    }
   }
 
   Future<void> _load() async {
@@ -352,7 +373,8 @@ class _InfoCard extends StatelessWidget {
           Text(
             updatedAt == null
                 ? 'İETT canlı filo verisi'
-                : 'Güncellendi: $_ago · otomatik yenilenir',
+                : 'Güncellendi: $_ago · '
+                    '${LiveBusService.refreshInterval.inSeconds} sn\'de bir',
             style: text.labelMedium
                 ?.copyWith(color: VigilantColors.onSurfaceVariant),
           ),

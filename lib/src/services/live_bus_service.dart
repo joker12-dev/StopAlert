@@ -21,10 +21,15 @@ class LiveBusService {
   static final LiveBusService instance = LiveBusService._();
 
   /// Önbellek bu süre boyunca taze sayılır (İETT'ye yeni istek yok).
-  static const _freshFor = Duration(seconds: 30);
+  ///
+  /// 45 sn SEÇİLDİ ÇÜNKÜ: servis saatte 100 istek kabul ediyor. 30 sn'de bir
+  /// tazeleme 120 istek/saat yapar ve TEK kullanıcı bile ekranı bir saat açık
+  /// tutarsa kotayı aşardı. 45 sn ⇒ en fazla 80 istek/saat (güvenli marj).
+  static const refreshInterval = Duration(seconds: 45);
+  static const _freshFor = refreshInterval;
 
   /// Firestore bile okunmadan aynı istemciye anında dönülen süre.
-  static const _localFor = Duration(seconds: 10);
+  static const _localFor = Duration(seconds: 15);
 
   final Map<String, _Local> _local = {};
 
