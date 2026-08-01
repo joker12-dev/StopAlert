@@ -78,6 +78,45 @@ class IettService {
     }
   }
 
+  static const _trafficUrl =
+      'https://api.ibb.gov.tr/tkmservices/api/TrafficData/v1/'
+      'TrafficIndexHistory/1/5M';
+
+  int? _trafficIndex;
+  DateTime? _trafficAt;
+
+  /// İstanbul ANLIK trafik yoğunluk indeksi (0-100). İBB Ulaşım Yönetim
+  /// Merkezi 5 dakikada bir yayınlar; kayıt/anahtar gerekmez.
+  ///
+  /// NOT: Bu ŞEHİR GENELİ bir indekstir — Google Maps'teki gibi yol-bazlı
+  /// renkli trafik değildir (İBB o veriyi API olarak yayınlamıyor).
+  Future<int?> trafficIndex({bool force = false}) async {
+    final at = _trafficAt;
+    if (!force &&
+        _trafficIndex != null &&
+        at != null &&
+        DateTime.now().difference(at) < const Duration(minutes: 5)) {
+      return _trafficIndex;
+    }
+    try {
+      final res = await http
+          .get(Uri.parse(_trafficUrl))
+          .timeout(const Duration(seconds: 10));
+      if (res.statusCode != 200) return _trafficIndex;
+      final list = jsonDecode(utf8.decode(res.bodyBytes)) as List;
+      if (list.isEmpty) return _trafficIndex;
+      // İlk kayıt en güncel olan.
+      final v = (list.first as Map<String, dynamic>)['TrafficIndex'];
+      final idx = (v as num?)?.round();
+      if (idx == null) return _trafficIndex;
+      _trafficIndex = idx.clamp(0, 100);
+      _trafficAt = DateTime.now();
+      return _trafficIndex;
+    } catch (_) {
+      return _trafficIndex;
+    }
+  }
+
   /// SOAP gövdesindeki XML kaçışlarını çöz (JSON metni gömülü gelir).
   static String _unescape(String s) => s
       .replaceAll('&lt;', '<')
