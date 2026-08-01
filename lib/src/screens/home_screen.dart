@@ -886,6 +886,7 @@ class _CategoryRow extends StatelessWidget {
 
   static const _cats = [
     (label: 'Otobüs', icon: Icons.directions_bus_filled_rounded),
+    (label: 'Metrobüs', icon: Icons.airport_shuttle_rounded),
     (label: 'Marmaray', icon: Icons.directions_railway_filled_rounded),
     (label: 'Metro', icon: Icons.subway_rounded),
     (label: 'Vapur', icon: Icons.directions_boat_rounded),

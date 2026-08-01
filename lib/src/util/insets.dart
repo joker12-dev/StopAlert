@@ -10,10 +10,14 @@ abstract final class AppInsets {
   static const navBarHeight = 80.0;
 
   /// Sekme ekranlarında (Ana Sayfa, Rotalar, Favoriler, Profil) liste altı.
+  ///
+  /// Menü `extendBody: true` ile içeriğin ÜSTÜNDE durduğu için son öğe menünün
+  /// altında kalıyordu. 12 px pay yetmiyordu (kart gölgesi/kenarı hâlâ menüye
+  /// değiyordu); 32 px nefes bırakılır.
   static double listBottom(BuildContext context) =>
-      navBarHeight + 12 + MediaQuery.viewPaddingOf(context).bottom;
+      navBarHeight + 32 + MediaQuery.viewPaddingOf(context).bottom;
 
   /// Alt menüsü OLMAYAN tam sayfa ekranlarda (push edilmiş) liste altı.
   static double pageBottom(BuildContext context) =>
-      24 + MediaQuery.viewPaddingOf(context).bottom;
+      28 + MediaQuery.viewPaddingOf(context).bottom;
 }

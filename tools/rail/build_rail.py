@@ -21,12 +21,26 @@ import os
 import re
 import sys
 import unicodedata
+import urllib.parse
 import urllib.request
 
 API = ('https://api.ibb.gov.tr/MetroIstanbul/api/MetroMobile/V2/GetStations')
 GEOJSON = ('https://data.ibb.gov.tr/dataset/04ec9805-2483-46c7-914f-30c50857a846'
            '/resource/3dc8203f-3613-48a8-85e9-24fffb7821ad/download/'
            'rayli_sistem_istasyon_poi_verisi.geojson')
+
+# İBB GeoJSON'u yeni açılan istasyonları (M3/M5/M9 uzatmaları) içermiyor.
+# Üçüncü kaynak olarak OpenStreetMap kullanılır — güncel ve ücretsiz.
+OVERPASS = 'https://overpass-api.de/api/interpreter'
+OVERPASS_QUERY = (
+    '[out:json][timeout:120];('
+    'node["railway"="station"]["station"="subway"](40.75,28.4,41.45,29.6);'
+    'node["railway"="station"]["subway"="yes"](40.75,28.4,41.45,29.6);'
+    'node["railway"="station"]["station"="light_rail"](40.75,28.4,41.45,29.6);'
+    'node["railway"="tram_stop"](40.75,28.4,41.45,29.6);'
+    'node["public_transport"="station"]["subway"="yes"](40.75,28.4,41.45,29.6);'
+    ');out body;'
+)
 
 # Hangi hat kodu hangi StopAlert türüne karşılık gelir.
 TYPE_BY_PREFIX = [
@@ -110,6 +124,30 @@ def main(dry_run=False):
         coords_any.setdefault(key, (lat, lon))
     print(f'GeoJSON: {len(coords)} kodlu + {len(coords_any)} adlı istasyon')
 
+    # --- 2b) OpenStreetMap (yeni açılan istasyonlar için tamamlayıcı) ---
+    osm = {}
+    try:
+        # Overpass Content-Type ve User-Agent olmadan 406 döndürüyor.
+        req = urllib.request.Request(
+            OVERPASS,
+            data=urllib.parse.urlencode({'data': OVERPASS_QUERY}).encode('utf-8'),
+            method='POST',
+            headers={
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'User-Agent': 'StopAlert/1.0 (transit app; data build script)',
+            })
+        with urllib.request.urlopen(req, timeout=180) as r:
+            els = json.loads(r.read().decode('utf-8')).get('elements', [])
+        for e in els:
+            name = (e.get('tags') or {}).get('name')
+            lat, lon = e.get('lat'), e.get('lon')
+            if not name or lat is None or lon is None:
+                continue
+            osm.setdefault(norm(name), (float(lat), float(lon)))
+        print(f'OSM: {len(osm)} istasyon (tamamlayıcı)')
+    except Exception as e:
+        print(f'OSM alınamadı ({e}); yalnızca İBB kaynakları kullanılacak')
+
     # --- 3) lines.json: ray hatlarını değiştir, diğerlerini koru ---
     doc = json.load(open(lines_path, encoding='utf-8'))
     old = doc['lines']
@@ -138,6 +176,13 @@ def main(dry_run=False):
                 if c == code and (key in k or k in key):
                     return v
             for k, v in coords_any.items():
+                if len(k) >= 5 and (key in k or k in key):
+                    return v
+        # OSM (yeni açılan istasyonlar burada bulunur)
+        if key in osm:
+            return osm[key]
+        if len(key) >= 5:
+            for k, v in osm.items():
                 if len(k) >= 5 and (key in k or k in key):
                     return v
         return old_coords.get((code, key)) or old_coords.get(key)

@@ -483,12 +483,27 @@ class _ResultsView extends StatelessWidget {
 
     final children = <Widget>[];
 
+    // METROBÜS ayrı bölüm — otobüsle karışmasın (34, 34A, 34AS…).
+    final metrobus = [for (final b in bus.lines) if (b.isMetrobus) b];
+    final busOnly = [for (final b in bus.lines) if (!b.isMetrobus) b];
+
+    if (metrobus.isNotEmpty) {
+      children.add(const _SectionLabel(
+          icon: Icons.airport_shuttle_rounded, label: 'METROBÜS'));
+      children.add(const SizedBox(height: 12));
+      for (final b in metrobus) {
+        children.add(_LineResultTile(brief: b, onTap: () => onBusLine(b)));
+        children.add(const SizedBox(height: 12));
+      }
+      children.add(const SizedBox(height: 20));
+    }
+
     // Otobüs hatları — numarayla aramada en alakalı (ör. "500T").
-    if (bus.lines.isNotEmpty) {
+    if (busOnly.isNotEmpty) {
       children.add(const _SectionLabel(
           icon: Icons.directions_bus_filled_rounded, label: 'OTOBÜS HATLARI'));
       children.add(const SizedBox(height: 12));
-      for (final b in bus.lines) {
+      for (final b in busOnly) {
         children.add(_LineResultTile(brief: b, onTap: () => onBusLine(b)));
         children.add(const SizedBox(height: 12));
       }
@@ -600,7 +615,9 @@ class _LineResultTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    const color = VigilantColors.primary;
+    // Metrobüs kendi rengiyle ayrışsın (arama sonucunda "Otobüs hattı"
+    // yazması yanlıştı).
+    final color = lineTypeColor(brief.type);
     return GlassPanel(
       borderRadius: 24,
       padding: const EdgeInsets.all(16),
@@ -633,7 +650,7 @@ class _LineResultTile extends StatelessWidget {
                     style: text.bodyMedium
                         ?.copyWith(fontWeight: FontWeight.w500)),
                 const SizedBox(height: 2),
-                Text('Otobüs hattı',
+                Text('${brief.type.label} hattı',
                     style: text.labelMedium
                         ?.copyWith(color: VigilantColors.onSurfaceVariant)),
               ],

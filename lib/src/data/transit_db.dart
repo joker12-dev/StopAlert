@@ -114,7 +114,7 @@ class TransitDb {
     // Hat NO başına TEK sonuç (İETT gibi: "MK13" tek çıkar; gidiş/dönüş
     // varyantları hat detay sayfasında). Temsili: kodun bir varyantı.
     final rows = await db.rawQuery(
-      'SELECT id, code, name FROM lines '
+      'SELECT id, code, name, type FROM lines '
       'WHERE code LIKE ? OR name_norm LIKE ? '
       'GROUP BY code ORDER BY LENGTH(code), code LIMIT ?',
       ['$n%', '%$n%', limit],
@@ -155,7 +155,7 @@ class TransitDb {
     final raw = _stripId(externalStopId);
     if (raw == null) return const [];
     final rows = await db.rawQuery(
-      'SELECT l.code AS code, l.id AS id, l.name AS name, '
+      'SELECT l.code AS code, l.id AS id, l.name AS name, l.type AS type, '
       'MIN(l.depar * 1000000 - '
       '(SELECT COUNT(*) FROM line_stops WHERE line_id = l.id)) AS k '
       'FROM line_stops ls JOIN lines l ON l.id = ls.line_id '
@@ -203,7 +203,9 @@ class TransitDb {
       id: kBusPrefix + (l['id'] as String),
       code: l['code'] as String,
       name: l['name'] as String,
-      type: LineType.bus,
+      type: (l['type'] as String?) == 'metrobus'
+          ? LineType.metrobus
+          : LineType.bus,
       stops: stops,
       segmentSeconds: segs,
     );
@@ -222,6 +224,10 @@ class TransitDb {
         id: kBusPrefix + (r['id'] as String),
         code: r['code'] as String,
         name: r['name'] as String,
+        // Eski sürüm DB'de `type` bulunmayabilir → otobüs varsayılır.
+        type: (r['type'] as String?) == 'metrobus'
+            ? LineType.metrobus
+            : LineType.bus,
       );
 
   String? _stripId(String id) =>
@@ -230,12 +236,21 @@ class TransitDb {
 
 /// Hafif hat özeti (arama/durak-hatları listeleri için — tam durak listesi yok).
 class TransitLineBrief {
-  const TransitLineBrief(
-      {required this.id, required this.code, required this.name});
+  const TransitLineBrief({
+    required this.id,
+    required this.code,
+    required this.name,
+    this.type = LineType.bus,
+  });
 
   final String id;
   final String code;
   final String name;
+
+  /// Otobüs mü metrobüs mü — arama sonuçlarında ayrı gösterilir.
+  final LineType type;
+
+  bool get isMetrobus => type == LineType.metrobus;
 }
 
 /// Bir hat NO'sunun tek yön varyantı (hat detay sayfası gidiş/dönüş ayrımı için).
