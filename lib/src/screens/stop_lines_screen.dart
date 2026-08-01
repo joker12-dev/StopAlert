@@ -6,6 +6,7 @@ import '../data/recent_search.dart';
 import '../data/transit_db.dart';
 import '../state/journey_provider.dart';
 import '../theme/app_theme.dart';
+import '../util/insets.dart';
 import '../util/haptics.dart';
 import 'alarm_setup_screen.dart';
 import 'nearby_map_screen.dart';
@@ -92,10 +93,10 @@ class StopLinesScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 6),
                   Text(stop.name, style: text.headlineSmall),
-                  if (stop.direction.isNotEmpty)
+                  if (stop.contextLabel.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 2),
-                      child: Text(stop.direction,
+                      child: Text(stop.contextLabel,
                           style: text.labelMedium
                               ?.copyWith(color: VigilantColors.secondary)),
                     ),
@@ -134,7 +135,7 @@ class StopLinesScreen extends ConsumerWidget {
             const SizedBox(height: 16),
             Expanded(
               child: ListView.separated(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 120),
+                padding: EdgeInsets.fromLTRB(20, 0, 20, AppInsets.pageBottom(context)),
                 itemCount: lines.length,
                 separatorBuilder: (_, __) => const SizedBox(height: 10),
                 itemBuilder: (context, i) {

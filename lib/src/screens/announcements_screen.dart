@@ -25,16 +25,25 @@ class AnnouncementsScreen extends ConsumerStatefulWidget {
 class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen> {
   String _query = '';
 
+  /// 0 = Anlık durumlar (güzergâh/trafik), 1 = Sefer bilgilendirmeleri.
+  int _tab = 0;
+
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     final async = ref.watch(announcementsProvider);
     final all = async.valueOrNull ?? const <IettAnnouncement>[];
     final q = _query.trim().toLowerCase();
+
+    // Sefer iptali/saat bildirimleri ile anlık durum duyurularını AYIR:
+    // ikisi karışınca 200+ sefer iptali diğerlerini boğuyordu.
+    final durum = [for (final a in all) if (!a.isTrip) a];
+    final sefer = [for (final a in all) if (a.isTrip) a];
+    final source = _tab == 0 ? durum : sefer;
     final items = q.isEmpty
-        ? all
+        ? source
         : [
-            for (final a in all)
+            for (final a in source)
               if (a.line.toLowerCase().contains(q) ||
                   a.message.toLowerCase().contains(q))
                 a
@@ -71,8 +80,35 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen> {
                 ],
               ),
             ),
+            // Tür ayrımı: anlık durumlar / sefer bilgilendirmeleri
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 10),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _TypeTab(
+                      label: 'Anlık durumlar',
+                      count: durum.length,
+                      selected: _tab == 0,
+                      color: VigilantColors.accentBlue,
+                      onTap: () => setState(() => _tab = 0),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _TypeTab(
+                      label: 'Sefer bilgisi',
+                      count: sefer.length,
+                      selected: _tab == 1,
+                      color: VigilantColors.tertiaryContainer,
+                      onTap: () => setState(() => _tab = 1),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
               child: TextField(
                 style: text.bodyMedium,
                 onChanged: (v) => setState(() => _query = v),
@@ -144,6 +180,74 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen> {
           ),
         ),
       );
+}
+
+/// Duyuru türü sekmesi (anlık durum / sefer bilgisi) + sayaç.
+class _TypeTab extends StatelessWidget {
+  const _TypeTab({
+    required this.label,
+    required this.count,
+    required this.selected,
+    required this.color,
+    required this.onTap,
+  });
+
+  final String label;
+  final int count;
+  final bool selected;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: selected
+              ? color.withValues(alpha: 0.15)
+              : VigilantColors.surfaceContainer,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: selected
+                ? color
+                : VigilantColors.surfaceVariant.withValues(alpha: 0.4),
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Flexible(
+              child: Text(label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: text.labelLarge?.copyWith(
+                    color: selected ? color : VigilantColors.onSurfaceVariant,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  )),
+            ),
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+              decoration: BoxDecoration(
+                color: (selected ? color : VigilantColors.onSurfaceVariant)
+                    .withValues(alpha: 0.18),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text('$count',
+                  style: text.labelSmall?.copyWith(
+                      color: selected ? color : VigilantColors.onSurfaceVariant,
+                      fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _AnnouncementCard extends StatelessWidget {

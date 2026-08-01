@@ -26,6 +26,11 @@
 	<string>Ekran kapalıyken ya da uygulamadan çıksan bile durağını kaçırmaman için arka planda konum gerekir. Lütfen "Her zaman izin ver" seç.</string>
 	<key>NSLocationAlwaysUsageDescription</key>
 	<string>Arka planda hat takibi için konum izni gerekir.</string>
+	<!-- Sesli arama — yalnızca mikrofon butonuna basınca istenir. -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Durak veya hat adını sesle aratabilmen için mikrofonu yalnızca sen mikrofon butonuna bastığında kullanırız.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Söylediğin durak/hat adını metne çevirip aramada kullanırız.</string>
 	<!-- Yeraltında (sinyal yok) durak sayımı için ivmeölçer. -->
 	<key>NSMotionUsageDescription</key>
 	<string>Sinyal olmayan yeraltı bölümlerinde durak tahminini iyileştirmek için hareket sensörünü kullanırız.</string>

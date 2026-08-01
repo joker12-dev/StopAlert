@@ -646,8 +646,8 @@ class _StopTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     final sub = m.isBus
-        ? (m.stop.direction.isNotEmpty
-            ? 'Otobüs · ${m.stop.direction}'
+        ? (m.stop.contextLabel.isNotEmpty
+            ? 'Otobüs · ${m.stop.contextLabel}'
             : 'Otobüs durağı')
         : '${m.line!.code} · ${m.line!.type.label}';
     return Material(

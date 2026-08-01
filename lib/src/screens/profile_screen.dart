@@ -6,6 +6,7 @@ import '../data/journey_stats.dart';
 import '../state/journey_provider.dart';
 import '../state/settings_provider.dart';
 import '../theme/app_theme.dart';
+import '../util/insets.dart';
 import '../util/haptics.dart';
 import '../widgets/banner_ad_slot.dart';
 import 'history_screen.dart';
@@ -28,7 +29,7 @@ class ProfileScreen extends ConsumerWidget {
       body: SafeArea(
         bottom: false,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
+          padding: EdgeInsets.fromLTRB(20, 8, 20, AppInsets.listBottom(context)),
           children: [
             // Başlık
             Row(

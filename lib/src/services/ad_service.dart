@@ -58,6 +58,17 @@ abstract final class AdConfig {
         ? _realBannerAndroid
         : _testBannerAndroid;
   }
+
+  /// GELİŞTİRME CİHAZLARI — buraya eklenen cihazlar AdMob'a "test" olarak
+  /// bildirilir: bizim denemelerimiz gerçek istek/gösterim istatistiklerini
+  /// (eşleşme oranı, eBGBM) KİRLETMEZ ve geçersiz trafik riski oluşmaz.
+  ///
+  /// Kimliği bulmak için: uygulamayı cihazda aç, logcat'te şu satırı ara —
+  ///   "Use RequestConfiguration.Builder().setTestDeviceIds(Arrays.asList(\"ABC…\"))"
+  /// oradaki kimliği aşağıya ekle.
+  static const testDeviceIds = <String>[
+    // 'BURAYA_CIHAZ_KIMLIGI',
+  ];
 }
 
 /// Geçiş (interstitial) reklamını YALNIZCA İndin (varış) ekranında,
@@ -82,6 +93,12 @@ class AdService {
     if (!isMobileDevice || _initialized) return;
     _initialized = true;
     try {
+      // Geliştirme cihazlarını işaretle (varsa) — istatistikler temiz kalsın.
+      if (AdConfig.testDeviceIds.isNotEmpty) {
+        await MobileAds.instance.updateRequestConfiguration(
+          RequestConfiguration(testDeviceIds: AdConfig.testDeviceIds),
+        );
+      }
       await MobileAds.instance.initialize();
     } catch (_) {
       // SDK başlatılamadı: reklamlar sessizce devre dışı kalır.

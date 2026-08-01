@@ -175,8 +175,10 @@ class TransitDb {
     final line =
         await db.query('lines', where: 'id = ?', whereArgs: [raw], limit: 1);
     if (line.isEmpty) return null;
+    // s.* kullanılır: eski sürüm bir DB'de `district` sütunu bulunmayabilir;
+    // sütunu tek tek saymak o durumda SQL hatası verirdi.
     final rows = await db.rawQuery(
-      'SELECT ls.seconds, s.id AS sid, s.name, s.direction, s.lat, s.lon '
+      'SELECT ls.seconds AS seconds, s.* '
       'FROM line_stops ls JOIN stops s ON s.id = ls.stop_id '
       'WHERE ls.line_id = ? ORDER BY ls.seq',
       [raw],
@@ -187,11 +189,12 @@ class TransitDb {
     for (var i = 0; i < rows.length; i++) {
       final r = rows[i];
       stops.add(Stop(
-        id: kBusPrefix + r['sid'].toString(),
+        id: kBusPrefix + r['id'].toString(),
         name: r['name'] as String,
         lat: (r['lat'] as num).toDouble(),
         lon: (r['lon'] as num).toDouble(),
         direction: (r['direction'] as String?) ?? '',
+        district: (r['district'] as String?) ?? '',
       ));
       if (i > 0) segs.add((r['seconds'] as num?)?.toInt() ?? 90);
     }
@@ -212,6 +215,7 @@ class TransitDb {
         lat: (r['lat'] as num).toDouble(),
         lon: (r['lon'] as num).toDouble(),
         direction: (r['direction'] as String?) ?? '',
+        district: (r['district'] as String?) ?? '',
       );
 
   TransitLineBrief _brief(Map<String, Object?> r) => TransitLineBrief(

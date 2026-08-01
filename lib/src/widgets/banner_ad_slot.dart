@@ -20,13 +20,33 @@ class BannerAdSlot extends StatefulWidget {
 class _BannerAdSlotState extends State<BannerAdSlot> {
   BannerAd? _ad;
   bool _loaded = false;
+  bool _requested = false;
 
   @override
-  void initState() {
-    super.initState();
-    if (!isMobileDevice) return;
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Ekran genişliği gerektiği için initState değil burada yükleriz; yalnızca
+    // BİR KEZ istek atılır (her rebuild'de yeni istek = düşük eşleşme oranı).
+    if (!isMobileDevice || _requested) return;
+    _requested = true;
+    _loadAdaptive();
+  }
+
+  /// UYARLANIR (anchored adaptive) banner: cihazın genişliğine göre boyut
+  /// alır. Sabit 320x50'ye göre çok daha geniş reklam envanteri eşleşir —
+  /// doldurma oranı ve eBGBM belirgin şekilde artar (AdMob önerisi).
+  Future<void> _loadAdaptive() async {
+    final width = MediaQuery.sizeOf(context).width.truncate();
+    AdSize size;
+    try {
+      size = await AdSize.getLargeAnchoredAdaptiveBannerAdSize(width) ??
+          AdSize.banner;
+    } catch (_) {
+      size = AdSize.banner;
+    }
+    if (!mounted) return;
     final ad = BannerAd(
-      size: AdSize.banner,
+      size: size,
       adUnitId: AdConfig.bannerUnitId,
       request: const AdRequest(),
       listener: BannerAdListener(

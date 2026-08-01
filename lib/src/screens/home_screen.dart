@@ -11,6 +11,7 @@ import '../state/journey_provider.dart';
 import '../state/settings_provider.dart';
 import '../state/weather_provider.dart';
 import '../theme/app_theme.dart';
+import '../util/insets.dart';
 import '../util/haptics.dart';
 import '../widgets/anim.dart';
 import '../widgets/banner_ad_slot.dart';
@@ -71,7 +72,7 @@ class HomeScreen extends ConsumerWidget {
             child: ListView(
               // Alt boşluk = alt menü (80) + sistem çubuğu payı + nefes.
               padding: EdgeInsets.fromLTRB(
-                  20, 8, 20, 108 + MediaQuery.viewPaddingOf(context).bottom),
+                  20, 8, 20, AppInsets.listBottom(context)),
               children: [
                 EntranceFade(
                     child: _TopBar(nickname: nickname, dateText: _todayText)),

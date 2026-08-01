@@ -6,6 +6,7 @@ import '../data/recent_search.dart';
 import '../data/transit_db.dart';
 import '../state/journey_provider.dart';
 import '../theme/app_theme.dart';
+import '../util/insets.dart';
 import '../util/haptics.dart';
 import '../widgets/skeleton.dart';
 import 'alarm_setup_screen.dart';
@@ -211,7 +212,7 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
                       ],
                     )
                   : ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 120),
+                      padding: EdgeInsets.fromLTRB(20, 0, 20, AppInsets.pageBottom(context)),
                       itemCount: stops.length,
                       itemBuilder: (context, i) {
                         final stop = stops[i];

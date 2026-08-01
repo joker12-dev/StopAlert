@@ -32,6 +32,7 @@ class Stop {
     this.lon = 0,
     this.underground = false,
     this.direction = '',
+    this.district = '',
   });
 
   factory Stop.fromJson(Map<String, dynamic> json) => Stop(
@@ -60,9 +61,22 @@ class Stop {
   /// GPS'in çalışmadığı (tünel/denizaltı) istasyon.
   final bool underground;
 
-  /// Aynı adlı durakları ayırmak için yön/peron bilgisi (İETT stop_desc);
-  /// ray/vapur için boş.
+  /// Durağın baktığı YÖN (İETT `SYON`, ör. "AVCILAR") — aynı adlı iki durağı
+  /// ayıran asıl bilgi. Ray/vapur için boş.
   final String direction;
+
+  /// Durağın ilçesi (İETT `ILCEADI`, ör. "Esenyurt"). Ray/vapur için boş.
+  final String district;
+
+  /// Kullanıcıya gösterilecek ayırt edici alt satır: "AVCILAR yönü · Esenyurt".
+  /// Aynı adlı durakları ayırmak için yön ÖNCE gelir (asıl ayırt edici odur).
+  String get contextLabel {
+    final parts = [
+      if (direction.isNotEmpty) '$direction yönü',
+      if (district.isNotEmpty) district,
+    ];
+    return parts.join(' · ');
+  }
 }
 
 class TransitLine {

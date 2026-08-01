@@ -93,6 +93,29 @@ def get_lines():
     return out
 
 
+def get_stop_meta():
+    """Tüm durakların yön + ilçe bilgisi: {durak_kodu: (yon, ilce)}.
+
+    `DurakDetay_GYY` yalnızca ilçeyi verir; durağın YÖNÜ (hangi istikamete
+    bakıyor — aynı adlı iki durağı ayıran asıl bilgi) yalnızca burada var.
+    """
+    x = soap(HAT_URL, 'GetDurak_json',
+             '<GetDurak_json xmlns="http://tempuri.org/"><DurakKodu></DurakKodu>'
+             '</GetDurak_json>')
+    m = re.search(r'<GetDurak_jsonResult>(.*?)</GetDurak_jsonResult>', x, re.S)
+    if not m:
+        return {}
+    out = {}
+    for s in json.loads(html.unescape(m.group(1))):
+        # Durak kodu JSON'da bazen sayı, bazen metin gelir.
+        sid = str(s.get('SDURAKKODU') or '').strip()
+        if not sid:
+            continue
+        out[sid] = (str(s.get('SYON') or '').strip(),
+                    str(s.get('ILCEADI') or '').strip())
+    return out
+
+
 def _tag(row, name):
     m = re.search(f'<{name}>(.*?)</{name}>', row, re.S)
     return html.unescape(m.group(1)).strip() if m else ''
@@ -135,13 +158,16 @@ def build(limit=None, out_path=None):
         lines = lines[:limit]
     print(f'hat listesi: {len(lines)}')
 
+    meta = get_stop_meta()          # {durak_kodu: (yon, ilce)}
+    print(f'durak meta (yon+ilce): {len(meta)}')
+
     if os.path.exists(out_path):
         os.remove(out_path)
     db = sqlite3.connect(out_path)
     db.executescript('''
       PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF;
       CREATE TABLE stops(id INTEGER PRIMARY KEY, name TEXT, name_norm TEXT,
-                         direction TEXT, lat REAL, lon REAL);
+                         direction TEXT, district TEXT, lat REAL, lon REAL);
       CREATE TABLE lines(id TEXT PRIMARY KEY, code TEXT, name TEXT,
                          name_norm TEXT, dir TEXT, depar INTEGER, type TEXT);
       CREATE TABLE line_stops(line_id TEXT, seq INTEGER, stop_id INTEGER,
@@ -190,8 +216,9 @@ def build(limit=None, out_path=None):
 
     db.executemany('INSERT OR IGNORE INTO lines VALUES(?,?,?,?,?,?,?)', line_rows)
     db.executemany('INSERT INTO line_stops VALUES(?,?,?,?)', ls_rows)
-    db.executemany('INSERT OR IGNORE INTO stops VALUES(?,?,?,?,?,?)', [
-        (int(sid), v[0], norm(v[0]), v[1], v[2], v[3])
+    db.executemany('INSERT OR IGNORE INTO stops VALUES(?,?,?,?,?,?,?)', [
+        (int(sid), v[0], norm(v[0]), meta.get(sid, ('', ''))[0],
+         meta.get(sid, ('', ''))[1] or v[1], v[2], v[3])
         for sid, v in stops.items()
     ])
     db.executescript('''

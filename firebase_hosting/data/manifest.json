@@ -1,8 +1,8 @@
 {
-  "version": "20260731",
-  "file": "bus_20260731.sqlite",
-  "bytes": 6856704,
-  "sha256": "83575604df364605943a40a78d6c511c2df0b1fbaf557ea057b104880484ef48",
+  "version": "20260801",
+  "file": "bus_20260801.sqlite",
+  "bytes": 7008256,
+  "sha256": "82c7413cb161db01142e2be4e88a9d37f7fa0410ebd4cef65f556f3e879bd1b4",
   "lines": 2425,
   "stops": 13370,
   "source": "IETT resmi web servisi (api.ibb.gov.tr) + GTFS depar"

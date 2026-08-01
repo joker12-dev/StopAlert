@@ -6,6 +6,7 @@ import '../data/journey_payload.dart';
 import '../data/models.dart';
 import '../state/journey_provider.dart';
 import '../theme/app_theme.dart';
+import '../util/insets.dart';
 import '../widgets/banner_ad_slot.dart';
 import '../widgets/glass_panel.dart';
 import '../widgets/mascot.dart';
@@ -41,7 +42,7 @@ class FavoritesScreen extends ConsumerWidget {
       body: SafeArea(
         bottom: false,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
+          padding: EdgeInsets.fromLTRB(20, 8, 20, AppInsets.listBottom(context)),
           children: [
             // Başlık
             Row(

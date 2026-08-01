@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 import '../data/models.dart';
 import '../data/recent_search.dart';
 import '../data/transit_db.dart';
 import '../state/journey_provider.dart';
 import '../theme/app_theme.dart';
+import '../util/insets.dart';
 import '../util/haptics.dart';
 import '../widgets/glass_panel.dart';
 import '../widgets/mascot.dart';
@@ -31,6 +33,63 @@ class SearchScreen extends ConsumerStatefulWidget {
 
 class _SearchScreenState extends ConsumerState<SearchScreen> {
   String _query = '';
+  final _controller = TextEditingController();
+
+  /// Sesli arama — mikrofon izni YALNIZCA butona ilk basıldığında istenir
+  /// (uygulama açılışında değil; speech_to_text initialize sırasında sorar).
+  final stt.SpeechToText _speech = stt.SpeechToText();
+  bool _speechReady = false;
+  bool _listening = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _speech.stop();
+    super.dispose();
+  }
+
+  Future<void> _toggleVoice() async {
+    Haptics.light();
+    if (_listening) {
+      await _speech.stop();
+      if (mounted) setState(() => _listening = false);
+      return;
+    }
+    if (!_speechReady) {
+      // İlk dokunuş: mikrofon/konuşma izni burada istenir.
+      _speechReady = await _speech.initialize(
+        onStatus: (s) {
+          if (!mounted) return;
+          if (s == 'done' || s == 'notListening') {
+            setState(() => _listening = false);
+          }
+        },
+        onError: (_) {
+          if (mounted) setState(() => _listening = false);
+        },
+      );
+      if (!_speechReady) {
+        if (mounted) {
+          _snack('Sesli arama kullanılamıyor — mikrofon izni gerekiyor.');
+        }
+        return;
+      }
+    }
+    setState(() => _listening = true);
+    await _speech.listen(
+      listenOptions: stt.SpeechListenOptions(localeId: 'tr_TR'),
+      onResult: (r) {
+        if (!mounted) return;
+        setState(() {
+          _query = r.recognizedWords;
+          _controller.text = r.recognizedWords;
+          _controller.selection = TextSelection.collapsed(
+              offset: _controller.text.length);
+          if (r.finalResult) _listening = false;
+        });
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -93,13 +152,18 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: TextField(
+                        controller: _controller,
                         autofocus: widget.asPage,
                         style: text.bodyLarge,
                         decoration: InputDecoration(
                           border: InputBorder.none,
-                          hintText: 'Durak veya hat ara...',
+                          hintText: _listening
+                              ? 'Dinliyorum…'
+                              : 'Durak veya hat ara...',
                           hintStyle: text.bodyLarge?.copyWith(
-                            color: VigilantColors.onSurfaceVariant,
+                            color: _listening
+                                ? VigilantColors.primary
+                                : VigilantColors.onSurfaceVariant,
                           ),
                           contentPadding:
                               const EdgeInsets.symmetric(vertical: 16),
@@ -107,8 +171,20 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                         onChanged: (v) => setState(() => _query = v),
                       ),
                     ),
-                    const Icon(Icons.mic_none,
-                        color: VigilantColors.onSurfaceVariant),
+                    // Sesli arama — izin ilk dokunuşta istenir.
+                    GestureDetector(
+                      onTap: _toggleVoice,
+                      behavior: HitTestBehavior.opaque,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Icon(
+                          _listening ? Icons.mic : Icons.mic_none,
+                          color: _listening
+                              ? VigilantColors.primary
+                              : VigilantColors.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -226,8 +302,7 @@ class _SuggestionsView extends ConsumerWidget {
     final nearby = ref.watch(nearbyStopsProvider);
 
     return ListView(
-      padding: EdgeInsets.fromLTRB(
-          20, 0, 20, 108 + MediaQuery.viewPaddingOf(context).bottom),
+      padding: EdgeInsets.fromLTRB(20, 0, 20, AppInsets.listBottom(context)),
       children: [
         const _SectionLabel(icon: Icons.history, label: 'SON ARAMALAR'),
         const SizedBox(height: 12),
@@ -385,8 +460,7 @@ class _ResultsView extends StatelessWidget {
     }
 
     return ListView(
-      padding: EdgeInsets.fromLTRB(
-          20, 0, 20, 108 + MediaQuery.viewPaddingOf(context).bottom),
+      padding: EdgeInsets.fromLTRB(20, 0, 20, AppInsets.listBottom(context)),
       children: children,
     );
   }
@@ -543,8 +617,8 @@ class _BusStopTile extends StatelessWidget {
                         ?.copyWith(fontWeight: FontWeight.w500)),
                 const SizedBox(height: 2),
                 Text(
-                    stop.direction.isNotEmpty
-                        ? 'Otobüs durağı · ${stop.direction}'
+                    stop.contextLabel.isNotEmpty
+                        ? 'Otobüs · ${stop.contextLabel}'
                         : 'Otobüs durağı',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,

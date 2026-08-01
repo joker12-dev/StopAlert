@@ -19,6 +19,8 @@
          arka plandan açılabilmesinin güvencesi (opsiyonel adım) -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Sesli arama (yalnızca kullanıcı mikrofon butonuna basınca istenir) -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
 
     <application
         android:label="StopAlert"
@@ -74,6 +76,10 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- Sesli arama: cihazdaki konuşma tanıma servisini görebilmek için -->
+        <intent>
+            <action android:name="android.speech.RecognitionService"/>
         </intent>
     </queries>
 </manifest>

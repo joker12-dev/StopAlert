@@ -197,10 +197,10 @@ def main(gtfs_dir=None):
 
     # Resmi veride olmayan depar duraklarını ekle (ilçe bilgisi yok).
     have = {r[0] for r in db.execute('SELECT id FROM stops')}
-    add_stops = [(sid, v[0], norm(v[0]), '', v[1], v[2])
+    add_stops = [(sid, v[0], norm(v[0]), '', '', v[1], v[2])
                  for sid, v in new_stops.items() if sid not in have]
 
-    db.executemany('INSERT OR IGNORE INTO stops VALUES(?,?,?,?,?,?)', add_stops)
+    db.executemany('INSERT OR IGNORE INTO stops VALUES(?,?,?,?,?,?,?)', add_stops)
     db.executemany('INSERT OR IGNORE INTO lines VALUES(?,?,?,?,?,?,?)', line_rows)
     db.executemany('INSERT INTO line_stops VALUES(?,?,?,?)', ls_rows)
     db.execute("UPDATE meta SET value=? WHERE key='source'",
