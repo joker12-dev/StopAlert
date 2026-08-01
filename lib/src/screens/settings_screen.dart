@@ -201,8 +201,14 @@ class SettingsScreen extends ConsumerWidget {
       ),
       builder: (context) => _OptionSheet<String>(
         title: 'Harita Stili',
-        current: s.mapStyle,
-        options: const {'dark': 'Gece (koyu)', 'light': 'Sade (açık)'},
+        current: s.mapTileStyle.name,
+        options: const {
+          'gece': 'Gece (koyu, minimal)',
+          'geceDetay': 'Gece+ (koyu, detaylı)',
+          'canli': 'Canlı (renkli, detaylı)',
+          'uydu': 'Uydu görüntüsü',
+          'sade': 'Sade (açık)',
+        },
       ),
     );
     if (choice != null) {

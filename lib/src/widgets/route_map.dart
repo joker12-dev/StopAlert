@@ -191,13 +191,21 @@ class _RouteMapState extends State<RouteMap> {
           ),
           children: [
             TileLayer(
-              urlTemplate:
-                  'https://{s}.basemaps.cartocdn.com/${AppMapStyle.tileVariant}'
-                  '/{z}/{x}/{y}{r}.png',
-              subdomains: const ['a', 'b', 'c', 'd'],
+              urlTemplate: AppMapStyle.urlTemplate,
+              subdomains: AppMapStyle.subdomains,
               userAgentPackageName: 'com.originstudios.stopalert',
-              retinaMode: RetinaMode.isHighDensity(context),
+              retinaMode: AppMapStyle.supportsRetina &&
+                  RetinaMode.isHighDensity(context),
             ),
+            // Uydu görünümünde yol/durak adları okunsun diye ince etiket katmanı.
+            if (AppMapStyle.needsLabelOverlay)
+              TileLayer(
+                urlTemplate: AppMapStyle.labelOverlayUrl,
+                subdomains: AppMapStyle.labelSubdomains,
+                userAgentPackageName: 'com.originstudios.stopalert',
+                retinaMode: AppMapStyle.supportsRetina &&
+                    RetinaMode.isHighDensity(context),
+              ),
             if (drawPts.length >= 2)
               if (_progressSplit(drawPts) case (final passed, final remaining))
                 ...[
@@ -325,7 +333,7 @@ class _RouteMapState extends State<RouteMap> {
           bottom: 6,
           child: IgnorePointer(
             child: Text(
-              '© OSM',
+              AppMapStyle.attribution,
               style: TextStyle(
                 fontSize: 9,
                 color: Colors.white.withValues(alpha: 0.35),

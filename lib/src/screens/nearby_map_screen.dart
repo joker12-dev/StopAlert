@@ -10,6 +10,7 @@ import '../data/models.dart';
 import '../data/transit_db.dart';
 import '../services/routing_service.dart';
 import '../state/journey_provider.dart';
+import '../state/settings_provider.dart';
 import '../theme/app_theme.dart';
 import '../util/haptics.dart';
 import '../util/map_style.dart';
@@ -139,6 +140,73 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
       _visible = out.take(200).toList();
       _loadingStops = false;
     });
+  }
+
+  /// Harita görünümünü seç (Gece / Canlı / Uydu / Sade) — seçim Ayarlar'a
+  /// kalıcı yazılır, tüm haritalarda geçerli olur.
+  Future<void> _pickMapStyle() async {
+    Haptics.light();
+    final chosen = await showModalBottomSheet<MapTileStyle>(
+      context: context,
+      backgroundColor: VigilantColors.surfaceContainer,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        final t = Theme.of(context).textTheme;
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: VigilantColors.surfaceVariant,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                Text('Harita Görünümü',
+                    style: t.headlineSmall?.copyWith(fontSize: 20)),
+                const SizedBox(height: 12),
+                for (final s in MapTileStyle.values)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(
+                      switch (s) {
+                        MapTileStyle.gece => Icons.dark_mode_rounded,
+                        MapTileStyle.canli => Icons.palette_rounded,
+                        MapTileStyle.geceDetay => Icons.nightlight_rounded,
+                        MapTileStyle.uydu => Icons.satellite_alt_rounded,
+                        MapTileStyle.sade => Icons.light_mode_rounded,
+                      },
+                      color: AppMapStyle.style == s
+                          ? VigilantColors.primary
+                          : VigilantColors.onSurfaceVariant,
+                    ),
+                    title: Text(s.label, style: t.bodyMedium),
+                    trailing: AppMapStyle.style == s
+                        ? const Icon(Icons.check_rounded,
+                            color: VigilantColors.primary)
+                        : null,
+                    onTap: () => Navigator.of(context).pop(s),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    if (chosen == null || !mounted) return;
+    Haptics.selection();
+    setState(() => AppMapStyle.style = chosen);
+    await ref.read(settingsProvider.notifier).setMapStyle(chosen.name);
   }
 
   void _setRadius(double r) {
@@ -290,12 +358,20 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
                   ),
                   children: [
                     TileLayer(
-                      urlTemplate:
-                          'https://{s}.basemaps.cartocdn.com/${AppMapStyle.tileVariant}/{z}/{x}/{y}{r}.png',
-                      subdomains: const ['a', 'b', 'c', 'd'],
+                      urlTemplate: AppMapStyle.urlTemplate,
+                      subdomains: AppMapStyle.subdomains,
                       userAgentPackageName: 'com.originstudios.stopalert',
-                      retinaMode: RetinaMode.isHighDensity(context),
+                      retinaMode: AppMapStyle.supportsRetina &&
+                          RetinaMode.isHighDensity(context),
                     ),
+                    if (AppMapStyle.needsLabelOverlay)
+                      TileLayer(
+                        urlTemplate: AppMapStyle.labelOverlayUrl,
+                        subdomains: AppMapStyle.labelSubdomains,
+                        userAgentPackageName: 'com.originstudios.stopalert',
+                        retinaMode: AppMapStyle.supportsRetina &&
+                            RetinaMode.isHighDensity(context),
+                      ),
                     // TURUNCU arama dairesi (haritayı gezdirdikçe taşınır)
                     if (_probe case final p?)
                       CircleLayer(circles: [
@@ -387,6 +463,12 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
                           child: Text('Yakındaki Duraklar',
                               style: text.labelLarge
                                   ?.copyWith(fontWeight: FontWeight.w700)),
+                        ),
+                        const Spacer(),
+                        // Harita görünümü: Gece / Canlı / Uydu / Sade
+                        _RoundBtn(
+                          icon: Icons.layers_rounded,
+                          onTap: _pickMapStyle,
                         ),
                       ],
                     ),
@@ -736,7 +818,11 @@ class _StopMarker extends StatelessWidget {
           shape: BoxShape.circle,
           border: Border.all(color: Colors.white, width: 2.5),
           boxShadow: [
-            BoxShadow(color: color.withValues(alpha: 0.6), blurRadius: 12),
+            BoxShadow(color: color.withValues(alpha: 0.6), blurRadius: 14),
+            BoxShadow(
+                color: Colors.black.withValues(alpha: 0.4),
+                blurRadius: 6,
+                offset: const Offset(0, 2)),
           ],
         ),
         child: Icon(
@@ -747,11 +833,19 @@ class _StopMarker extends StatelessWidget {
             size: 20),
       );
     }
+    // Seçili olmayan durak: beyaz halkalı renkli nokta + hafif gölge —
+    // uydu/renkli döşemelerde de net okunur.
     return Container(
       decoration: BoxDecoration(
-        color: VigilantColors.background,
+        color: color,
         shape: BoxShape.circle,
-        border: Border.all(color: color, width: 2.5),
+        border: Border.all(color: Colors.white, width: 2),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.45),
+              blurRadius: 4,
+              offset: const Offset(0, 1)),
+        ],
       ),
     );
   }

@@ -20,7 +20,7 @@ class AppSettings {
     this.defaultDistanceIndex = 1, // 500m
     this.defaultStopsIndex = 1, // 2 durak
     this.contributeToCloud = false, // KVKK: anonim kalabalık öğrenmeye katkı
-    this.mapStyle = 'dark', // 'dark' (Gece) | 'light' (Sade)
+    this.mapStyle = 'gece', // MapTileStyle adi
   });
 
   /// Kullanıcının takma adı (Profil + ana sayfa selamlaması).
@@ -31,11 +31,19 @@ class AppSettings {
   /// modele katkı vermesine izin ver (varsayılan kapalı; kullanıcı açar).
   final bool contributeToCloud;
 
-  /// Harita stili: 'dark' (Gece) veya 'light' (Sade). CartoDB döşeme varyantı.
+  /// Harita stili — [MapTileStyle] adı ('gece' | 'canli' | 'uydu' | 'sade').
+  /// Eski sürümlerden gelen 'dark'/'light' değerleri de desteklenir.
   final String mapStyle;
 
+  /// Kayıtlı değeri (eski 'dark'/'light' dâhil) stil enum'una çevirir.
+  MapTileStyle get mapTileStyle => switch (mapStyle) {
+        'light' => MapTileStyle.sade,
+        'dark' => MapTileStyle.gece,
+        _ => MapTileStyle.fromName(mapStyle),
+      };
+
   /// Kullanıcı-dostu harita stili etiketi.
-  String get mapStyleLabel => mapStyle == 'light' ? 'Sade' : 'Gece';
+  String get mapStyleLabel => mapTileStyle.label;
   final String alarmSound;
   final int snoozeMinutes;
   final int defaultTriggerMode;
@@ -110,7 +118,7 @@ class AppSettings {
         defaultDistanceIndex: (m['defaultDistanceIndex'] as num?)?.toInt() ?? 1,
         defaultStopsIndex: (m['defaultStopsIndex'] as num?)?.toInt() ?? 1,
         contributeToCloud: m['contributeToCloud'] as bool? ?? false,
-        mapStyle: m['mapStyle'] as String? ?? 'dark',
+        mapStyle: m['mapStyle'] as String? ?? 'gece',
       );
 }
 
@@ -136,14 +144,14 @@ class SettingsNotifier extends AsyncNotifier<AppSettings> {
     }
     // Statik katmanları kullanıcı tercihine bağla.
     Haptics.enabled = settings.vibration;
-    AppMapStyle.light = settings.mapStyle == 'light';
+    AppMapStyle.style = settings.mapTileStyle;
     return settings;
   }
 
   Future<void> _persist(AppSettings next) async {
     state = AsyncData(next);
     Haptics.enabled = next.vibration;
-    AppMapStyle.light = next.mapStyle == 'light';
+    AppMapStyle.style = next.mapTileStyle;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_prefsKey, jsonEncode(next.toMap()));
   }
