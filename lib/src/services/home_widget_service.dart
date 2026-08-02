@@ -23,6 +23,10 @@ abstract final class HomeWidgetService {
   static const pathNewAlarm = '/alarm/new';
   static const pathTracking = '/tracking';
 
+  /// Kısayol yolu — uygulamayı AÇMADAN arka planda alarmı başlatır
+  /// (bkz. `home_widget_launcher.dart`).
+  static const pathStartAlarm = '/alarm/start';
+
   /// Üst üste bu kadar hata alınırsa vazgeçilir (widget eklenmemiş olabilir);
   /// yeni yolculukta sayaç sıfırlanır.
   static int _failures = 0;
@@ -94,6 +98,102 @@ abstract final class HomeWidgetService {
     } catch (_) {}
   }
 
+  /// Boş durumdaki tek-dokunuş kısayolları (son yolculuk, favori rota).
+  ///
+  /// Kısayola basınca uygulama AÇILMAZ; arka planda alarm başlar
+  /// (bkz. [homeWidgetBackgroundCallback]). Bu yüzden hattı yeniden kurmaya
+  /// yetecek kimlikler de yazılır.
+  static Future<void> setShortcuts(List<WidgetShortcut> shortcuts) async {
+    if (!isAndroidDevice) return;
+    try {
+      for (var i = 0; i < 2; i++) {
+        final s = i < shortcuts.length ? shortcuts[i] : null;
+        await HomeWidget.saveWidgetData<String>('sc${i}_title', s?.title ?? '');
+        await HomeWidget.saveWidgetData<String>('sc${i}_sub', s?.subtitle ?? '');
+        await HomeWidget.saveWidgetData<String>('sc${i}_code', s?.lineCode ?? '');
+        await HomeWidget.saveWidgetData<String>('sc${i}_color', s?.color ?? '');
+        await HomeWidget.saveWidgetData<String>('sc${i}_line', s?.lineId ?? '');
+        await HomeWidget.saveWidgetData<String>(
+            'sc${i}_board', s?.boardingStopId ?? '');
+        await HomeWidget.saveWidgetData<String>(
+            'sc${i}_target', s?.targetStopId ?? '');
+      }
+      await HomeWidget.updateWidget(androidName: _provider);
+    } catch (_) {}
+  }
+
+  /// Bir yolculuk başlarken rotasını hatırla — widget'taki "son yolculuk"
+  /// kısayolu bundan üretilir.
+  ///
+  /// Geçmiş kayıtları ([JourneyRecord]) yalnızca durak ADLARINI tutuyor;
+  /// arka planda alarm kurabilmek için KİMLİK gerekiyor, o yüzden ayrı yazılır.
+  static Future<void> rememberLastRoute({
+    required String lineId,
+    required String lineCode,
+    required String lineColor,
+    required String boardingStopId,
+    required String boardingStopName,
+    required String targetStopId,
+    required String targetStopName,
+  }) async {
+    if (!isAndroidDevice) return;
+    try {
+      await HomeWidget.saveWidgetData<String>('last_line', lineId);
+      await HomeWidget.saveWidgetData<String>('last_code', lineCode);
+      await HomeWidget.saveWidgetData<String>('last_color', lineColor);
+      await HomeWidget.saveWidgetData<String>('last_board', boardingStopId);
+      await HomeWidget.saveWidgetData<String>(
+          'last_board_name', boardingStopName);
+      await HomeWidget.saveWidgetData<String>('last_target', targetStopId);
+      await HomeWidget.saveWidgetData<String>(
+          'last_target_name', targetStopName);
+    } catch (_) {}
+  }
+
+  /// Hatırlanan son rota — widget kısayolu için (yoksa null).
+  static Future<WidgetShortcut?> lastRoute() async {
+    if (!isAndroidDevice) return null;
+    try {
+      final line = await HomeWidget.getWidgetData<String>('last_line');
+      final target = await HomeWidget.getWidgetData<String>('last_target');
+      if (line == null || line.isEmpty || target == null || target.isEmpty) {
+        return null;
+      }
+      final boardName =
+          await HomeWidget.getWidgetData<String>('last_board_name') ?? '';
+      final targetName =
+          await HomeWidget.getWidgetData<String>('last_target_name') ?? '';
+      return WidgetShortcut(
+        title: targetName,
+        subtitle: boardName.isEmpty ? 'Son yolculuk' : '$boardName → $targetName',
+        lineCode: await HomeWidget.getWidgetData<String>('last_code') ?? '',
+        color: await HomeWidget.getWidgetData<String>('last_color') ?? '',
+        lineId: line,
+        boardingStopId:
+            await HomeWidget.getWidgetData<String>('last_board') ?? '',
+        targetStopId: target,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Kısayolun kayıtlı kimlikleri (arka plan isolate'i buradan okur).
+  static Future<({String lineId, String boardingStopId, String targetStopId})?>
+      shortcutAt(int index) async {
+    final line = await HomeWidget.getWidgetData<String>('sc${index}_line');
+    final board = await HomeWidget.getWidgetData<String>('sc${index}_board');
+    final target = await HomeWidget.getWidgetData<String>('sc${index}_target');
+    if (line == null || line.isEmpty || target == null || target.isEmpty) {
+      return null;
+    }
+    return (
+      lineId: line,
+      boardingStopId: board ?? '',
+      targetStopId: target,
+    );
+  }
+
   /// Uygulama widget'a dokunularak açıldıysa hedef bağlantı (yoksa null).
   static Future<Uri?> initialLaunchUri() async {
     if (!isAndroidDevice) return null;
@@ -115,4 +215,31 @@ abstract final class HomeWidgetService {
     final s = km < 10 ? km.toStringAsFixed(1) : km.round().toString();
     return '${s.replaceAll('.', ',')} km';
   }
+}
+
+/// Widget'ın boş durumunda gösterilen tek-dokunuş kısayolu.
+class WidgetShortcut {
+  const WidgetShortcut({
+    required this.title,
+    required this.subtitle,
+    required this.lineCode,
+    required this.color,
+    required this.lineId,
+    required this.boardingStopId,
+    required this.targetStopId,
+  });
+
+  /// Üst satır — genelde hedef durak.
+  final String title;
+
+  /// Alt satır — "biniş → hedef" ya da "Son yolculuk".
+  final String subtitle;
+  final String lineCode;
+
+  /// Hat rengi "#RRGGBB" — rozetin dolgusu.
+  final String color;
+
+  final String lineId;
+  final String boardingStopId;
+  final String targetStopId;
 }

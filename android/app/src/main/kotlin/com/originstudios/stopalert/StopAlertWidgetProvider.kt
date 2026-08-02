@@ -14,6 +14,7 @@ import android.net.Uri
 import android.os.Build
 import android.view.View
 import android.widget.RemoteViews
+import es.antonborri.home_widget.HomeWidgetBackgroundIntent
 import es.antonborri.home_widget.HomeWidgetLaunchIntent
 import es.antonborri.home_widget.HomeWidgetProvider
 
@@ -46,20 +47,90 @@ class StopAlertWidgetProvider : HomeWidgetProvider() {
             if (active) {
                 bindActive(context, views, widgetData)
             } else {
-                bindIdle(context, views)
+                bindIdle(context, views, widgetData)
             }
             appWidgetManager.updateAppWidget(id, views)
         }
     }
 
-    private fun bindIdle(context: Context, views: RemoteViews) {
+    private fun bindIdle(
+        context: Context,
+        views: RemoteViews,
+        data: SharedPreferences
+    ) {
         views.setViewVisibility(R.id.widget_active, View.GONE)
         views.setViewVisibility(R.id.widget_idle, View.VISIBLE)
         views.setImageViewBitmap(R.id.idle_icon, idleBitmap(context))
-        // Hem kart hem düğme alarm kurma ekranını açar.
-        val intent = launchIntent(context, "/alarm/new")
-        views.setOnClickPendingIntent(R.id.widget_root, intent)
-        views.setOnClickPendingIntent(R.id.idle_button, intent)
+        // Sade "Alarm kur" düğmesi UYGULAMAYI açar (durak seçilecek).
+        val open = launchIntent(context, "/alarm/new")
+        views.setOnClickPendingIntent(R.id.widget_root, open)
+        views.setOnClickPendingIntent(R.id.idle_button, open)
+
+        val rows = listOf(
+            Shortcut(R.id.shortcut_0, R.id.shortcut_0_code, R.id.shortcut_0_title,
+                R.id.shortcut_0_sub, R.id.shortcut_0_go),
+            Shortcut(R.id.shortcut_1, R.id.shortcut_1_code, R.id.shortcut_1_title,
+                R.id.shortcut_1_sub, R.id.shortcut_1_go)
+        )
+        var shown = 0
+        rows.forEachIndexed { i, row ->
+            val title = data.getString("sc${i}_title", null)
+            if (title.isNullOrEmpty()) {
+                views.setViewVisibility(row.container, View.GONE)
+                return@forEachIndexed
+            }
+            shown++
+            views.setViewVisibility(row.container, View.VISIBLE)
+            views.setTextViewText(row.code, data.getString("sc${i}_code", ""))
+            views.setTextViewText(row.title, title)
+            views.setTextViewText(row.sub, data.getString("sc${i}_sub", ""))
+            views.setImageViewBitmap(row.go, playBitmap(context))
+            tintChip(views, row.code, colorOf(data.getString("sc${i}_color", null)))
+            // Kısayol UYGULAMAYI AÇMAZ: arka planda doğrudan alarmı başlatır.
+            views.setOnClickPendingIntent(
+                row.container,
+                HomeWidgetBackgroundIntent.getBroadcast(
+                    context, Uri.parse("stopalert://alarm/start?i=$i")
+                )
+            )
+        }
+        views.setTextViewText(
+            R.id.idle_subtitle,
+            if (shown > 0) context.getString(R.string.widget_shortcut_hint)
+            else context.getString(R.string.widget_idle_subtitle)
+        )
+    }
+
+    private data class Shortcut(
+        val container: Int,
+        val code: Int,
+        val title: Int,
+        val sub: Int,
+        val go: Int
+    )
+
+    /** Kısayoldaki "başlat" üçgeni. */
+    private fun playBitmap(context: Context): Bitmap {
+        val density = context.resources.displayMetrics.density
+        val size = (22 * density).toInt().coerceAtLeast(36)
+        val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bmp)
+        canvas.drawCircle(
+            size / 2f, size / 2f, size / 2f - 1f,
+            Paint(Paint.ANTI_ALIAS_FLAG).apply { color = BRAND }
+        )
+        val path = android.graphics.Path().apply {
+            val cx = size / 2f
+            val r = size / 4.6f
+            moveTo(cx - r * 0.55f, cx - r)
+            lineTo(cx + r * 0.85f, cx)
+            lineTo(cx - r * 0.55f, cx + r)
+            close()
+        }
+        canvas.drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+        })
+        return bmp
     }
 
     /** Boş durum simgesi: marka renginde içi boş halka + çan. */
@@ -107,12 +178,7 @@ class StopAlertWidgetProvider : HomeWidgetProvider() {
         // Rozet hat rengini alır. setBackgroundColor kullanılmaz — yuvarlak
         // köşeleri olan drawable'ı düz renkle ezerdi; tint şekli korur.
         // (API 31 öncesinde rozet marka kırmızısı kalır, kabul edilebilir.)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            views.setColorStateList(
-                R.id.line_code, "setBackgroundTintList",
-                ColorStateList.valueOf(accent)
-            )
-        }
+        tintChip(views, R.id.line_code, accent)
         views.setTextViewText(R.id.target_stop, target)
 
         // Dar widget: iki ayrı satır yerine "şimdiki → sonraki".
@@ -155,6 +221,22 @@ class StopAlertWidgetProvider : HomeWidgetProvider() {
         else -> if (remaining <= 1) "SON DURAK" else "YOLDA"
     }
 
+    /** Rozeti hat rengine boya (yuvarlak köşeler korunur; API 31+). */
+    private fun tintChip(views: RemoteViews, viewId: Int, color: Int) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            views.setColorStateList(
+                viewId, "setBackgroundTintList", ColorStateList.valueOf(color)
+            )
+        }
+    }
+
+    /** "#RRGGBB" → renk; çözülemezse marka kırmızısı. */
+    private fun colorOf(hex: String?): Int = try {
+        Color.parseColor(hex ?: "")
+    } catch (_: IllegalArgumentException) {
+        BRAND
+    }
+
     /** Hat rengi; yaklaşma/sinyal yok durumlarında uyarı rengine döner. */
     private fun parseColor(hex: String?, state: String): Int {
         if (state == "approaching" || state == "arrived") return BRAND
@@ -179,9 +261,9 @@ class StopAlertWidgetProvider : HomeWidgetProvider() {
         accent: Int
     ): Bitmap {
         val density = context.resources.displayMetrics.density
-        // Düzendeki ImageView 62dp; bitmap birebir o ölçüde üretilir.
-        val size = (62 * density).toInt().coerceAtLeast(96)
-        val stroke = 6f * density
+        // Düzendeki ImageView 86dp; bitmap birebir o ölçüde üretilir.
+        val size = (86 * density).toInt().coerceAtLeast(120)
+        val stroke = 8f * density
         val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bmp)
 
@@ -210,18 +292,18 @@ class StopAlertWidgetProvider : HomeWidgetProvider() {
         val number = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
             textAlign = Paint.Align.CENTER
-            textSize = 21f * density
+            textSize = 28f * density
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         }
         val caption = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.argb(150, 255, 255, 255)
             textAlign = Paint.Align.CENTER
-            textSize = 7.5f * density
+            textSize = 9.5f * density
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         }
         val cx = size / 2f
-        canvas.drawText("$remaining", cx, cx + 3f * density, number)
-        canvas.drawText("DURAK", cx, cx + 13f * density, caption)
+        canvas.drawText("$remaining", cx, cx + 4f * density, number)
+        canvas.drawText("DURAK", cx, cx + 18f * density, caption)
         return bmp
     }
 

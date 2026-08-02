@@ -40,6 +40,20 @@ class BusDataService {
     return '${dir.path}/bus.sqlite';
   }
 
+  /// İndirilmiş DB'nin yolu — yoksa null.
+  ///
+  /// Arka plan isolate'i (widget kısayolu) veritabanını kendisi açmak zorunda:
+  /// orada uygulamanın açık bağlantısı yoktur.
+  Future<String?> localPath() async {
+    if (!isMobileDevice) return null;
+    try {
+      final path = await _dbPath();
+      return await File(path).exists() ? path : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Cihazda indirilmiş DB var mı? (Dolum ekranını yalnızca ilk açılışta —
   /// yani yerel DB yokken — göstermek için.) Mobil dışında true (atlanır).
   Future<bool> hasLocal() async {

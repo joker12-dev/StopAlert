@@ -62,7 +62,13 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
   /// TURUNCU arama noktası: haritanın merkezi. Haritayı gezdirdikçe taşınır ve
   /// çevresindeki [_radius] metre içindeki duraklar listelenir (mavi nokta =
   /// kullanıcının gerçek konumu, o sabittir).
-  LatLng? _probe;
+  ///
+  /// setState DEĞİL, ayrı bir dinleyici olmasının sebebi: kaydırma sırasında
+  /// bu değer her karede değişiyor ve setState ile 200 durak işareti de her
+  /// karede yeniden kuruluyordu. Hızlı savurmada Dart yığını tükenip uygulama
+  /// "Out of Memory" ile çöküyordu (cihaz logunda kayıtlı). Artık yalnızca
+  /// daire ve turuncu nokta yeniden çizilir.
+  final _probe = ValueNotifier<LatLng?>(null);
 
   /// Arama yarıçapı (metre) — kullanıcı çipten değiştirir.
   double _radius = 500;
@@ -82,6 +88,7 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
   @override
   void dispose() {
     _debounce?.cancel();
+    _probe.dispose();
     super.dispose();
   }
 
@@ -106,8 +113,8 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
     if (!_mapReady || !mounted) return;
     try {
       final p = _probeLatLng();
-      if (_probe == p) return;
-      setState(() => _probe = p);
+      if (_probe.value == p) return;
+      _probe.value = p;
     } catch (_) {
       // kamera henüz hazır değil
     }
@@ -133,10 +140,8 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
       return;
     }
     _reloading = true;
-    setState(() {
-      _probe = probe;
-      _loadingStops = true;
-    });
+    _probe.value = probe;
+    setState(() => _loadingStops = true);
 
     const distance = Distance();
     final r = _radius;
@@ -457,6 +462,8 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
                   ),
                   children: [
                     TileLayer(
+                      keepBuffer: AppMapStyle.keepBuffer,
+                      panBuffer: AppMapStyle.panBuffer,
                       urlTemplate: AppMapStyle.urlTemplate,
                       subdomains: AppMapStyle.subdomains,
                       userAgentPackageName: 'com.originstudios.stopalert',
@@ -465,6 +472,8 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
                     ),
                     if (AppMapStyle.needsLabelOverlay)
                       TileLayer(
+                        keepBuffer: AppMapStyle.keepBuffer,
+                        panBuffer: AppMapStyle.panBuffer,
                         urlTemplate: AppMapStyle.labelOverlayUrl,
                         subdomains: AppMapStyle.labelSubdomains,
                         userAgentPackageName: 'com.originstudios.stopalert',
@@ -472,8 +481,10 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
                             RetinaMode.isHighDensity(context),
                       ),
                     // TURUNCU arama dairesi (haritayı gezdirdikçe taşınır)
-                    if (_probe case final p?)
-                      CircleLayer(circles: [
+                    ValueListenableBuilder<LatLng?>(
+                      valueListenable: _probe,
+                      builder: (context, p, _) => CircleLayer(circles: [
+                        if (p != null)
                         CircleMarker(
                           point: p,
                           radius: _radius,
@@ -485,6 +496,7 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
                           borderStrokeWidth: 2,
                         ),
                       ]),
+                    ),
                     // Yürüme rotası (yollardan)
                     if (_walk.length >= 2)
                       PolylineLayer(polylines: [
@@ -523,15 +535,18 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
                         ),
                       ]),
                     // Turuncu arama noktası (dairenin merkezi) — en üstte
-                    if (_probe case final p?)
-                      MarkerLayer(markers: [
-                        Marker(
-                          point: p,
-                          width: 22,
-                          height: 22,
-                          child: const _ProbeDot(),
-                        ),
+                    ValueListenableBuilder<LatLng?>(
+                      valueListenable: _probe,
+                      builder: (context, p, _) => MarkerLayer(markers: [
+                        if (p != null)
+                          Marker(
+                            point: p,
+                            width: 22,
+                            height: 22,
+                            child: const _ProbeDot(),
+                          ),
                       ]),
+                    ),
                   ],
                 ),
               ),

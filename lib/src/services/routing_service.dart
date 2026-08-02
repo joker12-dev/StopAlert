@@ -21,6 +21,9 @@ class RoutingService {
   final Map<String, List<LatLng>> _cache = {};
   static const _geo = Distance();
 
+  /// Bellekte tutulan azami güzergâh sayısı (ekleme sırasına göre eskiyen atılır).
+  static const _maxCached = 12;
+
   /// [waypoints] üzerinden yol polyline'ı. Çok fazla nokta varsa örneklenir
   /// (OSRM istek sınırı). Başarısızsa boş liste.
   Future<List<LatLng>> route(List<LatLng> waypoints,
@@ -51,6 +54,9 @@ class RoutingService {
       if (routes.isEmpty) return const [];
       final poly = cleanRoute(routes.first as Map<String, dynamic>, pts);
       if (poly.length < 2) return const [];
+      // Önbellek SINIRLI: bir otobüs güzergâhı binlerce LatLng tutuyor, sınırsız
+      // biriktirmek uzun oturumlarda belleği şişiriyordu. En eski atılır.
+      if (_cache.length >= _maxCached) _cache.remove(_cache.keys.first);
       _cache[key] = poly;
       return poly;
     } catch (_) {

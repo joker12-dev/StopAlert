@@ -6,4 +6,6 @@
     <string name="widget_idle_subtitle">Durağını seç, uyandıralım</string>
     <string name="widget_create_alarm">Alarm kur</string>
     <string name="widget_ring_desc">Kalan durak göstergesi</string>
+    <string name="widget_start_alarm">Alarmı başlat</string>
+    <string name="widget_shortcut_hint">Kısayola dokun, alarm hemen başlasın</string>
 </resources>

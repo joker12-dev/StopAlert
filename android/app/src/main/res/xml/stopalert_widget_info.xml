@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  4x1 widget — alçak ve geniş. Önceki 4x2 hâli ana ekranda fazla yer kaplıyordu.
+  4x2 widget. Boş durumda "Alarm kur" düğmesinin altına, tek dokunuşla alarmı
+  başlatan kısayollar (son yolculuk / favori rota) sığsın diye iki sıra.
   minWidth/minHeight eski Android'ler için, targetCell* Android 12+ için.
   Yeniden boyutlandırılabilir: kullanıcı isterse uzatabilir.
   updatePeriodMillis=0: sistem periyodik tazelemesi kapalı; tazeleme takip
@@ -9,12 +10,12 @@
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:description="@string/widget_description"
     android:initialLayout="@layout/widget_stopalert"
-    android:minHeight="72dp"
-    android:minResizeHeight="72dp"
+    android:minHeight="150dp"
+    android:minResizeHeight="110dp"
     android:minWidth="250dp"
     android:previewLayout="@layout/widget_stopalert"
     android:resizeMode="horizontal|vertical"
-    android:targetCellHeight="1"
+    android:targetCellHeight="2"
     android:targetCellWidth="4"
     android:updatePeriodMillis="0"
     android:widgetCategory="home_screen" />

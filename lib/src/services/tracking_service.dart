@@ -97,6 +97,18 @@ class TrackingTaskHandler extends TaskHandler {
     _lastGpsAt = DateTime.now();
     await AlarmNotifications.init();
 
+    // Bu yolculuk ZATEN varmıştı ve servis (uygulama öldürüldüğü için) yeniden
+    // başlatıldı. Sıfırdan takibe geçilirse kullanıcı hedefte olduğu hâlde
+    // motor "yolculuk sürüyor" der ve İndin sayfası hiç açılmaz. Onun yerine
+    // varış durumu korunur ve UI'ya bildirilir.
+    final pending =
+        await FlutterForegroundTask.getData<String>(key: 'arrival_pending');
+    if (pending == '1') {
+      _arrived = true;
+      _republishArrival();
+      return;
+    }
+
     _sub = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.high,
@@ -178,6 +190,12 @@ class TrackingTaskHandler extends TaskHandler {
     }
     if (status.state == JourneyState.arrived) {
       _arrived = true;
+      // VARIŞ KALICI İŞARETLENİR. Servis `allowAutoRestart: true` ile
+      // çalışıyor: kullanıcı uygulamayı son uygulamalardan silince Android
+      // servisi SIFIRDAN başlatabiliyor ve varış/alarm durumu kayboluyordu.
+      // O zaman motor yolculuğu yeniden "devam ediyor" sanıp İndin sayfasına
+      // hiç geçmiyor, ekran takılı kalıyordu (bkz. [onStart]).
+      FlutterForegroundTask.saveData(key: 'arrival_pending', value: '1');
       _learnFromJourney(); // ÖĞRENME: ölçülen segment sürelerini modele işle
       // Yaklaşma alarmı zaten susturulduysa varışta yeniden çaldırma; ekran
       // "arrived" durumunu görüp İndin sayfasına kendiliğinden geçer.
@@ -185,6 +203,34 @@ class TrackingTaskHandler extends TaskHandler {
         _fireAlarm(payload.targetStopName, 'Vardın — inme zamanı');
       }
     }
+  }
+
+  /// Yeniden başlatılan serviste varış durumunu UI'ya yeniden duyur.
+  ///
+  /// Kalıcı bildirim de varış metnine döner: kullanıcı uygulamayı açmadan da
+  /// yolculuğun bittiğini görür.
+  void _republishArrival() {
+    final payload = _payload;
+    if (payload == null) return;
+    final update = TrackingUpdate(
+      state: JourneyState.arrived.name,
+      stopsRemaining: 0,
+      etaSeconds: 0,
+      distanceMeters: 0,
+      currentStopName: payload.targetStopName,
+      nextStopName: payload.targetStopName,
+      lat: _last?.lat ?? 0,
+      lon: _last?.lon ?? 0,
+      alarmActive: false,
+      confidence: 1,
+    );
+    _last = update;
+    FlutterForegroundTask.updateService(
+      notificationTitle: 'Vardın · ${payload.targetStopName}',
+      notificationText: 'Yolculuk tamamlandı',
+    );
+    FlutterForegroundTask.sendDataToMain(update.encode());
+    FlutterForegroundTask.saveData(key: 'last_update', value: update.encode());
   }
 
   /// Bu yolculukta iyi GPS altında ölçülen segment sürelerini öğrenme deposuna
@@ -510,6 +556,22 @@ abstract final class TrackingController {
     await FlutterForegroundTask.saveData(
         key: 'journey_payload', value: payload.encode());
     await FlutterForegroundTask.removeData(key: 'last_update');
+    // Önceki yolculuğun varış işareti yeni yolculuğa taşınmamalı.
+    await FlutterForegroundTask.removeData(key: 'arrival_pending');
+    // Widget'taki "son yolculuk" kısayolu bu rotayı gösterecek.
+    final target = payload.targetStop;
+    unawaited(HomeWidgetService.rememberLastRoute(
+      lineId: payload.line.id,
+      lineCode: payload.line.code,
+      lineColor: colorHex(lineTypeColor(payload.line.type)),
+      boardingStopId: payload.boardingStopId,
+      boardingStopName: payload.line.stops
+          .firstWhere((s) => s.id == payload.boardingStopId,
+              orElse: () => payload.line.stops.first)
+          .name,
+      targetStopId: payload.targetStopId,
+      targetStopName: target?.name ?? payload.targetStopName,
+    ));
     if (await FlutterForegroundTask.isRunningService) {
       await FlutterForegroundTask.stopService();
     }
@@ -533,6 +595,12 @@ abstract final class TrackingController {
     if (await FlutterForegroundTask.isRunningService) {
       await FlutterForegroundTask.stopService();
     }
+    // BİTEN YOLCULUĞUN İZLERİ SİLİNİR. Servis `allowAutoRestart: true` ile
+    // çalışıyor; kayıt kalırsa Android servisi kendiliğinden başlattığında
+    // tamamlanmış yolculuk diriltiliyor ve uygulama açılışta ölü bir takip
+    // ekranına düşüyordu.
+    await FlutterForegroundTask.removeData(key: 'journey_payload');
+    await FlutterForegroundTask.removeData(key: 'arrival_pending');
     // Servis isolate'inin onDestroy'u da temizliyor; servis hiç başlamadıysa
     // (ör. izin reddi) widget aktif takılı kalmasın diye burada da yapılır.
     await HomeWidgetService.clear();

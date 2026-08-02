@@ -32,6 +32,17 @@ abstract final class AppMapStyle {
   /// Aktif stil (Ayarlar'dan değişir).
   static MapTileStyle style = MapTileStyle.canli;
 
+  /// Görünen alanın ÖTESİNDE kaç halka karo tutulsun.
+  ///
+  /// flutter_map varsayılanı 2; hızlı kaydırmada ekran dışı karolar birikip
+  /// belleği şişiriyordu (cihazda "Out of Memory" ile çökme kaydedildi).
+  /// 1 halka, kaydırırken boş kare görmeye yetecek kadar önden yükler ama
+  /// bellekte tuttuğu karo sayısını belirgin azaltır.
+  static const keepBuffer = 1;
+
+  /// Kaydırma yönünde ÖN YÜKLEME halkası. 0 = yalnızca görünen alan.
+  static const panBuffer = 0;
+
   /// Eski API — true = açık tema. Ayarlardaki 'light'/'dark' ile uyum için.
   static bool get light => style == MapTileStyle.sade;
   static set light(bool v) => style = v ? MapTileStyle.sade : MapTileStyle.gece;

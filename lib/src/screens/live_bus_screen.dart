@@ -154,7 +154,24 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen> {
     ));
   }
 
-  List<BusVehicle> get _shown => _vehicles;
+  /// Yalnızca GÖSTERİLEN yöndeki araçlar.
+  ///
+  /// İETT hattın bütün araçlarını tek listede veriyor; yönü `guzergahkodu`
+  /// içindeki `_G_`/`_D_` ayırıyor. Süzgeç olmadan gidişteki 3 ve dönüşteki 2
+  /// otobüs her iki yönde de görünüyordu.
+  ///
+  /// Yön anlaşılamayan araç (depar/garaj seferi, boş güzergâh kodu) GİZLENMEZ:
+  /// otobüsün orada olduğu gerçek, yönünü bilmemek onu yok saymayı gerektirmez.
+  List<BusVehicle> get _shown => [
+        for (final v in _vehicles)
+          if (v.routeCode.isEmpty ||
+              (!v.routeCode.contains('_G_') && !v.routeCode.contains('_D_')) ||
+              v.isGidis == _isGidisLine)
+            v,
+      ];
+
+  /// Gösterilen varyant gidiş mi — hat id'si `bus:147_G` biçiminde.
+  bool get _isGidisLine => _line.id.endsWith('_G');
 
   List<Stop> get _stops =>
       [for (final s in _line.stops) if (s.lat != 0 || s.lon != 0) s];
@@ -267,6 +284,8 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen> {
               ),
               children: [
                 TileLayer(
+                  keepBuffer: AppMapStyle.keepBuffer,
+                  panBuffer: AppMapStyle.panBuffer,
                   urlTemplate: AppMapStyle.urlTemplate,
                   subdomains: AppMapStyle.subdomains,
                   userAgentPackageName: 'com.originstudios.stopalert',
@@ -275,6 +294,8 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen> {
                 ),
                 if (AppMapStyle.needsLabelOverlay)
                   TileLayer(
+                    keepBuffer: AppMapStyle.keepBuffer,
+                    panBuffer: AppMapStyle.panBuffer,
                     urlTemplate: AppMapStyle.labelOverlayUrl,
                     subdomains: AppMapStyle.labelSubdomains,
                     userAgentPackageName: 'com.originstudios.stopalert',
@@ -365,14 +386,25 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen> {
     );
   }
 
+  /// İşaretin NOKTASI (üstteki yuvarlak) tam durak koordinatına otursun diye
+  /// hizalama. Varsayılan `Alignment.center` kutunun ortasını, `topCenter` ise
+  /// üst kenarını koordinata koyar; ikisinde de etiket kutuyu uzattığı için
+  /// yuvarlak yoldan aşağı kayıyordu. Doğrusu: yuvarlağın MERKEZİNİ koordinata
+  /// getiren oran.
+  static Alignment _dotAlignment(double dotBox, double totalHeight) =>
+      Alignment(0, dotBox / totalHeight - 1);
+
   /// Ara durak: küçük nokta + (yakınsa) adı. Dokununca alarm kartı açılır.
   Marker _stopMarker(Stop s, {required bool showLabels}) {
     final selected = _selectedStop?.id == s.id;
+    const dotBox = 24.0;
+    final height = showLabels ? 58.0 : dotBox;
     return Marker(
       point: LatLng(s.lat, s.lon),
-      width: showLabels ? 132 : 22,
-      height: showLabels ? 52 : 22,
-      alignment: Alignment.topCenter,
+      width: showLabels ? 132 : dotBox,
+      height: height,
+      alignment:
+          showLabels ? _dotAlignment(dotBox, height) : Alignment.center,
       child: GestureDetector(
         onTap: () {
           Haptics.light();
@@ -384,13 +416,14 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _StopDot(selected: selected),
+            SizedBox(
+              width: dotBox,
+              height: dotBox,
+              child: Center(child: _StopDot(selected: selected)),
+            ),
             if (showLabels)
               Flexible(
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: _MapLabel(text: s.name, highlight: selected),
-                ),
+                child: _MapLabel(text: s.name, highlight: selected),
               ),
           ],
         ),
@@ -401,11 +434,13 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen> {
   /// Hattın ilk/son durağı — başlangıç ve bitiş işareti.
   Marker _terminalMarker(Stop s, {required bool isStart}) {
     final selected = _selectedStop?.id == s.id;
+    const dotBox = 30.0;
+    const height = 66.0;
     return Marker(
       point: LatLng(s.lat, s.lon),
       width: 140,
-      height: 58,
-      alignment: Alignment.topCenter,
+      height: height,
+      alignment: _dotAlignment(dotBox, height),
       child: GestureDetector(
         onTap: () {
           Haptics.light();
@@ -417,33 +452,36 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 26,
-              height: 26,
-              decoration: BoxDecoration(
-                color: isStart
-                    ? VigilantColors.secondary
-                    : VigilantColors.primary,
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 2.5),
-                boxShadow: [
-                  BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.45),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2)),
-                ],
+            SizedBox(
+              width: dotBox,
+              height: dotBox,
+              child: Center(
+                child: Container(
+                  width: 26,
+                  height: 26,
+                  decoration: BoxDecoration(
+                    color: isStart
+                        ? VigilantColors.secondary
+                        : VigilantColors.primary,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2.5),
+                    boxShadow: [
+                      BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.45),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2)),
+                    ],
+                  ),
+                  child: Icon(
+                      isStart ? Icons.trip_origin_rounded : Icons.flag_rounded,
+                      size: 14,
+                      color: Colors.white),
+                ),
               ),
-              child: Icon(
-                  isStart ? Icons.trip_origin_rounded : Icons.flag_rounded,
-                  size: 14,
-                  color: Colors.white),
             ),
             Flexible(
-              child: Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: _MapLabel(
-                    text: s.name, highlight: selected, strong: true),
-              ),
+              child: _MapLabel(
+                  text: s.name, highlight: selected, strong: true),
             ),
           ],
         ),

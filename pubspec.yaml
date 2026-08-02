@@ -39,12 +39,12 @@ dev_dependencies:
   flutter_lints: ^5.0.0
   sqflite_common_ffi: ^2.3.4
 
-# Uygulama simgesi: StopAlertLogo'dan uretilen kaynaklar (tool: make_icon.py).
+# Uygulama simgesi: newIcon.png'den uretilir (Stopi maskotu, koyu zemin).
 flutter_launcher_icons:
   android: true
-  ios: false
+  ios: true
   image_path: assets/icon/app_icon.png
-  adaptive_icon_background: "#F0201A"
+  adaptive_icon_background: "#121212"
   adaptive_icon_foreground: assets/icon/app_icon_fg.png
 
 flutter:

@@ -276,23 +276,31 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
   }
 
   /// Yolculuğu başarıyla tamamla: takibi/servisi durdur, İndin sayfasına geç.
+  ///
+  /// Temizlik işleri (telemetri, öğrenme, servisi durdurma) İndin sayfasına
+  /// geçişi ASLA engellememeli: biri hata verirse kullanıcı ölü bir takip
+  /// ekranında kalıyordu — alarm susuyor ama hiçbir şey olmuyordu.
   void _completeJourney() {
     if (_arrivedHandled) return;
     _arrivedHandled = true;
-    Telemetry.log('journey_arrived');
-    LiveActivityService.instance.end();
-    _snoozeTimer?.cancel();
-    _uiTicker?.cancel();
-    // ÖĞRENME: uygulama içi (web/masaüstü) modda ölçülen segment sürelerini
-    // burada kaydet; servis modunda arka plan görevi zaten kaydeder.
-    if (!_serviceMode) {
-      final obs = _engine?.observations() ?? const [];
-      if (obs.isNotEmpty) unawaited(SegmentLearningStore.record(obs));
+    try {
+      Telemetry.log('journey_arrived');
+      LiveActivityService.instance.end();
+      _snoozeTimer?.cancel();
+      _uiTicker?.cancel();
+      // ÖĞRENME: uygulama içi (web/masaüstü) modda ölçülen segment sürelerini
+      // burada kaydet; servis modunda arka plan görevi zaten kaydeder.
+      if (!_serviceMode) {
+        final obs = _engine?.observations() ?? const [];
+        if (obs.isNotEmpty) unawaited(SegmentLearningStore.record(obs));
+      }
+      // Öğrenilen sayı rozetini tazele (Ayarlar → Öğrenme).
+      ref.invalidate(learnedSegmentCountProvider);
+      _stopTracking();
+      if (_serviceMode) unawaited(TrackingController.stop());
+    } catch (_) {
+      // Yut: aşağıdaki geçiş her hâlükârda yapılmalı.
     }
-    // Öğrenilen sayı rozetini tazele (Ayarlar → Öğrenme).
-    ref.invalidate(learnedSegmentCountProvider);
-    _stopTracking();
-    if (_serviceMode) unawaited(TrackingController.stop());
     _goToArrival();
   }
 

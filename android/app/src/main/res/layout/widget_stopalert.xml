@@ -1,79 +1,211 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  StopAlert ana ekran widget'ı (4x1 — alçak ve geniş).
+  StopAlert ana ekran widget'ı (4x2).
 
   Tek düzen içinde iki durum var; sağlayıcı (StopAlertWidgetProvider) hangisinin
   görüneceğini setViewVisibility ile seçer:
-    widget_idle   → aktif alarm yok
+    widget_idle   → aktif alarm yok: "Alarm kur" + kısayollar
     widget_active → kalan durak halkası + durak bilgileri
 
-  Yükseklik bilinçli olarak dar tutuldu: ana ekranda iki sıra kaplamak yerine
-  tek sıraya sığsın. Bu yüzden "şu anki durak" ve "sonraki durak" ayrı satırlar
-  değil, tek satırda "şimdiki → sonraki" biçiminde gösteriliyor.
+  Boş durumdaki KISAYOLLAR (son yolculuk / favori rota) uygulamayı açmadan
+  doğrudan alarmı başlatır; sade "Alarm kur" düğmesi uygulamaya götürür.
 -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/widget_background"
-    android:paddingLeft="12dp"
-    android:paddingTop="10dp"
-    android:paddingRight="12dp"
-    android:paddingBottom="10dp">
+    android:padding="14dp">
 
     <!-- ================= AKTİF ALARM YOK ================= -->
     <LinearLayout
         android:id="@+id/widget_idle"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:baselineAligned="false"
-        android:gravity="center_vertical"
-        android:orientation="horizontal">
-
-        <ImageView
-            android:id="@+id/idle_icon"
-            android:layout_width="34dp"
-            android:layout_height="34dp"
-            android:contentDescription="@string/widget_idle_title" />
+        android:orientation="vertical">
 
         <LinearLayout
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
-            android:layout_weight="1"
-            android:orientation="vertical">
+            android:baselineAligned="false"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:id="@+id/idle_icon"
+                android:layout_width="30dp"
+                android:layout_height="30dp"
+                android:contentDescription="@string/widget_idle_title" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="9dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/widget_idle_title"
+                    android:textColor="#FFFFFF"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/idle_subtitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text="@string/widget_idle_subtitle"
+                    android:textColor="#8AFFFFFF"
+                    android:textSize="11sp" />
+            </LinearLayout>
 
             <TextView
+                android:id="@+id/idle_button"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/widget_idle_title"
+                android:background="@drawable/widget_button"
+                android:paddingLeft="16dp"
+                android:paddingTop="7dp"
+                android:paddingRight="16dp"
+                android:paddingBottom="7dp"
+                android:text="@string/widget_create_alarm"
                 android:textColor="#FFFFFF"
-                android:textSize="14sp"
+                android:textSize="12sp"
                 android:textStyle="bold" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:maxLines="1"
-                android:text="@string/widget_idle_subtitle"
-                android:textColor="#8AFFFFFF"
-                android:textSize="11sp" />
         </LinearLayout>
 
-        <TextView
-            android:id="@+id/idle_button"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:background="@drawable/widget_button"
-            android:paddingLeft="18dp"
-            android:paddingTop="8dp"
-            android:paddingRight="18dp"
-            android:paddingBottom="8dp"
-            android:text="@string/widget_create_alarm"
-            android:textColor="#FFFFFF"
-            android:textSize="13sp"
-            android:textStyle="bold" />
+        <!-- Tek dokunuşta alarm: son yolculuk / favori rota -->
+        <LinearLayout
+            android:id="@+id/shortcut_0"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_marginTop="10dp"
+            android:layout_weight="1"
+            android:background="@drawable/widget_shortcut_bg"
+            android:baselineAligned="false"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingLeft="10dp"
+            android:paddingRight="10dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/shortcut_0_code"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/widget_chip"
+                android:maxLines="1"
+                android:minWidth="40dp"
+                android:paddingLeft="7dp"
+                android:paddingTop="2dp"
+                android:paddingRight="7dp"
+                android:paddingBottom="2dp"
+                android:textAlignment="center"
+                android:textColor="#FFFFFF"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="9dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/shortcut_0_title"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="#FFFFFF"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/shortcut_0_sub"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="#8AFFFFFF"
+                    android:textSize="10sp" />
+            </LinearLayout>
+
+            <ImageView
+                android:id="@+id/shortcut_0_go"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:contentDescription="@string/widget_start_alarm" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/shortcut_1"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_marginTop="7dp"
+            android:layout_weight="1"
+            android:background="@drawable/widget_shortcut_bg"
+            android:baselineAligned="false"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingLeft="10dp"
+            android:paddingRight="10dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/shortcut_1_code"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/widget_chip"
+                android:maxLines="1"
+                android:minWidth="40dp"
+                android:paddingLeft="7dp"
+                android:paddingTop="2dp"
+                android:paddingRight="7dp"
+                android:paddingBottom="2dp"
+                android:textAlignment="center"
+                android:textColor="#FFFFFF"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="9dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/shortcut_1_title"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="#FFFFFF"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/shortcut_1_sub"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="#8AFFFFFF"
+                    android:textSize="10sp" />
+            </LinearLayout>
+
+            <ImageView
+                android:id="@+id/shortcut_1_go"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:contentDescription="@string/widget_start_alarm" />
+        </LinearLayout>
     </LinearLayout>
 
     <!-- ================= ALARM KURULU ================= -->
@@ -89,18 +221,17 @@
         <!-- Kalan durak halkası (Canvas'ta çizilip bitmap olarak basılır) -->
         <ImageView
             android:id="@+id/ring"
-            android:layout_width="62dp"
-            android:layout_height="62dp"
+            android:layout_width="86dp"
+            android:layout_height="86dp"
             android:contentDescription="@string/widget_ring_desc" />
 
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="12dp"
+            android:layout_marginStart="14dp"
             android:layout_weight="1"
             android:orientation="vertical">
 
-            <!-- Hat kodu rozeti · durum -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -113,59 +244,57 @@
                     android:layout_height="wrap_content"
                     android:background="@drawable/widget_chip"
                     android:maxLines="1"
-                    android:paddingLeft="7dp"
-                    android:paddingTop="1dp"
-                    android:paddingRight="7dp"
-                    android:paddingBottom="1dp"
+                    android:paddingLeft="8dp"
+                    android:paddingTop="2dp"
+                    android:paddingRight="8dp"
+                    android:paddingBottom="2dp"
                     android:textColor="#FFFFFF"
-                    android:textSize="11sp"
+                    android:textSize="12sp"
                     android:textStyle="bold" />
 
                 <TextView
                     android:id="@+id/state_label"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="7dp"
+                    android:layout_marginStart="8dp"
                     android:layout_weight="1"
                     android:ellipsize="end"
                     android:maxLines="1"
                     android:textColor="#FF453A"
-                    android:textSize="9sp"
+                    android:textSize="10sp"
                     android:textStyle="bold" />
             </LinearLayout>
 
-            <!-- Hedef durak -->
             <TextView
                 android:id="@+id/target_stop"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="3dp"
+                android:layout_marginTop="5dp"
                 android:ellipsize="end"
                 android:maxLines="1"
                 android:textColor="#FFFFFF"
-                android:textSize="14sp"
+                android:textSize="16sp"
                 android:textStyle="bold" />
 
-            <!-- Kalan mesafe · ETA -->
             <TextView
                 android:id="@+id/distance"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:maxLines="1"
-                android:textColor="#B3FFFFFF"
-                android:textSize="11sp" />
-
-            <!-- "şimdiki durak → sonraki durak" tek satırda -->
-            <TextView
-                android:id="@+id/stops_line"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="1dp"
                 android:ellipsize="end"
                 android:maxLines="1"
+                android:textColor="#B3FFFFFF"
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/stops_line"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:ellipsize="end"
+                android:maxLines="2"
                 android:textColor="#8AFFFFFF"
-                android:textSize="10sp" />
+                android:textSize="11sp" />
         </LinearLayout>
     </LinearLayout>
 </FrameLayout>

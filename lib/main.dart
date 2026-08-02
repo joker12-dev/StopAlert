@@ -2,8 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:home_widget/home_widget.dart';
 
 import 'src/data/journey_payload.dart';
+import 'src/data/models.dart';
 import 'src/screens/data_bootstrap_screen.dart';
 import 'src/screens/live_tracking_screen.dart';
 import 'src/screens/onboarding_screen.dart';
@@ -13,10 +15,12 @@ import 'src/services/alarm_notifications.dart';
 import 'src/services/bus_data_service.dart';
 import 'src/services/cloud_learning_service.dart';
 import 'src/services/firebase_bootstrap.dart';
+import 'src/services/home_widget_launcher.dart';
 import 'src/services/home_widget_service.dart';
 import 'src/services/permission_service.dart';
 import 'src/services/telemetry.dart';
 import 'src/services/tracking_service.dart';
+import 'src/state/journey_provider.dart';
 import 'src/state/onboarding_provider.dart';
 import 'src/state/settings_provider.dart';
 import 'src/theme/app_theme.dart';
@@ -91,9 +95,52 @@ class _RootGateState extends ConsumerState<_RootGate>
   /// Takip'e düşer; burada yalnızca "Alarm kur" bağlantısı karşılanır.
   Future<void> _listenHomeWidget() async {
     if (!isAndroidDevice) return;
+    // Kısayollara basılınca uygulama açılmadan alarm başlasın diye arka plan
+    // giriş noktasını kaydet.
+    unawaited(HomeWidget.registerInteractivityCallback(
+        homeWidgetBackgroundCallback));
     _handleWidgetUri(await HomeWidgetService.initialLaunchUri());
     _widgetClicks = HomeWidgetService.clicks.listen(_handleWidgetUri);
+    unawaited(_refreshWidgetShortcuts());
   }
+
+  /// Widget'ın boş durumundaki iki kısayolu tazele: en son yolculuk ve ilk
+  /// favori rota. Uygulama her öne geldiğinde güncellenir.
+  Future<void> _refreshWidgetShortcuts() async {
+    if (!isAndroidDevice) return;
+    try {
+      final shortcuts = <WidgetShortcut>[];
+      // 1) Son yolculuk (takip başlarken hatırlandı).
+      final last = await HomeWidgetService.lastRoute();
+      if (last != null) shortcuts.add(last);
+      // 2) Favori rota — son yolculukla aynıysa atlanır.
+      final favorites = await ref
+          .read(favoritesStreamProvider.future)
+          .timeout(_widgetDataTimeout);
+      for (final f in favorites) {
+        if (shortcuts.any((s) =>
+            s.lineId == f.lineId && s.targetStopId == f.targetStopId)) {
+          continue;
+        }
+        shortcuts.add(WidgetShortcut(
+          title: f.targetStopName,
+          subtitle: '${f.boardingStopName} → ${f.targetStopName}',
+          lineCode: f.lineCode,
+          color: colorHex(lineTypeColor(
+              LineType.values.asNameMap()[f.lineTypeName] ?? LineType.bus)),
+          lineId: f.lineId,
+          boardingStopId: f.boardingStopId,
+          targetStopId: f.targetStopId,
+        ));
+        if (shortcuts.length == 2) break;
+      }
+      await HomeWidgetService.setShortcuts(shortcuts);
+    } catch (_) {
+      // Favori yoksa/okunamadıysa widget yalnızca "Alarm kur" gösterir.
+    }
+  }
+
+  static const _widgetDataTimeout = Duration(seconds: 8);
 
   void _handleWidgetUri(Uri? uri) {
     if (uri == null || !mounted) return;
@@ -141,6 +188,8 @@ class _RootGateState extends ConsumerState<_RootGate>
     if (state == AppLifecycleState.resumed) {
       _refreshPermissionStatus();
       _flushCloudLearning();
+      // Yeni favori/yolculuk widget kısayollarına yansısın.
+      unawaited(_refreshWidgetShortcuts());
     }
   }
 

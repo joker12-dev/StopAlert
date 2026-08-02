@@ -70,6 +70,17 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/stopalert_widget_info" />
         </receiver>
+        <!-- Widget'taki kısayollara (son yolculuk / favori rota) basınca alarmı
+             UYGULAMAYI AÇMADAN başlatan arka plan alıcısı. Widget etkileşimi,
+             Android'in "arka planda ön plan servisi başlatma" kısıtından muaf
+             tutulan durumlardan biridir. -->
+        <receiver
+            android:name="es.antonborri.home_widget.HomeWidgetBackgroundReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="es.antonborri.home_widget.action.BACKGROUND" />
+            </intent-filter>
+        </receiver>
         <!-- AdMob Uygulama Kimliği (App ID) — StopAlert Android. -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"

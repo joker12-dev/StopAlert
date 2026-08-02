@@ -305,7 +305,30 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   }
 
   /// Son arama kaydını gerçek hat verisiyle yeniden çözer ve alarma taşır.
-  void _openRecent(RecentSearch entry) {
+  ///
+  /// İki tür kayıt var: DURAKLI (hat + hedef durak → doğrudan alarm kurulumu)
+  /// ve DURAKSIZ (yalnızca hat → hat sayfası). Duraksız kayıt `stopId` boş
+  /// olanıdır; kullanıcı aramada "147"ye dokunduğunda böyle yazılır.
+  Future<void> _openRecent(RecentSearch entry) async {
+    if (entry.stopId.isEmpty) {
+      Haptics.light();
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => LineDetailScreen(code: entry.lineCode)),
+      );
+      return;
+    }
+    // Otobüs hatları gömülü listede değil, indirilen DB'de.
+    if (isBusId(entry.lineId)) {
+      final line = await TransitDb.instance.buildLine(entry.lineId);
+      if (!mounted) return;
+      final i = line?.indexOfStop(entry.stopId) ?? -1;
+      if (line != null && i != -1) {
+        _openAlarmSetup(line.stops[i].name, line: line, stop: line.stops[i]);
+        return;
+      }
+      _openAlarmSetup(entry.stopName);
+      return;
+    }
     final lines = ref.read(linesProvider).valueOrNull ?? const <TransitLine>[];
     TransitLine? line;
     Stop? stop;
@@ -324,6 +347,16 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   /// Otobüs hattı seçildi: tek hat sayfasını aç (gidiş/dönüş + duraklar).
   void _openBusLine(TransitLineBrief brief) {
     Haptics.light();
+    // Hat seçimi de "Son Aramalar"a yazılır: kullanıcı 147'yi arayıp açtıysa
+    // ertesi gün tekrar aramak zorunda kalmamalı. Durak henüz seçilmediği
+    // için kayıt DURAKSIZ olur (bkz. [_openRecent]).
+    ref.read(recentSearchesProvider.notifier).add(RecentSearch(
+          stopName: brief.name.isEmpty ? brief.code : brief.name,
+          stopId: '',
+          lineId: brief.id,
+          lineCode: brief.code,
+          lineTypeName: brief.type.name,
+        ));
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => LineDetailScreen(code: brief.code)),
     );

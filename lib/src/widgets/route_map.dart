@@ -196,6 +196,8 @@ class _RouteMapState extends State<RouteMap> {
           ),
           children: [
             TileLayer(
+              keepBuffer: AppMapStyle.keepBuffer,
+              panBuffer: AppMapStyle.panBuffer,
               urlTemplate: AppMapStyle.urlTemplate,
               subdomains: AppMapStyle.subdomains,
               userAgentPackageName: 'com.originstudios.stopalert',
