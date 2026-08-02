@@ -69,9 +69,15 @@ void main() {
       expect(TransitCities.kocaeli.hasLiveBus, isFalse);
     });
 
-    test('trafik ve duyuru beslemesi yalnızca İstanbul’da', () {
+    test('trafik iki şehirde de var (ayrı servisler)', () {
+      // İstanbul: İBB Ulaşım Yönetim Merkezi indeksi.
       expect(TransitCities.istanbul.hasTraffic, isTrue);
-      expect(TransitCities.kocaeli.hasTraffic, isFalse);
+      // Kocaeli: Akıllı Şehir Kocaeli anlık yoğunluk servisi.
+      expect(TransitCities.kocaeli.hasTraffic, isTrue);
+    });
+
+    test('duyuru beslemesi yalnızca İstanbul’da', () {
+      // İETT sefer duyurusu servisi veriyor; Kocaeli'de karşılığı yok.
       expect(TransitCities.istanbul.hasAnnouncements, isTrue);
       expect(TransitCities.kocaeli.hasAnnouncements, isFalse);
     });

@@ -84,7 +84,9 @@ class _RootGateState extends ConsumerState<_RootGate>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    if (isMobileDevice) _checkData();
+    // Veri kontrolü izin kapısından SONRA yapılır (bkz. build): şehir tahmini
+    // konum gerektiriyor ve izin henüz istenmemiş olabilir.
+    if (!isMobileDevice) _dataReady = true;
     _refreshPermissionStatus();
     _flushCloudLearning();
     _listenHomeWidget();
@@ -151,6 +153,12 @@ class _RootGateState extends ConsumerState<_RootGate>
     }
   }
 
+  /// İzin kapısı geçildikten sonra: şehri konumdan tazele, paketi kontrol et.
+  Future<void> _afterPermissions() async {
+    await ref.read(cityProvider.notifier).refreshFromLocation();
+    if (mounted) await _checkData();
+  }
+
   /// İlk açılışta yerel otobüs DB'si yoksa dolum ekranını göster; varsa arka
   /// planda aç/güncelle ve akışa hemen devam et.
   Future<void> _checkData() async {
@@ -204,11 +212,13 @@ class _RootGateState extends ConsumerState<_RootGate>
     }
     final report = await PermissionService().check();
     if (!mounted) return;
+    var justBecameReady = false;
     setState(() {
       final current = _permissionsOk;
       if (current == null) {
         // İlk açılış: izinler tamsa kapıyı hiç gösterme.
         _permissionsOk = report.criticalGranted;
+        justBecameReady = report.criticalGranted;
       } else if (current && !report.criticalGranted) {
         // Kullanımdayken izin geri alındı: kapı yeniden öne gelsin.
         _permissionsOk = false;
@@ -217,6 +227,8 @@ class _RootGateState extends ConsumerState<_RootGate>
       // dönüşte sayfanın aniden kapanıp kullanıcıyı yarıda bırakmaması için
       // kapı yalnızca kendi "Devam et" butonuyla (onCompleted) kapanır.
     });
+    // İzinler zaten verilmişse dolum akışı burada başlar (kapı gösterilmedi).
+    if (justBecameReady && _dataReady == null) await _checkData();
   }
 
   @override
@@ -227,24 +239,33 @@ class _RootGateState extends ConsumerState<_RootGate>
       error: (_, __) => const BottomNavShell(),
       data: (done) {
         if (!done) return const OnboardingScreen();
-        // İlk açılış: otobüs veri paketi inene kadar dolum ekranı.
+
+        // SIRA ÖNEMLİ: önce İZİN, sonra VERİ PAKETİ.
+        //
+        // Tersi olduğunda uygulamayı ilk açan kişi hiçbir açıklama görmeden
+        // sistem konum penceresiyle karşılaşıyordu (şehir tahmini konum
+        // istiyor). Artık izin, gerekçesini anlatan "Başlamadan Önce"
+        // ekranında isteniyor; şehir ondan sonra konumdan belirleniyor ve
+        // doğru şehrin paketi iniyor.
+        final permissionsOk = _permissionsOk;
+        if (permissionsOk == null) return const _Splash();
+        if (!permissionsOk) {
+          return PermissionGateScreen(
+            onCompleted: () {
+              if (!mounted) return;
+              setState(() => _permissionsOk = true);
+              // İzin verildi: şehri şimdi konumdan belirle, paketi ona göre in.
+              unawaited(_afterPermissions());
+            },
+          );
+        }
+
         final dataReady = _dataReady;
         if (dataReady == null) return const _Splash();
         if (!dataReady) {
           return DataBootstrapScreen(
             onCompleted: () {
               if (mounted) setState(() => _dataReady = true);
-            },
-          );
-        }
-        final permissionsOk = _permissionsOk;
-        if (permissionsOk == null) return const _Splash();
-        if (!permissionsOk) {
-          // Arka plan takibi için zorunlu izinler ("Her zaman izin ver")
-          // tamamlanmadan uygulama akışı başlamaz.
-          return PermissionGateScreen(
-            onCompleted: () {
-              if (mounted) setState(() => _permissionsOk = true);
             },
           );
         }

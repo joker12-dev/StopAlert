@@ -30,15 +30,27 @@ class CityNotifier extends AsyncNotifier<TransitCity> {
     return _detectFromLocation();
   }
 
+  /// Konumdan şehir tahmini. İzin İSTEMEZ — yalnızca zaten verilmişse okur;
+  /// aksi halde İstanbul'a düşer ve izin kapısı geçildikten sonra
+  /// [refreshFromLocation] ile tekrar denenir.
   Future<TransitCity> _detectFromLocation() async {
     if (!isMobileDevice) return TransitCities.fallback;
     try {
-      final pos = await LocationService().currentLocation();
+      final pos = await LocationService().currentLocationIfGranted();
       if (pos == null) return TransitCities.fallback;
       return TransitCities.forLocation(pos.latitude, pos.longitude);
     } catch (_) {
       return TransitCities.fallback;
     }
+  }
+
+  /// İzin verildikten sonra şehri konumdan yeniden belirle (elle seçim
+  /// yapılmışsa dokunulmaz).
+  Future<void> refreshFromLocation() async {
+    final prefs = await SharedPreferences.getInstance();
+    final manual = prefs.getString(_manualKey);
+    if (manual != null && manual.isNotEmpty) return;
+    state = AsyncData(await _detectFromLocation());
   }
 
   /// Kullanıcı şehri elle seçti — kalıcı olarak sabitlenir.

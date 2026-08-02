@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/models.dart';
 import '../data/recent_search.dart';
+import '../data/transit_city.dart';
 import '../data/transit_db.dart';
+import '../services/live_bus_service.dart';
 import '../state/city_provider.dart';
 import '../state/journey_provider.dart';
 import '../theme/app_theme.dart';
@@ -18,9 +21,16 @@ import 'route_map_screen.dart';
 /// ayrı DEPAR güzergâhları. Kullanıcı güzergâhı/yönü seçer, ineceği durağa
 /// dokununca alarm kurulur. Depar (garaj/özel sefer) normalle karışmaz.
 class LineDetailScreen extends ConsumerStatefulWidget {
-  const LineDetailScreen({super.key, required this.code});
+  const LineDetailScreen({super.key, required this.code, this.city});
 
   final String code;
+
+  /// Hat BAŞKA şehrin paketindeyse o şehir. Null = aktif şehir.
+  ///
+  /// Arama bütün kurulu paketlerde yapıldığı için kullanıcı Kocaeli'deyken
+  /// İstanbul hattına bakabiliyor; bunun için aktif şehri DEĞİŞTİRMİYORUZ —
+  /// sorgular doğrudan o şehrin veritabanına gidiyor.
+  final TransitCity? city;
 
   @override
   ConsumerState<LineDetailScreen> createState() => _LineDetailScreenState();
@@ -36,6 +46,12 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
   bool _deparOpen = false;
   String _filter = '';
 
+  /// Ham durak kimliği -> o durakta bulunan araç sayısı.
+  ///
+  /// İETT filo servisi her araç için `yakinDurakKodu` veriyor; seçili YÖNÜN
+  /// araçları sayılır (gidiş/dönüş karışmasın diye `guzergahkodu` süzülür).
+  Map<String, int> _busesAtStop = const {};
+
   @override
   void initState() {
     super.initState();
@@ -50,7 +66,8 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
   }
 
   Future<void> _load() async {
-    final v = await TransitDb.instance.directionsForCode(widget.code);
+    final v = await TransitDb.instance
+        .directionsForCode(widget.code, cityId: widget.city?.id);
     if (!mounted) return;
     _gidis = _firstDir(v, 'G');
     _donus = _firstDir(v, 'D');
@@ -68,6 +85,7 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
     }
     _selectedId = (_gidis ?? _donus)?.id;
     await _loadSelected();
+    unawaited(_loadLiveBuses());
   }
 
   Future<void> _loadSelected() async {
@@ -77,7 +95,8 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
       return;
     }
     setState(() => _loading = true);
-    final line = await TransitDb.instance.buildLine(id);
+    final line =
+        await TransitDb.instance.buildLine(id, cityId: widget.city?.id);
     if (!mounted) return;
     setState(() {
       _line = line;
@@ -90,7 +109,39 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
     Haptics.selection();
     _selectedId = id;
     _filter = '';
+    _busesAtStop = const {};        // yön değişti: eski konumlar geçersiz
     _loadSelected();
+    _loadLiveBuses();
+  }
+
+  /// Hattın canlı araçlarını çekip hangi durakta olduklarını işaretle.
+  ///
+  /// Yalnızca canlı filo servisi olan şehirde çalışır. Seçili yönün araçları
+  /// sayılır: aynı hattın karşı yönündeki otobüsü "bu durakta" göstermek
+  /// kullanıcıyı yanlış otobüse bindirirdi.
+  Future<void> _loadLiveBuses() async {
+    if (!ref.read(activeCityProvider).hasLiveBus) return;
+    if (widget.city != null) return;     // başka şehrin hattı: canlı veri yok
+    final id = _selectedId;
+    if (id == null) return;
+    final isGidis = id.endsWith('_G');
+    try {
+      final vehicles = await LiveBusService.instance.vehicles(widget.code);
+      if (!mounted || _selectedId != id) return;
+      final counts = <String, int>{};
+      for (final v in vehicles) {
+        final code = v.nearestStopCode.trim();
+        if (code.isEmpty) continue;
+        // Yönü belirsiz araç (depar/boş güzergâh kodu) sayılmaz: yanlış
+        // yöne yazmaktansa hiç yazmamak doğru.
+        final known = v.routeCode.contains('_G_') || v.routeCode.contains('_D_');
+        if (!known || v.isGidis != isGidis) continue;
+        counts[code] = (counts[code] ?? 0) + 1;
+      }
+      setState(() => _busesAtStop = counts);
+    } catch (_) {
+      // Canlı veri yoksa liste sade hâliyle çalışır.
+    }
   }
 
   bool get _selectedIsDepar => _depar.any((d) => d.id == _selectedId);
@@ -221,10 +272,17 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
                       itemBuilder: (context, i) {
                         final stop = stops[i];
                         final isLast = q.isEmpty && i == stops.length - 1;
+                        final raw = stop.id.startsWith(kBusPrefix)
+                            ? stop.id.substring(kBusPrefix.length)
+                            : stop.id;
                         return _StopRow(
                           name: stop.name,
                           index: q.isEmpty ? i + 1 : null,
+                          isFirst: q.isEmpty && i == 0,
                           isLast: isLast,
+                          color: lineColorOf(
+                              line?.color ?? '', line?.type ?? LineType.bus),
+                          busCount: _busesAtStop[raw] ?? 0,
                           onTap: () => _pickTarget(stop),
                         );
                       },
@@ -609,49 +667,127 @@ class _StopRow extends StatelessWidget {
   const _StopRow({
     required this.name,
     required this.index,
+    required this.isFirst,
     required this.isLast,
+    required this.color,
+    required this.busCount,
     required this.onTap,
   });
 
   final String name;
   final int? index;
+  final bool isFirst;
   final bool isLast;
+  final Color color;
+
+  /// Bu durakta bulunan CANLI araç sayısı (0 = bilgi yok/araç yok).
+  final int busCount;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    const color = VigilantColors.primary;
+    final here = busCount > 0;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(14),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+      child: IntrinsicHeight(
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Container(
-              width: 32,
-              height: 32,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: color.withValues(alpha: 0.15),
+            // Zaman çizelgesi: duraklar arası bağlantı çizgisi. Düz numaralı
+            // liste hattın SIRALI olduğunu anlatmıyordu.
+            SizedBox(
+              width: 34,
+              child: Column(
+                children: [
+                  Expanded(
+                    child: Container(
+                      width: 2,
+                      color: isFirst
+                          ? Colors.transparent
+                          : color.withValues(alpha: 0.35),
+                    ),
+                  ),
+                  Container(
+                    width: here ? 20 : 14,
+                    height: here ? 20 : 14,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: here ? color : VigilantColors.background,
+                      border: Border.all(
+                          color: color.withValues(alpha: here ? 1 : 0.7),
+                          width: 2.5),
+                    ),
+                    child: isLast
+                        ? Icon(Icons.flag_rounded,
+                            size: 9,
+                            color: here ? Colors.white : color)
+                        : null,
+                  ),
+                  Expanded(
+                    child: Container(
+                      width: 2,
+                      color: isLast
+                          ? Colors.transparent
+                          : color.withValues(alpha: 0.35),
+                    ),
+                  ),
+                ],
               ),
-              child: isLast
-                  ? const Icon(Icons.flag_rounded, size: 16, color: color)
-                  : Text(index?.toString() ?? '•',
-                      style: text.labelMedium?.copyWith(
-                          color: color, fontWeight: FontWeight.w700)),
             ),
-            const SizedBox(width: 14),
+            const SizedBox(width: 12),
             Expanded(
-              child: Text(name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: text.bodyMedium),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 11),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        if (index != null) ...[
+                          Text('$index',
+                              style: text.labelSmall?.copyWith(
+                                  color: VigilantColors.onSurfaceVariant,
+                                  fontWeight: FontWeight.w700)),
+                          const SizedBox(width: 8),
+                        ],
+                        Expanded(
+                          child: Text(name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: text.bodyMedium?.copyWith(
+                                  fontWeight:
+                                      here ? FontWeight.w700 : FontWeight.w400)),
+                        ),
+                      ],
+                    ),
+                    // CANLI: bu durakta şu an bekleyen/duran araç.
+                    if (here)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 3),
+                        child: Row(
+                          children: [
+                            Icon(Icons.directions_bus_filled_rounded,
+                                size: 13, color: color),
+                            const SizedBox(width: 5),
+                            Text(
+                                busCount == 1
+                                    ? 'Şu an bu durakta'
+                                    : 'Şu an $busCount otobüs burada',
+                                style: text.labelSmall?.copyWith(
+                                    color: color, fontWeight: FontWeight.w700)),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
             ),
-            const Icon(Icons.alarm_add_rounded,
-                size: 20, color: VigilantColors.primary),
+            const SizedBox(width: 8),
+            Icon(Icons.alarm_add_rounded,
+                size: 20, color: VigilantColors.onSurfaceVariant),
           ],
         ),
       ),

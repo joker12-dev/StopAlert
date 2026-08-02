@@ -160,8 +160,9 @@ class TransitDb {
 
   /// Bir hat NO'suna (ör. "MK13") ait tüm varyantlar — hat detay sayfası
   /// gidiş/dönüş ayrımını buradan kurar. Durak sayısına göre azalan.
-  Future<List<LineVariant>> directionsForCode(String code) async {
-    final db = _db;
+  Future<List<LineVariant>> directionsForCode(String code,
+      {String? cityId}) async {
+    final db = cityId == null ? _db : _aux[cityId];
     if (db == null) return const [];
     final rows = await db.rawQuery(
       'SELECT id, name, dir, depar, '
@@ -185,8 +186,8 @@ class TransitDb {
   /// numara/depar'lar birleşir). Temsilci: bu durağı içeren, NORMAL (depar=0)
   /// ve en çok duraklı varyant. İETT'deki gibi durakta her numara bir kez çıkar.
   Future<List<TransitLineBrief>> linesForStop(String externalStopId,
-      {int limit = 40}) async {
-    final db = _db;
+      {int limit = 40, String? cityId}) async {
+    final db = cityId == null ? _db : _aux[cityId];
     if (db == null) return const [];
     final raw = _stripId(externalStopId);
     if (raw == null) return const [];
@@ -203,8 +204,11 @@ class TransitDb {
   }
 
   /// Tam [TransitLine] (sıralı duraklar + segment süreleri). Bus prefix'li id.
-  Future<TransitLine?> buildLine(String externalLineId) async {
-    final db = _db;
+  /// [cityId] verilirse o şehrin ek veritabanından kurar — kullanıcı başka
+  /// şehirdeki bir hatta bakarken AKTİF şehri değiştirmek zorunda kalmasın.
+  Future<TransitLine?> buildLine(String externalLineId,
+      {String? cityId}) async {
+    final db = cityId == null ? _db : _aux[cityId];
     if (db == null) return null;
     final raw = _stripId(externalLineId);
     if (raw == null) return null;

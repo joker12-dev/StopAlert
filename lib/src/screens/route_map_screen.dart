@@ -234,7 +234,9 @@ class _RouteMapScreenState extends ConsumerState<RouteMapScreen> {
             Positioned(
               left: 16,
               right: 16,
-              bottom: 20,
+              // Sistem gezinme çubuğunun (jest çubuğu / 3 tuş) payı eklenir;
+              // sabit 20 px verilince panel çubuğun altında kalıyordu.
+              bottom: 20 + MediaQuery.viewPaddingOf(context).bottom,
               child: _StopCard(
                 stop: s,
                 index: stops.indexWhere((x) => x.id == s.id) + 1,
@@ -248,7 +250,9 @@ class _RouteMapScreenState extends ConsumerState<RouteMapScreen> {
             Positioned(
               left: 16,
               right: 16,
-              bottom: 20,
+              // Sistem gezinme çubuğunun (jest çubuğu / 3 tuş) payı eklenir;
+              // sabit 20 px verilince panel çubuğun altında kalıyordu.
+              bottom: 20 + MediaQuery.viewPaddingOf(context).bottom,
               child: _HintCard(
                   stopCount: stops.length, lineName: widget.line.name),
             ),

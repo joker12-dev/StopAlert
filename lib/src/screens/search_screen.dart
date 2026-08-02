@@ -6,7 +6,6 @@ import '../data/models.dart';
 import '../data/recent_search.dart';
 import '../data/transit_city.dart';
 import '../data/transit_db.dart';
-import '../services/bus_data_service.dart';
 import '../state/city_provider.dart';
 import '../state/journey_provider.dart';
 import '../theme/app_theme.dart';
@@ -348,29 +347,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     _openAlarmSetup(stop?.name ?? entry.stopName, line: line, stop: stop);
   }
 
-  /// Sonuç BAŞKA şehirdense o şehre geç.
-  ///
-  /// Arama bütün kurulu paketlerde yapılıyor ama hat detayı, durak listesi ve
-  /// alarm akışı AKTİF şehrin paketinden okuyor. Geçiş yapılmazsa kullanıcı
-  /// İstanbul'daki bir hattı seçip Kocaeli verisiyle karşılaşırdı.
-  Future<bool> _switchToCity(TransitCity city) async {
-    if (city.id == ref.read(activeCityProvider).id) return true;
-    final messenger = ScaffoldMessenger.of(context);
-    await ref.read(cityProvider.notifier).select(city);
-    await BusDataService.instance.ensureReady(city: city);
-    if (!mounted) return false;
-    ref.invalidate(nearbyStopsProvider);
-    messenger
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text('${city.name} şehrine geçildi')));
-    return true;
-  }
-
   /// Otobüs hattı seçildi: tek hat sayfasını aç (gidiş/dönüş + duraklar).
+  /// Otobüs hattı seçildi. AKTİF ŞEHİR DEĞİŞMEZ: hat sayfası doğrudan o
+  /// şehrin paketinden okur. Kullanıcı yalnızca bakmak için şehir
+  /// değiştirmek zorunda kalmasın — şehir Ayarlar'dan bilinçli seçilir.
   Future<void> _openBusLine(TransitLineBrief brief, TransitCity city) async {
     Haptics.light();
-    if (!await _switchToCity(city)) return;
-    if (!mounted) return;
     // Hat seçimi de "Son Aramalar"a yazılır: kullanıcı 147'yi arayıp açtıysa
     // ertesi gün tekrar aramak zorunda kalmamalı. Durak henüz seçilmediği
     // için kayıt DURAKSIZ olur (bkz. [_openRecent]).
@@ -382,7 +364,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           lineTypeName: brief.type.name,
         ));
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => LineDetailScreen(code: brief.code)),
+      MaterialPageRoute(
+        builder: (_) => LineDetailScreen(
+          code: brief.code,
+          city: city.id == ref.read(activeCityProvider).id ? null : city,
+        ),
+      ),
     );
   }
 
@@ -390,15 +377,18 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   /// ekranda sun; kullanıcı hangi hatla gittiğini seçince o hatla alarma geçilir.
   Future<void> _openBusStop(Stop stop, TransitCity city) async {
     Haptics.light();
-    if (!await _switchToCity(city)) return;
-    final lines = await TransitDb.instance.linesForStop(stop.id);
+    final other =
+        city.id == ref.read(activeCityProvider).id ? null : city;
+    final lines =
+        await TransitDb.instance.linesForStop(stop.id, cityId: other?.id);
     if (!mounted) return;
     if (lines.isEmpty) {
       _snack('Bu duraktan geçen hat bulunamadı.');
       return;
     }
     Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => StopLinesScreen(stop: stop, lines: lines),
+      builder: (_) =>
+          StopLinesScreen(stop: stop, lines: lines, city: other),
     ));
   }
 
@@ -736,7 +726,7 @@ class _LineResultTile extends StatelessWidget {
                     style: text.bodyMedium
                         ?.copyWith(fontWeight: FontWeight.w500)),
                 const SizedBox(height: 2),
-                if (showCity) _CityBadge(name: city.name),
+                _CityBadge(name: city.name, isCurrent: !showCity),
                 Text('${brief.type.label} hattı',
                     style: text.labelMedium
                         ?.copyWith(color: VigilantColors.onSurfaceVariant)),
@@ -752,38 +742,47 @@ class _LineResultTile extends StatelessWidget {
 }
 
 /// Otobüs durağı sonucu. Dokununca hangi hatla gidileceği seçilir.
-/// Sonucun hangi şehre ait olduğunu gösteren küçük rozet.
+/// Sonucun hangi şehre ait olduğunu gösteren rozet.
 ///
-/// Arama bütün kurulu paketlerde yapıldığı için "İZMİT" ile İstanbul'daki
-/// "İZMİT CADDESİ" aynı listede çıkabiliyor; şehir yazılmazsa ayırt edilemez.
+/// HER sonuçta yazılır: arama bütün kurulu paketlerde yapıldığı için "İZMİT"
+/// ile İstanbul'daki "İZMİT CADDESİ" aynı listede çıkabiliyor. Bulunulan
+/// şehir marka renginde, diğerleri mavi — ikisi de aynı netlikte okunur,
+/// biri soluk bırakılmaz.
 class _CityBadge extends StatelessWidget {
-  const _CityBadge({required this.name});
+  const _CityBadge({required this.name, required this.isCurrent});
 
   final String name;
+  final bool isCurrent;
 
   @override
   Widget build(BuildContext context) {
+    final color =
+        isCurrent ? VigilantColors.primary : VigilantColors.accentBlue;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 2),
+      padding: const EdgeInsets.only(bottom: 3),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
             decoration: BoxDecoration(
-              color: VigilantColors.accentBlue.withValues(alpha: 0.18),
+              color: color.withValues(alpha: 0.22),
               borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: color.withValues(alpha: 0.45)),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.location_city_rounded,
-                    size: 10, color: VigilantColors.accentBlue),
+                Icon(
+                    isCurrent
+                        ? Icons.my_location_rounded
+                        : Icons.location_city_rounded,
+                    size: 10,
+                    color: color),
                 const SizedBox(width: 4),
                 Text(name,
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: VigilantColors.accentBlue,
-                        fontWeight: FontWeight.w700)),
+                        color: color, fontWeight: FontWeight.w700)),
               ],
             ),
           ),
@@ -836,7 +835,7 @@ class _BusStopTile extends StatelessWidget {
                     style: text.bodyMedium
                         ?.copyWith(fontWeight: FontWeight.w500)),
                 const SizedBox(height: 2),
-                if (showCity) _CityBadge(name: city.name),
+                _CityBadge(name: city.name, isCurrent: !showCity),
                 Text(
                     stop.contextLabel.isNotEmpty
                         ? 'Otobüs · ${stop.contextLabel}'

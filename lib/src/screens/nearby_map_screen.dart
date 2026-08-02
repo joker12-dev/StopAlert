@@ -59,6 +59,9 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
   /// harita alanının ortasına konumlanır (panel arkasına düşmesin).
   double _panelHeight = 0;
 
+  /// Anlık yakınlaşma — durak adlarının yazılıp yazılmayacağını belirler.
+  double _zoom = 15;
+
   /// TURUNCU arama noktası: haritanın merkezi. Haritayı gezdirdikçe taşınır ve
   /// çevresindeki [_radius] metre içindeki duraklar listelenir (mavi nokta =
   /// kullanıcının gerçek konumu, o sabittir).
@@ -107,6 +110,69 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
       return cam.center;
     }
   }
+
+  /// Durak işareti + (yakınlaşınca) adı.
+  ///
+  /// Adlar eskiden yalnızca dokununca görünüyordu; kullanıcı hangi durağın
+  /// hangisi olduğunu tek tek dokunarak bulmak zorunda kalıyordu. Uzak
+  /// zoom'da yazılmaz — 200 durak etiketi haritayı okunmaz yapar.
+  Marker _stopMarker(MapStop m) {
+    final selected = _isSelected(m);
+    final showLabel = _zoom >= _labelZoom;
+    final dotBox = selected ? 38.0 : 20.0;
+    final height = showLabel ? dotBox + 34 : dotBox;
+    return Marker(
+      point: LatLng(m.stop.lat, m.stop.lon),
+      width: showLabel ? 128 : dotBox,
+      height: height,
+      // Yuvarlağın MERKEZİ koordinata otursun (etiket kutuyu uzatıyor).
+      alignment: showLabel
+          ? Alignment(0, dotBox / height - 1)
+          : Alignment.center,
+      child: GestureDetector(
+        onTap: () => _selectStop(m),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: dotBox,
+              height: dotBox,
+              child: _StopMarker(selected: selected, isBus: m.isBus),
+            ),
+            if (showLabel)
+              Flexible(
+                child: Container(
+                  margin: const EdgeInsets.only(top: 2),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? VigilantColors.primary
+                        : Colors.black.withValues(alpha: 0.72),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    m.stop.name,
+                    maxLines: 2,
+                    textAlign: TextAlign.center,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 9.5,
+                      height: 1.15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Durak adlarının yazıldığı yakınlaşma eşiği.
+  static const _labelZoom = 15.0;
 
   /// [point]'i ekranın değil, GÖRÜNEN harita alanının (panelin üstünde kalan
   /// kısım) ortasına getirir.
@@ -484,9 +550,15 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
                     },
                     // Kaydırma SIRASINDA turuncu nokta anında taşınır; ağır
                     // durak sorgusu ise hareket durunca (debounce) yapılır.
-                    onPositionChanged: (_, __) {
+                    onPositionChanged: (cam, __) {
                       _updateProbeLive();
                       _scheduleReload();
+                      // Etiket eşiği geçildiyse yeniden çiz (her karede değil).
+                      final was = _zoom >= _labelZoom;
+                      _zoom = cam.zoom;
+                      if (mounted && was != (_zoom >= _labelZoom)) {
+                        setState(() {});
+                      }
                     },
                   ),
                   children: [
@@ -542,16 +614,7 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
                     MarkerLayer(
                       markers: [
                         for (final m in _markerStops(stops))
-                          Marker(
-                            point: LatLng(m.stop.lat, m.stop.lon),
-                            width: _isSelected(m) ? 38 : 18,
-                            height: _isSelected(m) ? 38 : 18,
-                            child: GestureDetector(
-                              onTap: () => _selectStop(m),
-                              child: _StopMarker(
-                                  selected: _isSelected(m), isBus: m.isBus),
-                            ),
-                          ),
+                          _stopMarker(m),
                       ],
                     ),
                     if (user != null)

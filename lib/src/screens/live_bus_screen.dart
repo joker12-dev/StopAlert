@@ -357,7 +357,8 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen> {
           Positioned(
             left: 16,
             right: 16,
-            bottom: 20,
+            // Sistem gezinme çubuğunun payı (sabit 20 px yetmiyordu).
+            bottom: 20 + MediaQuery.viewPaddingOf(context).bottom,
             child: _InfoCard(
               count: shown.length,
               loading: _loading,

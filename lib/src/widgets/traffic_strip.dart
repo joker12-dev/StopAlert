@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../services/iett_service.dart';
+import '../services/kocaeli_traffic_service.dart';
 import '../theme/app_theme.dart';
 import '../util/platform_check.dart';
 import 'traffic_gauge.dart';
@@ -12,20 +13,26 @@ final trafficProvider = FutureProvider<int?>((ref) async {
   return IettService.instance.trafficIndex();
 });
 
+/// Kocaeli anlık trafik yoğunluğu (0-100) — Akıllı Şehir Kocaeli servisi.
+final kocaeliTrafficProvider = FutureProvider<int?>((ref) async {
+  if (!isMobileDevice) return null;
+  return KocaeliTrafficService.instance.index();
+});
+
 /// Şehir trafik yoğunlukları — yatay kaydırmalı kartlar.
 ///
-/// Şu an YALNIZCA İstanbul canlıdır (İBB Ulaşım Yönetim Merkezi verisi).
-/// Diğer şehirler yer tutucudur: veri kaynağı bağlanana kadar "yakında"
-/// olarak, tıklanamaz biçimde gösterilir.
+/// İstanbul (İBB Ulaşım Yönetim Merkezi) ve Kocaeli (Akıllı Şehir Kocaeli)
+/// canlıdır. Kalan şehirler veri kaynağı bağlanana kadar yer tutucudur.
 class TrafficStrip extends ConsumerWidget {
   const TrafficStrip({super.key});
 
-  static const _soonCities = ['Kocaeli', 'Sakarya', 'Ankara', 'İzmir', 'Bursa'];
+  static const _soonCities = ['Sakarya', 'Ankara', 'İzmir', 'Bursa'];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final text = Theme.of(context).textTheme;
     final istanbul = ref.watch(trafficProvider);
+    final kocaeli = ref.watch(kocaeliTrafficProvider);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -38,7 +45,7 @@ class TrafficStrip extends ConsumerWidget {
             Text('Trafik Yoğunluğu',
                 style: text.bodyLarge?.copyWith(fontWeight: FontWeight.w600)),
             const Spacer(),
-            if (istanbul.isLoading)
+            if (istanbul.isLoading || kocaeli.isLoading)
               const SizedBox(
                 width: 14,
                 height: 14,
@@ -60,6 +67,15 @@ class TrafficStrip extends ConsumerWidget {
                 percent: istanbul.valueOrNull,
                 live: true,
               ),
+              const SizedBox(width: 6),
+              _CityCard(
+                city: 'Kocaeli',
+                percent: kocaeli.valueOrNull,
+                live: true,
+                // Servis durum etiketini kendi veriyor ("Akıcı", "Yoğun"…);
+                // kendi eşiğimizi uydurmak yerine onu gösteriyoruz.
+                levelLabel: KocaeliTrafficService.instance.level,
+              ),
               for (final c in _soonCities) ...[
                 const SizedBox(width: 6),
                 _CityCard(city: c, percent: null, live: false),
@@ -77,10 +93,14 @@ class _CityCard extends StatelessWidget {
     required this.city,
     required this.percent,
     required this.live,
+    this.levelLabel,
   });
 
   final String city;
   final int? percent;
+
+  /// Servisin kendi durum etiketi; yoksa yüzdeden türetilir.
+  final String? levelLabel;
 
   /// Gerçek veri bağlı mı (false → "yakında" yer tutucu).
   final bool live;
@@ -108,7 +128,11 @@ class _CityCard extends StatelessWidget {
             Text(
               !live
                   ? 'yakında'
-                  : (p == null ? 'veri yok' : TrafficGauge.labelFor(p)),
+                  : (p == null
+                      ? 'veri yok'
+                      : (levelLabel?.isNotEmpty ?? false)
+                          ? levelLabel!
+                          : TrafficGauge.labelFor(p)),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: text.labelSmall?.copyWith(

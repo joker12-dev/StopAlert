@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/models.dart';
 import '../data/recent_search.dart';
+import '../data/transit_city.dart';
 import '../data/transit_db.dart';
 import '../state/journey_provider.dart';
 import '../theme/app_theme.dart';
@@ -15,15 +16,24 @@ import 'nearby_map_screen.dart';
 /// bu durağı hedef seçmiştir; burada "hangi hatla gidiyorum" der, o hatla alarm
 /// kurulur. (Modal yerine net bir ekran — akış karışmasın.)
 class StopLinesScreen extends ConsumerWidget {
-  const StopLinesScreen({super.key, required this.stop, required this.lines});
+  const StopLinesScreen({
+    super.key,
+    required this.stop,
+    required this.lines,
+    this.city,
+  });
 
   final Stop stop;
   final List<TransitLineBrief> lines;
 
+  /// Durak BAŞKA şehrin paketindeyse o şehir (aktif şehir değiştirilmez).
+  final TransitCity? city;
+
   Future<void> _pick(
       BuildContext context, WidgetRef ref, TransitLineBrief brief) async {
     Haptics.light();
-    final line = await TransitDb.instance.buildLine(brief.id);
+    final line =
+        await TransitDb.instance.buildLine(brief.id, cityId: city?.id);
     if (!context.mounted) return;
     if (line == null) {
       ScaffoldMessenger.of(context)

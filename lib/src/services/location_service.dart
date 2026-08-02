@@ -9,6 +9,29 @@ import 'package:latlong2/latlong.dart';
 /// İzin reddedilir ya da servis kapalıysa null döner — harita bu durumda
 /// yalnızca hattı gösterir, uygulama çökmez (konum kritik akış değil).
 class LocationService {
+  /// Konum izni ZATEN verilmişse konumu döndürür; VERİLMEMİŞSE İSTEMEZ.
+  ///
+  /// Şehir tahmini bunu kullanır: uygulamayı ilk açan kişi karşısında sistem
+  /// izin penceresi bulmamalı. İzin, akıştaki "Başlamadan Önce" ekranında
+  /// gerekçesiyle birlikte isteniyor.
+  Future<LatLng?> currentLocationIfGranted() async {
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) return null;
+      final permission = await Geolocator.checkPermission();
+      if (permission != LocationPermission.always &&
+          permission != LocationPermission.whileInUse) {
+        return null;
+      }
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings:
+            const LocationSettings(accuracy: LocationAccuracy.medium),
+      );
+      return LatLng(pos.latitude, pos.longitude);
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<LatLng?> currentLocation() async {
     try {
       if (!await Geolocator.isLocationServiceEnabled()) return null;

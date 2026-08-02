@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -92,6 +93,9 @@ class _RouteMapState extends State<RouteMap> {
   static const _labelZoomThreshold = 14.0;
   bool _showLabels = false;
 
+  /// Anlık yakınlaşma — yön oklarının sıklığını belirler.
+  double _currentZoom = 13;
+
   List<Stop> get _stops => widget.line?.stops ?? const <Stop>[];
 
   List<LatLng> get _linePoints => [
@@ -153,6 +157,59 @@ class _RouteMapState extends State<RouteMap> {
     _controller.move(cam.center, (cam.zoom + delta).clamp(3.0, 18.0));
   }
 
+  // Oklar çizgi/zoom değişmedikçe yeniden hesaplanmaz (OSRM çizgisi binlerce
+  // noktadan oluşabiliyor).
+  List<Marker> _arrows = const [];
+  double? _arrowsFor;
+  int _arrowsLen = -1;
+
+  /// Ok sıklığı kademesi — yalnızca kademe değişince yeniden çizilir.
+  int get _arrowSpacingBucket =>
+      _currentZoom >= 15.5 ? 2 : (_currentZoom >= 14 ? 1 : 0);
+
+  /// Güzergâh üzerine aralıklarla yerleştirilen yön okları.
+  List<Marker> _directionArrows(List<LatLng> pts) {
+    if (pts.length < 2) return const [];
+    // Yakınlaştıkça sıklaşır; uzakta çizgiyi boğmasın.
+    final spacing = _currentZoom >= 15.5
+        ? 300.0
+        : _currentZoom >= 14
+            ? 600.0
+            : 1200.0;
+    if (_arrowsFor == spacing && _arrowsLen == pts.length) return _arrows;
+    const geo = Distance();
+    final out = <Marker>[];
+    var acc = 0.0;
+    for (var i = 0; i < pts.length - 1; i++) {
+      final a = pts[i];
+      final b = pts[i + 1];
+      final len = geo.as(LengthUnit.Meter, a, b);
+      if (len <= 0) continue;
+      acc += len;
+      if (acc < spacing) continue;
+      acc = 0;
+      final dLon =
+          (b.longitude - a.longitude) * math.cos(a.latitude * math.pi / 180);
+      out.add(Marker(
+        point: LatLng((a.latitude + b.latitude) / 2,
+            (a.longitude + b.longitude) / 2),
+        width: 18,
+        height: 18,
+        child: IgnorePointer(
+          child: Transform.rotate(
+            angle: math.atan2(dLon, b.latitude - a.latitude),
+            child: const Icon(Icons.navigation_rounded,
+                size: 13, color: Colors.white),
+          ),
+        ),
+      ));
+    }
+    _arrows = out;
+    _arrowsFor = spacing;
+    _arrowsLen = pts.length;
+    return out;
+  }
+
   @override
   Widget build(BuildContext context) {
     final linePts = _linePoints;
@@ -191,7 +248,12 @@ class _RouteMapState extends State<RouteMap> {
               // Kullanıcı haritayı ELLE oynattıysa takip kilidini bırak.
               if (hasGesture && _follow) setState(() => _follow = false);
               final show = camera.zoom >= _labelZoomThreshold;
-              if (show != _showLabels) setState(() => _showLabels = show);
+              // Ok sıklığı eşiği de zoom'a bağlı; ikisi birlikte tazelenir.
+              final before = _arrowSpacingBucket;
+              _currentZoom = camera.zoom;
+              if (show != _showLabels || before != _arrowSpacingBucket) {
+                setState(() => _showLabels = show);
+              }
             },
           ),
           children: [
@@ -272,6 +334,9 @@ class _RouteMapState extends State<RouteMap> {
                   ],
                 ),
               ],
+            // Gidiş yönü okları — çizgiye bakınca hangi uçtan hangi uca
+            // gidildiği anlaşılmıyordu.
+            if (widget.interactive) MarkerLayer(markers: _directionArrows(drawPts)),
             // Ara durak noktaları
             MarkerLayer(
               markers: [

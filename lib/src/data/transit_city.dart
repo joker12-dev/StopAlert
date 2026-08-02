@@ -94,6 +94,8 @@ abstract final class TransitCities {
     // Batı sınır Dilovası; Gebze (29,43) dahil kalır.
     minLon: 29.30,
     maxLon: 30.40,
+    // Akıllı Şehir Kocaeli anlık yoğunluk servisi veriyor.
+    hasTraffic: true,
   );
 
   static const all = [istanbul, kocaeli];

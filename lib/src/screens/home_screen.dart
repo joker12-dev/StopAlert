@@ -779,7 +779,7 @@ class _NearbyCard extends ConsumerWidget {
                                     color: VigilantColors.onSurfaceVariant)),
                           ]
                         : [
-                            for (var i = 0; i < hits.take(3).length; i++) ...[
+                            for (var i = 0; i < hits.take(2).length; i++) ...[
                               if (i > 0) const SizedBox(height: 14),
                               _NearbyRow(
                                 hit: hits[i],
