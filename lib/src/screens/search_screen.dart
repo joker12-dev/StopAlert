@@ -4,7 +4,10 @@ import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 import '../data/models.dart';
 import '../data/recent_search.dart';
+import '../data/transit_city.dart';
 import '../data/transit_db.dart';
+import '../services/bus_data_service.dart';
+import '../state/city_provider.dart';
 import '../state/journey_provider.dart';
 import '../theme/app_theme.dart';
 import '../util/insets.dart';
@@ -257,6 +260,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 ),
               ),
             ),
+            // Şehir filtresi — yalnızca birden fazla paket kuruluysa görünür.
+            // Kullanıcı başka şehirdeki durağa bakmak için Ayarlar'a gitmesin.
+            _CityFilterBar(active: ref.watch(activeCityProvider)),
             const SizedBox(height: 24),
             Expanded(
               child: q.isEmpty
@@ -344,9 +350,31 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     _openAlarmSetup(stop?.name ?? entry.stopName, line: line, stop: stop);
   }
 
+  /// Başka şehrin sonucuna dokunuldu: o şehre GEÇ.
+  ///
+  /// Arama ek veritabanında yapılıyor ama hat detayı, durak listesi ve alarm
+  /// akışı AKTİF şehrin paketinden okuyor. Geçiş yapılmazsa kullanıcı
+  /// İstanbul'daki bir hattı seçip Kocaeli verisiyle karşılaşırdı.
+  Future<bool> _switchToScopeCity() async {
+    final scope = ref.read(searchScopeProvider);
+    if (scope == null) return true;
+    final messenger = ScaffoldMessenger.of(context);
+    await ref.read(cityProvider.notifier).select(scope);
+    await BusDataService.instance.ensureReady(city: scope);
+    if (!mounted) return false;
+    ref.read(searchScopeProvider.notifier).state = null;
+    ref.invalidate(nearbyStopsProvider);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text('${scope.name} şehrine geçildi')));
+    return true;
+  }
+
   /// Otobüs hattı seçildi: tek hat sayfasını aç (gidiş/dönüş + duraklar).
-  void _openBusLine(TransitLineBrief brief) {
+  Future<void> _openBusLine(TransitLineBrief brief) async {
     Haptics.light();
+    if (!await _switchToScopeCity()) return;
+    if (!mounted) return;
     // Hat seçimi de "Son Aramalar"a yazılır: kullanıcı 147'yi arayıp açtıysa
     // ertesi gün tekrar aramak zorunda kalmamalı. Durak henüz seçilmediği
     // için kayıt DURAKSIZ olur (bkz. [_openRecent]).
@@ -366,6 +394,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   /// ekranda sun; kullanıcı hangi hatla gittiğini seçince o hatla alarma geçilir.
   Future<void> _openBusStop(Stop stop) async {
     Haptics.light();
+    if (!await _switchToScopeCity()) return;
     final lines = await TransitDb.instance.linesForStop(stop.id);
     if (!mounted) return;
     if (lines.isEmpty) {
@@ -381,6 +410,98 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
+  }
+}
+
+/// Arama kapsamı çipleri: aktif şehir + indirilmiş diğer şehirler.
+class _CityFilterBar extends ConsumerWidget {
+  const _CityFilterBar({required this.active});
+
+  final TransitCity active;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final installed =
+        ref.watch(installedCitiesProvider).valueOrNull ?? const <TransitCity>[];
+    // Tek paket varsa filtre göstermenin anlamı yok.
+    if (installed.length < 2) return const SizedBox.shrink();
+    final scope = ref.watch(searchScopeProvider);
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: SizedBox(
+        height: 34,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          children: [
+            _ScopeChip(
+              label: '${active.name} (bulunduğun)',
+              selected: scope == null,
+              onTap: () =>
+                  ref.read(searchScopeProvider.notifier).state = null,
+            ),
+            for (final c in installed)
+              if (c.id != active.id)
+                Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: _ScopeChip(
+                    label: c.name,
+                    selected: scope?.id == c.id,
+                    onTap: () =>
+                        ref.read(searchScopeProvider.notifier).state = c,
+                  ),
+                ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ScopeChip extends StatelessWidget {
+  const _ScopeChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        Haptics.selection();
+        onTap();
+      },
+      child: Container(
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: selected
+              ? VigilantColors.primary.withValues(alpha: 0.18)
+              : VigilantColors.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: selected
+                ? VigilantColors.primary.withValues(alpha: 0.6)
+                : VigilantColors.surfaceVariant.withValues(alpha: 0.5),
+          ),
+        ),
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: selected
+                    ? VigilantColors.primary
+                    : VigilantColors.onSurfaceVariant,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              ),
+        ),
+      ),
+    );
   }
 }
 
@@ -457,9 +578,11 @@ class _SuggestionsView extends ConsumerWidget {
                     if (i > 0) const SizedBox(height: 12),
                     _NearbyTile(
                       name: hits[i].stop.name,
-                      meta:
-                          '${_fmtMeters(hits[i].meters)} • ${hits[i].line.code}'
-                          ' ${hits[i].line.type.label}',
+                      meta: hits[i].line == null
+                          ? '${_fmtMeters(hits[i].meters)} • Otobüs durağı'
+                          : '${_fmtMeters(hits[i].meters)} • '
+                              '${hits[i].line!.code} '
+                              '${hits[i].line!.type.label}',
                       onTap: () => onStopTap(
                         hits[i].stop.name,
                         line: hits[i].line,

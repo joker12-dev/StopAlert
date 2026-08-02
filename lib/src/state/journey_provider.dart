@@ -13,6 +13,8 @@ import '../data/models.dart';
 import '../data/recent_search.dart';
 import '../data/sample_lines.dart';
 import '../data/transit_db.dart';
+import '../services/bus_data_service.dart';
+import '../data/transit_city.dart';
 import '../services/journey_repository.dart';
 import '../services/location_service.dart';
 
@@ -86,14 +88,18 @@ final currentLocationProvider = FutureProvider<UserLocation>((ref) async {
 /// Kullanıcıya en yakın durak (tüm hatlardan; aynı adlı durak tekilleştirilir).
 class NearbyStopHit {
   const NearbyStopHit({
-    required this.line,
     required this.stop,
     required this.meters,
+    this.line,
   });
 
-  final TransitLine line;
+  /// Ray/vapur durağıysa ait olduğu hat (doğrudan alarm kurulabilir).
+  /// Otobüs durağında NULL: hangi hatla gidileceği kullanıcıya sorulur.
+  final TransitLine? line;
   final Stop stop;
   final double meters;
+
+  bool get isBus => line == null;
 }
 
 /// Konuma göre en yakın duraklar — ana sayfa ve arama önerileri için.
@@ -104,6 +110,8 @@ final nearbyStopsProvider = FutureProvider<List<NearbyStopHit>>((ref) async {
   if (loc == null) return const [];
   const distance = Distance();
   final best = <String, NearbyStopHit>{};
+
+  // Ray/vapur — APK'da gömülü hatlar.
   for (final line in lines) {
     for (final stop in line.stops) {
       if (stop.lat == 0 && stop.lon == 0) continue;
@@ -115,6 +123,25 @@ final nearbyStopsProvider = FutureProvider<List<NearbyStopHit>>((ref) async {
       }
     }
   }
+
+  // OTOBÜS — indirilen veri paketinden. Bu katman eksikti: ev/iş çevresinde
+  // otobüs durağı 100 m ötedeyken 2 km uzaktaki Marmaray "en yakın durak"
+  // olarak listeleniyordu.
+  if (TransitDb.instance.isReady) {
+    final busStops =
+        await TransitDb.instance.nearbyStops(loc.latitude, loc.longitude, 900,
+            limit: 120);
+    for (final stop in busStops) {
+      final d = distance.as(LengthUnit.Meter, loc, LatLng(stop.lat, stop.lon));
+      // Aynı adlı durağın yön varyantları tek satıra iner.
+      final key = stop.name.toLowerCase();
+      final cur = best[key];
+      if (cur == null || d < cur.meters) {
+        best[key] = NearbyStopHit(stop: stop, meters: d);
+      }
+    }
+  }
+
   final list = best.values.toList()
     ..sort((a, b) => a.meters.compareTo(b.meters));
   return list.take(6).toList();
@@ -206,11 +233,34 @@ final busSearchProvider =
     if (q.length < 2) return const BusSearchResults();
     final db = TransitDb.instance;
     if (!db.isReady) return const BusSearchResults();
-    final lines = await db.searchLines(q, limit: 12);
-    final stops = await db.searchStops(q, limit: 20);
+    final scope = ref.watch(searchScopeProvider);
+
+    // Aktif şehir dışında bir kapsam seçildiyse o şehrin paketi aramaya açılır.
+    if (scope != null) {
+      final path = await BusDataService.instance.localPath(scope);
+      if (path != null) await db.openAux(scope.id, path);
+    }
+
+    final lines = await db.searchLines(q, limit: 12, cityId: scope?.id);
+    final stops = await db.searchStops(q, limit: 20, cityId: scope?.id);
     return BusSearchResults(lines: lines, stops: stops);
   },
 );
+
+/// Arama kapsamı: null = AKTİF şehir, değilse o şehrin indirilmiş paketi.
+///
+/// Kocaeli'de yaşayan biri İstanbul'daki bir durağa bakmak için ayarlardan
+/// şehir değiştirmek zorunda kalmasın diye var.
+final searchScopeProvider = StateProvider<TransitCity?>((ref) => null);
+
+/// Aramada seçilebilecek şehirler: paketi CİHAZDA olanlar.
+final installedCitiesProvider = FutureProvider<List<TransitCity>>((ref) async {
+  final out = <TransitCity>[];
+  for (final c in TransitCities.all) {
+    if (await BusDataService.instance.hasLocal(c)) out.add(c);
+  }
+  return out;
+});
 
 /// Son aramalar (cihazda kalıcı; en yeni önce, en fazla 5 kayıt).
 final recentSearchesProvider =

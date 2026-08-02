@@ -6,6 +6,7 @@ import '../data/journey_payload.dart';
 import '../data/journey_record.dart';
 import '../data/journey_suggestion.dart';
 import '../data/models.dart';
+import '../data/transit_db.dart';
 import '../data/stopi_tips.dart';
 import '../state/city_provider.dart';
 import '../state/journey_provider.dart';
@@ -25,6 +26,7 @@ import 'alarm_setup_screen.dart';
 import 'announcements_screen.dart';
 import 'live_tracking_screen.dart';
 import 'nearby_map_screen.dart';
+import 'stop_lines_screen.dart';
 
 /// Ana Sayfa — "StopAlert Ana Sayfa Premium" (Stitch) tasarımının Flutter portu.
 /// Koyu tema, marka kırmızısı, Stopi maskotu; canlı yakın duraklar kartı, büyük
@@ -287,13 +289,31 @@ class HomeScreen extends ConsumerWidget {
 
   // ---- Navigasyon eylemleri ----
 
-  void _openStop(
-      BuildContext context, WidgetRef ref, TransitLine line, Stop stop) {
+  Future<void> _openStop(BuildContext context, WidgetRef ref,
+      TransitLine? line, Stop stop) async {
     Haptics.light();
+    // OTOBÜS durağı: hangi hatla gidileceği belli değil — duraktan geçen
+    // hatlar sunulur, kullanıcı seçince alarma geçilir.
+    if (line == null) {
+      final lines = await TransitDb.instance.linesForStop(stop.id);
+      if (!context.mounted) return;
+      if (lines.isEmpty) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(const SnackBar(
+              content: Text('Bu duraktan geçen hat bulunamadı.')));
+        return;
+      }
+      await Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => StopLinesScreen(stop: stop, lines: lines),
+      ));
+      return;
+    }
     ref.read(journeyDraftProvider.notifier)
       ..reset()
       ..selectLine(line)
       ..selectTargetStop(stop.id);
+    if (!context.mounted) return;
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) =>
           AlarmSetupScreen(stopName: stop.name, lineLabel: line.code),
@@ -610,7 +630,9 @@ class _NearbyCard extends ConsumerWidget {
       {required this.onStart, required this.onOpenStop, required this.onMap});
 
   final VoidCallback onStart;
-  final void Function(TransitLine line, Stop stop) onOpenStop;
+  /// Ray/vapur durağında hat bellidir; OTOBÜS durağında null gelir ve
+  /// kullanıcıya önce "hangi hatla?" sorulur.
+  final void Function(TransitLine? line, Stop stop) onOpenStop;
   final VoidCallback onMap;
 
   String _fmt(double m) => m >= 1000
@@ -811,7 +833,7 @@ class _NearbyRow extends StatelessWidget {
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: HomeScreen._chipBorder),
             ),
-            child: Text(hit.line.code,
+            child: Text(hit.line?.code ?? 'DURAK',
                 textAlign: TextAlign.center,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,

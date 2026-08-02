@@ -108,6 +108,35 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
     }
   }
 
+  /// [point]'i ekranın değil, GÖRÜNEN harita alanının (panelin üstünde kalan
+  /// kısım) ortasına getirir.
+  ///
+  /// Düz `move` kullanınca nokta ekran ortasına geliyor ama alt panel ekranın
+  /// ~%42'sini kapattığı için kullanıcının mavi noktası panelin dibinde
+  /// kalıyordu. Kamerayı panelin yarısı kadar yukarı kaydırmak gerekiyor.
+  void _centerOnVisible(LatLng point, double zoom) {
+    _map.move(point, zoom);
+    if (_panelHeight <= 0) return;
+    try {
+      final cam = _map.camera;
+      final size = cam.nonRotatedSize;
+      if (size.height <= 0) return;
+      // Görünen alanın ortasındaki koordinat...
+      final visibleCenter = cam.screenOffsetToLatLng(
+          Offset(size.width / 2, (size.height - _panelHeight) / 2));
+      // ...noktaya eşit olacak şekilde kamerayı ötele.
+      _map.move(
+        LatLng(
+          cam.center.latitude + (point.latitude - visibleCenter.latitude),
+          cam.center.longitude + (point.longitude - visibleCenter.longitude),
+        ),
+        zoom,
+      );
+    } catch (_) {
+      // Kamera henüz ölçülmediyse düz ortalama yeterli.
+    }
+  }
+
   /// Harita OYNARKEN turuncu noktayı anında taşı (veri yükleme bekler).
   void _updateProbeLive() {
     if (!_mapReady || !mounted) return;
@@ -277,7 +306,7 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
     if (nearest == null || nearest.isEmpty || !_mapReady) return;
     Haptics.light();
     final s = nearest.first.stop;
-    _map.move(LatLng(s.lat, s.lon), 15);
+    _centerOnVisible(LatLng(s.lat, s.lon), 15);
     await _reloadVisible();
   }
 
@@ -297,7 +326,7 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
     });
     if (_mapReady) {
       try {
-        _map.move(LatLng(m.stop.lat, m.stop.lon), 16.5);
+        _centerOnVisible(LatLng(m.stop.lat, m.stop.lon), 16.5);
       } catch (_) {
         // Kamera hesabı başarısızsa haritayı bozma; seçim yine de geçerli.
       }
@@ -442,14 +471,14 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
                       if (focus != null) {
                         // Durak sayfasından gelindi: o durağa odaklan + seç.
                         final target = LatLng(focus.lat, focus.lon);
-                        _map.move(target, 16);
+                        _centerOnVisible(target, 16);
                         final m = user == null
                             ? 0.0
                             : const Distance()
                                 .as(LengthUnit.Meter, user, target);
                         _selectStop(MapStop(stop: focus, meters: m));
                       } else if (user != null) {
-                        _map.move(user, 15);
+                        _centerOnVisible(user, 15);
                       }
                       _reloadVisible(); // ilk parçayı yükle
                     },

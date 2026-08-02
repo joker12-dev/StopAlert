@@ -39,15 +39,47 @@ class TransitDb {
   Database? _db;
   bool get isReady => _db != null;
 
+  /// ARAMA İÇİN açılan ek şehir veritabanları (şehir kimliği -> bağlantı).
+  ///
+  /// Aktif şehir tek tutulur ama kullanıcı aramada "Tümü"nü seçtiğinde diğer
+  /// şehirlerin indirilmiş paketlerinde de aranabilmeli — Kocaeli'deki biri
+  /// İstanbul'daki bir durağa bakmak için ayarlardan şehir değiştirmek
+  /// zorunda kalmasın.
+  final Map<String, Database> _aux = {};
+
+  /// Aramaya açık ek şehirler.
+  Iterable<String> get auxCities => _aux.keys;
+
   Future<void> open(String path) async {
     if (_db != null) return;
     _db = await openDatabase(path, readOnly: true);
+  }
+
+  /// Ek şehir veritabanını arama için aç (zaten açıksa dokunmaz).
+  Future<void> openAux(String cityId, String path) async {
+    if (_aux.containsKey(cityId)) return;
+    try {
+      _aux[cityId] = await openDatabase(path, readOnly: true);
+    } catch (_) {
+      // Paket bozuk/yok: o şehir aramada görünmez.
+    }
+  }
+
+  Future<void> closeAux() async {
+    final all = _aux.values.toList();
+    _aux.clear();
+    for (final d in all) {
+      try {
+        await d.close();
+      } catch (_) {}
+    }
   }
 
   Future<void> close() async {
     final d = _db;
     _db = null;
     await d?.close();
+    await closeAux();
   }
 
   Future<String?> meta(String key) async {
@@ -92,8 +124,10 @@ class TransitDb {
     return [for (final r in rows) _stop(r)];
   }
 
-  Future<List<Stop>> searchStops(String query, {int limit = 20}) async {
-    final db = _db;
+  /// [cityId] verilirse o şehrin ek veritabanında arar (bkz. [openAux]).
+  Future<List<Stop>> searchStops(String query,
+      {int limit = 20, String? cityId}) async {
+    final db = cityId == null ? _db : _aux[cityId];
     final q = query.trim();
     if (db == null || q.isEmpty) return const [];
     final rows = await db.query('stops',
@@ -106,8 +140,8 @@ class TransitDb {
   /// Hafif hat bilgisi (id/code/name) — arama sonuçları için. Tam durak listesi
   /// yalnızca hat seçilince [buildLine] ile yüklenir.
   Future<List<TransitLineBrief>> searchLines(String query,
-      {int limit = 20}) async {
-    final db = _db;
+      {int limit = 20, String? cityId}) async {
+    final db = cityId == null ? _db : _aux[cityId];
     final q = query.trim();
     if (db == null || q.isEmpty) return const [];
     final n = transitNorm(q);
