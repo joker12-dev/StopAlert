@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/models.dart';
 import '../data/recent_search.dart';
 import '../data/transit_db.dart';
+import '../state/city_provider.dart';
 import '../state/journey_provider.dart';
 import '../theme/app_theme.dart';
 import '../util/insets.dart';
@@ -269,8 +270,10 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
                   style: text.bodyMedium
                       ?.copyWith(color: VigilantColors.onSurfaceVariant)),
             ),
-            // Canlı araç konumları ("otobüsüm nerede").
-            if (_line case final l?)
+            // Canlı araç konumları ("otobüsüm nerede"). Yalnızca canlı filo
+            // servisi olan şehirlerde: İETT açık servis veriyor, Kocaeli
+            // vermiyor — olmayan özelliği düğme olarak göstermek ölü dokunuş.
+            if (_line case final l? when ref.watch(activeCityProvider).hasLiveBus)
               IconButton(
                 tooltip: 'Otobüsler nerede',
                 onPressed: () {

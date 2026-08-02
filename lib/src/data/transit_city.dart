@@ -19,6 +19,7 @@ class TransitCity {
     required this.maxLon,
     this.hasLiveBus = false,
     this.hasTraffic = false,
+    this.hasAnnouncements = false,
   });
 
   /// Dosya/kayıt anahtarı (`bus_istanbul.sqlite`, manifest yolu…).
@@ -42,14 +43,20 @@ class TransitCity {
   /// Trafik yoğunluğu göstergesi var mı.
   final bool hasTraffic;
 
+  /// Hat duyurusu beslemesi var mı (İETT sefer iptali/duyuru servisi).
+  final bool hasAnnouncements;
+
   bool contains(double lat, double lon) =>
       lat >= minLat && lat <= maxLat && lon >= minLon && lon <= maxLon;
 
-  /// Kutunun merkezine uzaklık (derece cinsinden kaba ölçü) — hangi şehre
-  /// daha yakın olduğunu seçmek için.
+  /// Kutunun merkezine kaba uzaklığın karesi — hangi şehre daha yakın
+  /// olduğunu seçmek için. Boylam derecesi 41. paralelde enlem derecesinin
+  /// ~0,75'i kadar mesafe ettiğinden ölçeklenir; yoksa doğu-batı farkları
+  /// olduğundan büyük görünür.
   double roughDistance(double lat, double lon) {
+    const lonScale = 0.75;
     final dy = lat - (minLat + maxLat) / 2;
-    final dx = lon - (minLon + maxLon) / 2;
+    final dx = (lon - (minLon + maxLon) / 2) * lonScale;
     return dy * dy + dx * dx;
   }
 
@@ -71,6 +78,7 @@ abstract final class TransitCities {
     maxLon: 29.95,
     hasLiveBus: true,
     hasTraffic: true,
+    hasAnnouncements: true,
   );
 
   static const kocaeli = TransitCity(
@@ -79,8 +87,12 @@ abstract final class TransitCities {
     // CC BY lisansı atfı ZORUNLU kılıyor.
     attribution: 'Veri: Kocaeli Büyükşehir Belediyesi Açık Veri Portalı (CC BY)',
     minLat: 40.42,
-    maxLat: 41.25,
-    minLon: 29.10,
+    // Kuzey sınır 41,10: daha yukarısı İstanbul'un Şile kıyısı. Şile (41,175)
+    // ile Kandıra (41,07) aynı boylam kuşağında olduğu için kutu buradan
+    // kesilmezse Şile Kocaeli sanılıyordu.
+    maxLat: 41.10,
+    // Batı sınır Dilovası; Gebze (29,43) dahil kalır.
+    minLon: 29.30,
     maxLon: 30.40,
   );
 
@@ -95,22 +107,31 @@ abstract final class TransitCities {
     return fallback;
   }
 
-  /// Konuma en uygun şehir. Hiçbir kutuya girmiyorsa en yakını seçilir —
-  /// kullanıcı şehirlerarası yolda olabilir; boş ekran göstermektense en
-  /// yakın şehirle başlamak yeğdir (üstteki çipten değiştirebilir).
+  /// Konuma en uygun şehir.
+  ///
+  /// Kutular ÇAKIŞIYOR: İstanbul ili doğuda 29,95'e kadar uzanıyor ve İzmit
+  /// (29,94) o kutunun içinde kalıyor. Bu yüzden "kutusuna giren ilk şehir"
+  /// yanlış: kutuya girenler arasından MERKEZİ EN YAKIN olan seçilir.
+  ///
+  /// Hiçbir kutuya girmiyorsa yine en yakın şehir döner — kullanıcı
+  /// şehirlerarası yolda olabilir; boş ekran göstermektense en yakın şehirle
+  /// başlamak yeğdir (Ayarlar'dan değiştirebilir).
   static TransitCity forLocation(double lat, double lon) {
-    for (final c in all) {
-      if (c.contains(lat, lon)) return c;
-    }
+    TransitCity? inside;
+    var insideD = double.infinity;
     var best = fallback;
     var bestD = double.infinity;
     for (final c in all) {
       final d = c.roughDistance(lat, lon);
+      if (c.contains(lat, lon) && d < insideD) {
+        insideD = d;
+        inside = c;
+      }
       if (d < bestD) {
         bestD = d;
         best = c;
       }
     }
-    return best;
+    return inside ?? best;
   }
 }

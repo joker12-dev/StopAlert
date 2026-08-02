@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../services/iett_service.dart';
+import '../state/city_provider.dart';
 import '../theme/app_theme.dart';
 import '../util/insets.dart';
 import '../util/haptics.dart';
@@ -130,7 +131,9 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen> {
               ),
             ),
             Expanded(
-              child: async.isLoading && all.isEmpty
+              child: !ref.watch(activeCityProvider).hasAnnouncements
+                  ? _noFeed(text, ref.watch(activeCityProvider).name)
+                  : async.isLoading && all.isEmpty
                   ? const Center(
                       child: CircularProgressIndicator(
                           color: VigilantColors.primary))
@@ -160,6 +163,35 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen> {
       ),
     );
   }
+
+  /// Şehrin duyuru beslemesi yok (İETT'nin karşılığı Kocaeli'de bulunmuyor).
+  /// Boş liste göstermek "duyuru yok" gibi okunurdu; sebebi açıkça yazılır.
+  Widget _noFeed(TextTheme text, String cityName) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Mascot(MascotAssets.dikkat, height: 110),
+              const SizedBox(height: 12),
+              Text(
+                '$cityName için duyuru servisi yok',
+                textAlign: TextAlign.center,
+                style: text.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Hat duyuruları İETT’nin açık servisinden geliyor; '
+                '$cityName belediyesi böyle bir besleme yayınlamıyor. '
+                'Alarm ve takip normal çalışır.',
+                textAlign: TextAlign.center,
+                style: text.bodyMedium
+                    ?.copyWith(color: VigilantColors.onSurfaceVariant),
+              ),
+            ],
+          ),
+        ),
+      );
 
   Widget _empty(TextTheme text, bool nothingLoaded) => Center(
         child: Padding(

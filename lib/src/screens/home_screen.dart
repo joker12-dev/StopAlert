@@ -7,6 +7,7 @@ import '../data/journey_record.dart';
 import '../data/journey_suggestion.dart';
 import '../data/models.dart';
 import '../data/stopi_tips.dart';
+import '../state/city_provider.dart';
 import '../state/journey_provider.dart';
 import '../state/settings_provider.dart';
 import '../state/weather_provider.dart';
@@ -98,7 +99,9 @@ class HomeScreen extends ConsumerWidget {
             EntranceFade(delayMs: 220, child: _PromoHero(onStart: goToRoutes)),
             const SizedBox(height: 28),
             // Şehir trafik yoğunlukları (İstanbul canlı, diğerleri yer tutucu).
-            const EntranceFade(delayMs: 260, child: TrafficStrip()),
+            // Trafik yoğunluğu İBB servisinden geliyor — yalnızca İstanbul.
+            if (ref.watch(activeCityProvider).hasTraffic)
+              const EntranceFade(delayMs: 260, child: TrafficStrip()),
             // Sık rota önerisi (bizim özellik) — varsa
             ..._buildSuggestionSection(context, ref, text),
             const SizedBox(height: 28),
