@@ -12,6 +12,7 @@ import '../util/haptics.dart';
 import '../widgets/skeleton.dart';
 import 'alarm_setup_screen.dart';
 import 'live_bus_screen.dart';
+import 'route_map_screen.dart';
 
 /// Tek otobüs hattı sayfası (İETT tarzı): "MK13" → NORMAL gidiş/dönüş +
 /// ayrı DEPAR güzergâhları. Kullanıcı güzergâhı/yönü seçer, ineceği durağa
@@ -134,6 +135,7 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _header(text),
+            _actions(text),
             const SizedBox(height: 12),
             // Kaydırılabilir üst alan (yön seçimi + depar); durak listesi ayrı.
             Flexible(
@@ -234,59 +236,109 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
     );
   }
 
-  Widget _header(TextTheme text) => Padding(
-        padding: const EdgeInsets.fromLTRB(8, 8, 20, 0),
-        child: Row(
-          children: [
-            IconButton(
-              onPressed: () => Navigator.of(context).pop(),
-              icon: const Icon(Icons.arrow_back,
-                  color: VigilantColors.onSurfaceVariant),
+  /// Üst çubuk: hat rozeti (türüne göre renk) + hattın gittiği yön.
+  Widget _header(TextTheme text) {
+    final line = _line;
+    final type = line?.type ?? LineType.bus;
+    final color = lineTypeColor(type);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 8, 20, 0),
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: () => Navigator.of(context).pop(),
+            icon: const Icon(Icons.arrow_back,
+                color: VigilantColors.onSurfaceVariant),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.16),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: color.withValues(alpha: 0.4)),
             ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-              decoration: BoxDecoration(
-                color: VigilantColors.primary.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.directions_bus_filled_rounded,
-                      size: 18, color: VigilantColors.primary),
-                  const SizedBox(width: 8),
-                  Text(widget.code,
-                      style: text.titleMedium?.copyWith(
-                          color: VigilantColors.primary,
-                          fontWeight: FontWeight.w800)),
-                ],
-              ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(lineTypeIcon(type), size: 18, color: color),
+                const SizedBox(width: 8),
+                Text(widget.code,
+                    style: text.titleMedium?.copyWith(
+                        color: color, fontWeight: FontWeight.w800)),
+              ],
             ),
-            const SizedBox(width: 12),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(type.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: text.labelMedium
+                        ?.copyWith(color: VigilantColors.onSurfaceVariant)),
+                if (line != null)
+                  Text(line.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style:
+                          text.labelSmall?.copyWith(color: color)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Hattı haritada görme ve canlı araçları izleme kısayolları.
+  ///
+  /// Eskiden yalnızca üst çubukta küçük bir simge vardı; kullanıcı fark
+  /// etmiyordu. "Rotayı görüntüle" her hatta çıkar, "Canlı konum" yalnızca
+  /// canlı filo servisi olan şehirlerde (İETT açık servis veriyor, Kocaeli
+  /// vermiyor) — olmayan özelliği düğme yapmak ölü dokunuş olurdu.
+  Widget _actions(TextTheme text) {
+    final line = _line;
+    if (line == null) return const SizedBox.shrink();
+    final hasLive = ref.watch(activeCityProvider).hasLiveBus &&
+        (line.type == LineType.bus || line.type == LineType.metrobus);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+      child: Row(
+        children: [
+          Expanded(
+            child: _ActionButton(
+              icon: Icons.route_rounded,
+              label: 'Rotayı görüntüle',
+              filled: true,
+              onTap: () {
+                Haptics.light();
+                Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => RouteMapScreen(line: line)));
+              },
+            ),
+          ),
+          if (hasLive) ...[
+            const SizedBox(width: 10),
             Expanded(
-              child: Text('Otobüs Hattı',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: text.bodyMedium
-                      ?.copyWith(color: VigilantColors.onSurfaceVariant)),
-            ),
-            // Canlı araç konumları ("otobüsüm nerede"). Yalnızca canlı filo
-            // servisi olan şehirlerde: İETT açık servis veriyor, Kocaeli
-            // vermiyor — olmayan özelliği düğme olarak göstermek ölü dokunuş.
-            if (_line case final l? when ref.watch(activeCityProvider).hasLiveBus)
-              IconButton(
-                tooltip: 'Otobüsler nerede',
-                onPressed: () {
+              child: _ActionButton(
+                icon: Icons.my_location_rounded,
+                label: 'Canlı konum',
+                filled: false,
+                onTap: () {
                   Haptics.light();
                   Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => LiveBusScreen(line: l)));
+                      builder: (_) => LiveBusScreen(line: line)));
                 },
-                icon: const Icon(Icons.travel_explore_rounded,
-                    color: VigilantColors.primary),
               ),
+            ),
           ],
-        ),
-      );
+        ],
+      ),
+    );
+  }
 
   Widget _deparSection(TextTheme text) {
     return Padding(
@@ -442,6 +494,53 @@ class _DirTab extends StatelessWidget {
 }
 
 /// Depar güzergâh satırı (açılır listede).
+/// Hat sayfasındaki birincil eylem düğmesi.
+class _ActionButton extends StatelessWidget {
+  const _ActionButton({
+    required this.icon,
+    required this.label,
+    required this.filled,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool filled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = filled ? Colors.white : VigilantColors.onSurface;
+    return Material(
+      color: filled
+          ? VigilantColors.primary
+          : VigilantColors.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 18, color: fg),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: fg, fontWeight: FontWeight.w700)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _DeparRow extends StatelessWidget {
   const _DeparRow({
     required this.variant,
