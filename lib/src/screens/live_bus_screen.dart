@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -6,10 +7,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../data/models.dart';
+import '../engine/bus_dead_reckoning.dart';
+import '../engine/geo.dart' as geo;
 import '../services/iett_service.dart';
 import '../services/live_bus_service.dart';
 import '../services/routing_service.dart';
 import '../theme/app_theme.dart';
+import '../util/anim_config.dart';
 import '../util/haptics.dart';
 import '../util/map_style.dart';
 
@@ -38,6 +42,24 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen>
   bool _loading = true;
   DateTime? _updatedAt;
 
+  /// İETT'nin verdiği ortak `son_konum_zamani` — gerçek ölçüm anı.
+  DateTime? _sourceStamp;
+
+  /// Ölçümler arasında araçları güzergâh üzerinde yürüten ölü hesap.
+  ///
+  /// İETT ~60 sn'de bir toplu fotoğraf yayınlıyor (bkz. [BusDeadReckoning]);
+  /// akıcı hareket burada üretilir.
+  final _dr = BusDeadReckoning();
+
+  /// Ekranda gösterilen anlık konumlar. Ayrı bir dinleyici: yalnızca otobüs
+  /// katmanı yeniden çizilir, bilgi kartı ve harita karoları rahat bırakılır.
+  final _fixes = ValueNotifier<Map<String, BusFix>>(const {});
+  Timer? _ticker;
+
+  /// Akıcı hareket adımı — 20 kare/sn. Otobüs saniyede ~5 m gittiği için bu
+  /// yeterince yumuşak, 60 kare/sn ise boşuna pil yakardı.
+  static const _tickInterval = Duration(milliseconds: 50);
+
   /// Güzergâhın YOLLARA oturmuş hali (OSRM). Boşsa duraklar arası düz çizgi.
   List<LatLng> _road = const [];
 
@@ -63,17 +85,25 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen>
 
   /// Güzergâhı gerçek yollara oturt (OSRM). Ağ yoksa düz çizgiye düşülür —
   /// alarm/canlı takip haritasındaki davranışın aynısı.
+  ///
+  /// Ölü hesap da bu çizgiyi kullanır: araç yalnızca güzergâh üzerinde
+  /// yürütülür, böylece binaların içinden geçmez.
   Future<void> _loadRoad() async {
     final pts = _routePoints;
     if (pts.length < 2) return;
     final road = await RoutingService.instance.route(pts);
-    if (mounted && road.length >= 2) setState(() => _road = road);
+    if (!mounted) return;
+    if (road.length >= 2) setState(() => _road = road);
+    _dr.setRoute([for (final p in _drawRoute) geo.LatLng(p.latitude, p.longitude)]);
+    _feedDeadReckoning();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
+    _ticker?.cancel();
+    _fixes.dispose();
     super.dispose();
   }
 
@@ -82,6 +112,18 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen>
     _timer?.cancel();
     _timer = Timer.periodic(
         LiveBusService.refreshInterval, (_) => _load());
+    _startTicker();
+  }
+
+  /// Akıcı hareket döngüsü. Ağ isteği YOK — sadece son ölçümü güzergâh
+  /// üzerinde ileri sarar.
+  void _startTicker() {
+    _ticker?.cancel();
+    if (!AppAnim.enabled) return; // testlerde sürekli animasyon kapalı
+    _ticker = Timer.periodic(_tickInterval, (_) {
+      if (!mounted || !_dr.hasRoute) return;
+      _fixes.value = _dr.positionsAt(DateTime.now());
+    });
   }
 
   @override
@@ -92,6 +134,7 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen>
       _startTimer();
     } else {
       _timer?.cancel();
+      _ticker?.cancel();
     }
   }
 
@@ -104,7 +147,25 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen>
       _vehicles = list;
       _loading = false;
       _updatedAt = DateTime.now();
+      // Tüm araçlar ORTAK bir zaman damgası taşıyor (toplu fotoğraf); hız
+      // ölçümü servisin damgasıyla yapılır, cihaz saatiyle değil.
+      _sourceStamp = list.isEmpty ? null : DateTime.tryParse(list.first.lastSeen);
     });
+    _feedDeadReckoning();
+  }
+
+  /// Yeni ölçümü ölü hesaba ver. Yalnızca gösterilen yöndeki araçlar izlenir —
+  /// ters yöndeki araç aynı çizgi üzerinde geri gidiyor gibi görünürdü.
+  void _feedDeadReckoning() {
+    if (!_dr.hasRoute) return;
+    _dr.observe(
+      {
+        for (final v in _shown) v.plate: geo.LatLng(v.lat, v.lon),
+      },
+      DateTime.now(),
+      seenAt: _sourceStamp,
+    );
+    _fixes.value = _dr.positionsAt(DateTime.now());
   }
 
   List<BusVehicle> get _shown => _onlyThisDirection
@@ -115,6 +176,11 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen>
         for (final s in widget.line.stops)
           if (s.lat != 0 || s.lon != 0) LatLng(s.lat, s.lon),
       ];
+
+  /// Çizilen (ve ölü hesabın yürüttüğü) güzergâh: OSRM varsa yollara oturmuş
+  /// hali, yoksa duraklar arası düz çizgi.
+  List<LatLng> get _drawRoute =>
+      _road.length >= 2 ? _road : _routePoints;
 
   void _fit() {
     final pts = [
@@ -200,24 +266,36 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen>
                         ),
                       ),
                 ]),
-                // CANLI otobüsler
-                MarkerLayer(markers: [
-                  for (final v in shown)
-                    Marker(
-                      point: LatLng(v.lat, v.lon),
-                      width: 44,
-                      height: 44,
-                      child: GestureDetector(
-                        onTap: () {
-                          Haptics.light();
-                          setState(() => _selected =
-                              _selected?.plate == v.plate ? null : v);
+                // CANLI otobüsler — konum ölü hesapla akıcı ilerler.
+                // Yalnızca BU katman yeniden çizilir (ValueListenableBuilder):
+                // saniyede 20 kez tüm ekranı kurmak gereksiz olurdu.
+                ValueListenableBuilder<Map<String, BusFix>>(
+                  valueListenable: _fixes,
+                  builder: (context, fixes, _) => MarkerLayer(markers: [
+                    for (final v in shown)
+                      Marker(
+                        point: switch (fixes[v.plate]) {
+                          final f? => LatLng(f.point.lat, f.point.lon),
+                          // Henüz güzergâha oturmadıysa ham ölçüm.
+                          null => LatLng(v.lat, v.lon),
                         },
-                        child: _BusMarker(
-                            vehicle: v, selected: _selected?.plate == v.plate),
+                        width: 44,
+                        height: 44,
+                        child: GestureDetector(
+                          onTap: () {
+                            Haptics.light();
+                            setState(() => _selected =
+                                _selected?.plate == v.plate ? null : v);
+                          },
+                          child: _BusMarker(
+                            vehicle: v,
+                            selected: _selected?.plate == v.plate,
+                            bearing: fixes[v.plate]?.bearing,
+                          ),
+                        ),
                       ),
-                    ),
-                ]),
+                  ]),
+                ),
               ],
             ),
           ),
@@ -280,10 +358,16 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen>
               updatedAt: _updatedAt,
               selected: _selected,
               onClearSelection: () => setState(() => _selected = null),
+              speedKmh: _selected == null
+                  ? null
+                  : _dr.speedKmh(_selected!.plate),
               onlyThisDirection: _onlyThisDirection,
               onToggleDirection: () {
                 Haptics.selection();
                 setState(() => _onlyThisDirection = !_onlyThisDirection);
+                // İzlenen araç kümesi değişti: ölü hesabı yeniden beslersen
+                // gizlenen araçlar takipten düşer, görünenler hemen oturur.
+                _feedDeadReckoning();
               },
               onRefresh: () {
                 Haptics.light();
@@ -298,14 +382,21 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen>
 }
 
 class _BusMarker extends StatelessWidget {
-  const _BusMarker({required this.vehicle, this.selected = false});
+  const _BusMarker({
+    required this.vehicle,
+    this.selected = false,
+    this.bearing,
+  });
 
   final BusVehicle vehicle;
   final bool selected;
 
+  /// Güzergâh üzerindeki gidiş yönü (derece) — bilinmiyorsa ok gösterilmez.
+  final double? bearing;
+
   @override
   Widget build(BuildContext context) {
-    return AnimatedContainer(
+    final marker = AnimatedContainer(
       duration: const Duration(milliseconds: 160),
       margin: EdgeInsets.all(selected ? 0 : 4),
       decoration: BoxDecoration(
@@ -329,6 +420,24 @@ class _BusMarker extends StatelessWidget {
           color: selected ? VigilantColors.primary : Colors.white,
           size: selected ? 22 : 20),
     );
+    final b = bearing;
+    if (b == null) return marker;
+    // Gidiş yönü oku: aracın nereye doğru ilerlediği bir bakışta anlaşılsın.
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        Transform.rotate(
+          angle: b * math.pi / 180,
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: Icon(Icons.arrow_drop_up_rounded,
+                size: 16,
+                color: VigilantColors.primary.withValues(alpha: 0.95)),
+          ),
+        ),
+        marker,
+      ],
+    );
   }
 }
 
@@ -342,6 +451,7 @@ class _InfoCard extends StatelessWidget {
     required this.onRefresh,
     this.selected,
     this.onClearSelection,
+    this.speedKmh,
   });
 
   final int count;
@@ -350,6 +460,9 @@ class _InfoCard extends StatelessWidget {
   final bool onlyThisDirection;
   final VoidCallback onToggleDirection;
   final VoidCallback onRefresh;
+
+  /// Seçili aracın ölçülen ortalama hızı — iki konum arasından hesaplanır.
+  final double? speedKmh;
 
   /// Haritadan seçilen araç — varsa güzergâh detayı gösterilir.
   final BusVehicle? selected;
@@ -438,6 +551,9 @@ class _InfoCard extends StatelessWidget {
                   if (v.routeCode.isNotEmpty)
                     _row(text, Icons.alt_route_rounded,
                         'Güzergâh: ${v.routeCode}'),
+                  if (speedKmh case final s? when s > 1)
+                    _row(text, Icons.speed_rounded,
+                        'Hız: ~${s.round()} km/sa'),
                   if (v.lastSeen.isNotEmpty)
                     _row(text, Icons.schedule_rounded,
                         'Son konum: ${v.lastSeen}'),
@@ -473,10 +589,12 @@ class _InfoCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
+            // İETT konumu ~60 sn'de bir yayınlıyor; aradaki hareket güzergâh
+            // üzerinde tahmin ediliyor (bkz. BusDeadReckoning). Kullanıcı
+            // gördüğünün ne kadarının ölçüm olduğunu bilmeli.
             updatedAt == null
                 ? 'İETT canlı filo verisi'
-                : 'Güncellendi: $_ago · '
-                    '${LiveBusService.refreshInterval.inSeconds} sn\'de bir',
+                : 'Ölçüm: $_ago · arada tahmini ilerler',
             style: text.labelMedium
                 ?.copyWith(color: VigilantColors.onSurfaceVariant),
           ),
