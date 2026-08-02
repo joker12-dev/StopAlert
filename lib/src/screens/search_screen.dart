@@ -260,9 +260,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 ),
               ),
             ),
-            // Şehir filtresi — yalnızca birden fazla paket kuruluysa görünür.
-            // Kullanıcı başka şehirdeki durağa bakmak için Ayarlar'a gitmesin.
-            _CityFilterBar(active: ref.watch(activeCityProvider)),
             const SizedBox(height: 24),
             Expanded(
               child: q.isEmpty
@@ -273,6 +270,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   : _ResultsView(
                       transitResults: results,
                       busAsync: ref.watch(busSearchProvider(_query.trim())),
+                      activeCity: ref.watch(activeCityProvider),
                       onTransitStop: (line, stop) =>
                           _openAlarmSetup(stop.name, line: line, stop: stop),
                       onBusLine: _openBusLine,
@@ -350,30 +348,28 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     _openAlarmSetup(stop?.name ?? entry.stopName, line: line, stop: stop);
   }
 
-  /// Başka şehrin sonucuna dokunuldu: o şehre GEÇ.
+  /// Sonuç BAŞKA şehirdense o şehre geç.
   ///
-  /// Arama ek veritabanında yapılıyor ama hat detayı, durak listesi ve alarm
-  /// akışı AKTİF şehrin paketinden okuyor. Geçiş yapılmazsa kullanıcı
+  /// Arama bütün kurulu paketlerde yapılıyor ama hat detayı, durak listesi ve
+  /// alarm akışı AKTİF şehrin paketinden okuyor. Geçiş yapılmazsa kullanıcı
   /// İstanbul'daki bir hattı seçip Kocaeli verisiyle karşılaşırdı.
-  Future<bool> _switchToScopeCity() async {
-    final scope = ref.read(searchScopeProvider);
-    if (scope == null) return true;
+  Future<bool> _switchToCity(TransitCity city) async {
+    if (city.id == ref.read(activeCityProvider).id) return true;
     final messenger = ScaffoldMessenger.of(context);
-    await ref.read(cityProvider.notifier).select(scope);
-    await BusDataService.instance.ensureReady(city: scope);
+    await ref.read(cityProvider.notifier).select(city);
+    await BusDataService.instance.ensureReady(city: city);
     if (!mounted) return false;
-    ref.read(searchScopeProvider.notifier).state = null;
     ref.invalidate(nearbyStopsProvider);
     messenger
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text('${scope.name} şehrine geçildi')));
+      ..showSnackBar(SnackBar(content: Text('${city.name} şehrine geçildi')));
     return true;
   }
 
   /// Otobüs hattı seçildi: tek hat sayfasını aç (gidiş/dönüş + duraklar).
-  Future<void> _openBusLine(TransitLineBrief brief) async {
+  Future<void> _openBusLine(TransitLineBrief brief, TransitCity city) async {
     Haptics.light();
-    if (!await _switchToScopeCity()) return;
+    if (!await _switchToCity(city)) return;
     if (!mounted) return;
     // Hat seçimi de "Son Aramalar"a yazılır: kullanıcı 147'yi arayıp açtıysa
     // ertesi gün tekrar aramak zorunda kalmamalı. Durak henüz seçilmediği
@@ -392,9 +388,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   /// Otobüs durağı seçildi (hedef olarak): duraktan geçen hatları TEMİZ tam
   /// ekranda sun; kullanıcı hangi hatla gittiğini seçince o hatla alarma geçilir.
-  Future<void> _openBusStop(Stop stop) async {
+  Future<void> _openBusStop(Stop stop, TransitCity city) async {
     Haptics.light();
-    if (!await _switchToScopeCity()) return;
+    if (!await _switchToCity(city)) return;
     final lines = await TransitDb.instance.linesForStop(stop.id);
     if (!mounted) return;
     if (lines.isEmpty) {
@@ -410,98 +406,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
-  }
-}
-
-/// Arama kapsamı çipleri: aktif şehir + indirilmiş diğer şehirler.
-class _CityFilterBar extends ConsumerWidget {
-  const _CityFilterBar({required this.active});
-
-  final TransitCity active;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final installed =
-        ref.watch(installedCitiesProvider).valueOrNull ?? const <TransitCity>[];
-    // Tek paket varsa filtre göstermenin anlamı yok.
-    if (installed.length < 2) return const SizedBox.shrink();
-    final scope = ref.watch(searchScopeProvider);
-
-    return Padding(
-      padding: const EdgeInsets.only(top: 12),
-      child: SizedBox(
-        height: 34,
-        child: ListView(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          children: [
-            _ScopeChip(
-              label: '${active.name} (bulunduğun)',
-              selected: scope == null,
-              onTap: () =>
-                  ref.read(searchScopeProvider.notifier).state = null,
-            ),
-            for (final c in installed)
-              if (c.id != active.id)
-                Padding(
-                  padding: const EdgeInsets.only(left: 8),
-                  child: _ScopeChip(
-                    label: c.name,
-                    selected: scope?.id == c.id,
-                    onTap: () =>
-                        ref.read(searchScopeProvider.notifier).state = c,
-                  ),
-                ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ScopeChip extends StatelessWidget {
-  const _ScopeChip({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        Haptics.selection();
-        onTap();
-      },
-      child: Container(
-        alignment: Alignment.center,
-        padding: const EdgeInsets.symmetric(horizontal: 14),
-        decoration: BoxDecoration(
-          color: selected
-              ? VigilantColors.primary.withValues(alpha: 0.18)
-              : VigilantColors.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color: selected
-                ? VigilantColors.primary.withValues(alpha: 0.6)
-                : VigilantColors.surfaceVariant.withValues(alpha: 0.5),
-          ),
-        ),
-        child: Text(
-          label,
-          style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: selected
-                    ? VigilantColors.primary
-                    : VigilantColors.onSurfaceVariant,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-              ),
-        ),
-      ),
-    );
   }
 }
 
@@ -601,6 +505,7 @@ class _ResultsView extends StatelessWidget {
   const _ResultsView({
     required this.transitResults,
     required this.busAsync,
+    required this.activeCity,
     required this.onTransitStop,
     required this.onBusLine,
     required this.onBusStop,
@@ -608,9 +513,12 @@ class _ResultsView extends StatelessWidget {
 
   final List<(TransitLine, Stop)> transitResults;
   final AsyncValue<BusSearchResults> busAsync;
+
+  /// Bulunulan şehir — sonuç başka şehirdense rozeti gösterilir.
+  final TransitCity activeCity;
   final void Function(TransitLine line, Stop stop) onTransitStop;
-  final void Function(TransitLineBrief brief) onBusLine;
-  final void Function(Stop stop) onBusStop;
+  final void Function(TransitLineBrief brief, TransitCity city) onBusLine;
+  final void Function(Stop stop, TransitCity city) onBusStop;
 
   @override
   Widget build(BuildContext context) {
@@ -640,15 +548,19 @@ class _ResultsView extends StatelessWidget {
     final children = <Widget>[];
 
     // METROBÜS ayrı bölüm — otobüsle karışmasın (34, 34A, 34AS…).
-    final metrobus = [for (final b in bus.lines) if (b.isMetrobus) b];
-    final busOnly = [for (final b in bus.lines) if (!b.isMetrobus) b];
+    final metrobus = [for (final b in bus.lines) if (b.line.isMetrobus) b];
+    final busOnly = [for (final b in bus.lines) if (!b.line.isMetrobus) b];
 
     if (metrobus.isNotEmpty) {
       children.add(const _SectionLabel(
           icon: Icons.airport_shuttle_rounded, label: 'METROBÜS'));
       children.add(const SizedBox(height: 12));
       for (final b in metrobus) {
-        children.add(_LineResultTile(brief: b, onTap: () => onBusLine(b)));
+        children.add(_LineResultTile(
+            brief: b.line,
+            city: b.city,
+            showCity: b.city.id != activeCity.id,
+            onTap: () => onBusLine(b.line, b.city)));
         children.add(const SizedBox(height: 12));
       }
       children.add(const SizedBox(height: 20));
@@ -660,7 +572,11 @@ class _ResultsView extends StatelessWidget {
           icon: Icons.directions_bus_filled_rounded, label: 'OTOBÜS HATLARI'));
       children.add(const SizedBox(height: 12));
       for (final b in busOnly) {
-        children.add(_LineResultTile(brief: b, onTap: () => onBusLine(b)));
+        children.add(_LineResultTile(
+            brief: b.line,
+            city: b.city,
+            showCity: b.city.id != activeCity.id,
+            onTap: () => onBusLine(b.line, b.city)));
         children.add(const SizedBox(height: 12));
       }
       children.add(const SizedBox(height: 20));
@@ -685,7 +601,11 @@ class _ResultsView extends StatelessWidget {
           icon: Icons.location_on_outlined, label: 'OTOBÜS DURAKLARI'));
       children.add(const SizedBox(height: 12));
       for (final s in bus.stops) {
-        children.add(_BusStopTile(stop: s, onTap: () => onBusStop(s)));
+        children.add(_BusStopTile(
+            stop: s.stop,
+            city: s.city,
+            showCity: s.city.id != activeCity.id,
+            onTap: () => onBusStop(s.stop, s.city)));
         children.add(const SizedBox(height: 12));
       }
     }
@@ -763,9 +683,19 @@ class _TransitResultTile extends StatelessWidget {
 
 /// Otobüs hattı sonucu (kod + güzergâh adı). Dokununca hedef durak seçilir.
 class _LineResultTile extends StatelessWidget {
-  const _LineResultTile({required this.brief, required this.onTap});
+  const _LineResultTile({
+    required this.brief,
+    required this.city,
+    required this.showCity,
+    required this.onTap,
+  });
 
   final TransitLineBrief brief;
+  final TransitCity city;
+
+  /// Sonuç bulunulan şehirden DEĞİLSE rozet gösterilir; aksi halde her satıra
+  /// gereksiz "İstanbul" yazmak listeyi gürültüye boğardı.
+  final bool showCity;
   final VoidCallback onTap;
 
   @override
@@ -773,7 +703,7 @@ class _LineResultTile extends StatelessWidget {
     final text = Theme.of(context).textTheme;
     // Metrobüs kendi rengiyle ayrışsın (arama sonucunda "Otobüs hattı"
     // yazması yanlıştı).
-    final color = lineTypeColor(brief.type);
+    final color = lineColorOf(brief.color, brief.type);
     return GlassPanel(
       borderRadius: 24,
       padding: const EdgeInsets.all(16),
@@ -806,6 +736,7 @@ class _LineResultTile extends StatelessWidget {
                     style: text.bodyMedium
                         ?.copyWith(fontWeight: FontWeight.w500)),
                 const SizedBox(height: 2),
+                if (showCity) _CityBadge(name: city.name),
                 Text('${brief.type.label} hattı',
                     style: text.labelMedium
                         ?.copyWith(color: VigilantColors.onSurfaceVariant)),
@@ -821,10 +752,58 @@ class _LineResultTile extends StatelessWidget {
 }
 
 /// Otobüs durağı sonucu. Dokununca hangi hatla gidileceği seçilir.
+/// Sonucun hangi şehre ait olduğunu gösteren küçük rozet.
+///
+/// Arama bütün kurulu paketlerde yapıldığı için "İZMİT" ile İstanbul'daki
+/// "İZMİT CADDESİ" aynı listede çıkabiliyor; şehir yazılmazsa ayırt edilemez.
+class _CityBadge extends StatelessWidget {
+  const _CityBadge({required this.name});
+
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+            decoration: BoxDecoration(
+              color: VigilantColors.accentBlue.withValues(alpha: 0.18),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.location_city_rounded,
+                    size: 10, color: VigilantColors.accentBlue),
+                const SizedBox(width: 4),
+                Text(name,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: VigilantColors.accentBlue,
+                        fontWeight: FontWeight.w700)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _BusStopTile extends StatelessWidget {
-  const _BusStopTile({required this.stop, required this.onTap});
+  const _BusStopTile({
+    required this.stop,
+    required this.city,
+    required this.showCity,
+    required this.onTap,
+  });
 
   final Stop stop;
+  final TransitCity city;
+  final bool showCity;
   final VoidCallback onTap;
 
   @override
@@ -857,6 +836,7 @@ class _BusStopTile extends StatelessWidget {
                     style: text.bodyMedium
                         ?.copyWith(fontWeight: FontWeight.w500)),
                 const SizedBox(height: 2),
+                if (showCity) _CityBadge(name: city.name),
                 Text(
                     stop.contextLabel.isNotEmpty
                         ? 'Otobüs · ${stop.contextLabel}'

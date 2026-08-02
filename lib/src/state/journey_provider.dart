@@ -234,10 +234,20 @@ final nearbyMapProvider = FutureProvider<List<MapStop>>((ref) async {
 /// inmemişse/açılmamışsa boş döner (ray/vapur sonuçları yine görünür).
 class BusSearchResults {
   const BusSearchResults({this.lines = const [], this.stops = const []});
-  final List<TransitLineBrief> lines;
-  final List<Stop> stops;
+
+  /// Sonuçlar hangi şehirden geldiğini TAŞIR: arama bütün kurulu paketlerde
+  /// yapılıyor ve "İZMİT" ile İstanbul'daki "İZMİT CADDESİ" aynı listede
+  /// çıkabiliyor. Şehir etiketi olmadan ayırt edilemezdi.
+  final List<CityLine> lines;
+  final List<CityStop> stops;
   bool get isEmpty => lines.isEmpty && stops.isEmpty;
 }
+
+/// Şehir etiketli hat sonucu.
+typedef CityLine = ({TransitLineBrief line, TransitCity city});
+
+/// Şehir etiketli durak sonucu.
+typedef CityStop = ({Stop stop, TransitCity city});
 
 /// Sorguya göre otobüs hat/durak araması (yerel SQLite'tan, hızlı). En az 2
 /// karakterden sonra çalışır; her sorgu Riverpod tarafından tekil önbelleklenir.
@@ -248,27 +258,40 @@ final busSearchProvider =
     if (q.length < 2) return const BusSearchResults();
     final db = TransitDb.instance;
     if (!db.isReady) return const BusSearchResults();
-    final scope = ref.watch(searchScopeProvider);
+    final active = ref.watch(activeCityProvider);
 
-    // Aktif şehir dışında bir kapsam seçildiyse o şehrin paketi aramaya açılır.
-    if (scope != null) {
-      final path = await BusDataService.instance.localPath(scope);
-      if (path != null) await db.openAux(scope.id, path);
+    final lines = <CityLine>[];
+    final stops = <CityStop>[];
+
+    // 1) Aktif şehir — açık olan ana veritabanı.
+    for (final l in await db.searchLines(q, limit: 12)) {
+      lines.add((line: l, city: active));
+    }
+    for (final st in await db.searchStops(q, limit: 20)) {
+      stops.add((stop: st, city: active));
     }
 
-    final lines = await db.searchLines(q, limit: 12, cityId: scope?.id);
-    final stops = await db.searchStops(q, limit: 20, cityId: scope?.id);
+    // 2) İNDİRİLMİŞ DİĞER ŞEHİRLER. Filtre yok: kullanıcı hangi şehirde
+    //    olduğunu düşünmeden arasın. Kocaeli'deki biri İstanbul'daki bir
+    //    durağa bakmak için ayar değiştirmek zorunda kalmamalı.
+    for (final c in TransitCities.all) {
+      if (c.id == active.id) continue;
+      final path = await BusDataService.instance.localPath(c);
+      if (path == null) continue;              // paketi yok: aramaya girmez
+      await db.openAux(c.id, path);
+      for (final l in await db.searchLines(q, limit: 8, cityId: c.id)) {
+        lines.add((line: l, city: c));
+      }
+      for (final st in await db.searchStops(q, limit: 12, cityId: c.id)) {
+        stops.add((stop: st, city: c));
+      }
+    }
+
     return BusSearchResults(lines: lines, stops: stops);
   },
 );
 
-/// Arama kapsamı: null = AKTİF şehir, değilse o şehrin indirilmiş paketi.
-///
-/// Kocaeli'de yaşayan biri İstanbul'daki bir durağa bakmak için ayarlardan
-/// şehir değiştirmek zorunda kalmasın diye var.
-final searchScopeProvider = StateProvider<TransitCity?>((ref) => null);
-
-/// Aramada seçilebilecek şehirler: paketi CİHAZDA olanlar.
+/// Paketi CİHAZDA olan şehirler (Veri Paketleri ekranı ve arama için).
 final installedCitiesProvider = FutureProvider<List<TransitCity>>((ref) async {
   final out = <TransitCity>[];
   for (final c in TransitCities.all) {
