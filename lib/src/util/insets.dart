@@ -12,12 +12,12 @@ abstract final class AppInsets {
   /// Sekme ekranlarında (Ana Sayfa, Rotalar, Favoriler, Profil) liste altı.
   ///
   /// Menü `extendBody: true` ile içeriğin ÜSTÜNDE durduğu için son öğe menünün
-  /// altında kalıyordu. 12 px pay yetmiyordu (kart gölgesi/kenarı hâlâ menüye
-  /// değiyordu); 32 px nefes bırakılır.
+  /// altında kalıyordu. 12 ve 32 px paylar hâlâ dar geldi; 56 px ile son kart
+  /// menüden açıkça ayrılır.
   static double listBottom(BuildContext context) =>
-      navBarHeight + 32 + MediaQuery.viewPaddingOf(context).bottom;
+      navBarHeight + 56 + MediaQuery.viewPaddingOf(context).bottom;
 
   /// Alt menüsü OLMAYAN tam sayfa ekranlarda (push edilmiş) liste altı.
   static double pageBottom(BuildContext context) =>
-      28 + MediaQuery.viewPaddingOf(context).bottom;
+      40 + MediaQuery.viewPaddingOf(context).bottom;
 }
