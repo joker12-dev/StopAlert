@@ -3,6 +3,7 @@ package com.originstudios.stopalert
 import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.SharedPreferences
+import android.content.res.ColorStateList
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -10,6 +11,7 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.net.Uri
+import android.os.Build
 import android.view.View
 import android.widget.RemoteViews
 import es.antonborri.home_widget.HomeWidgetLaunchIntent
@@ -53,10 +55,32 @@ class StopAlertWidgetProvider : HomeWidgetProvider() {
     private fun bindIdle(context: Context, views: RemoteViews) {
         views.setViewVisibility(R.id.widget_active, View.GONE)
         views.setViewVisibility(R.id.widget_idle, View.VISIBLE)
+        views.setImageViewBitmap(R.id.idle_icon, idleBitmap(context))
         // Hem kart hem düğme alarm kurma ekranını açar.
         val intent = launchIntent(context, "/alarm/new")
         views.setOnClickPendingIntent(R.id.widget_root, intent)
         views.setOnClickPendingIntent(R.id.idle_button, intent)
+    }
+
+    /** Boş durum simgesi: marka renginde içi boş halka + çan. */
+    private fun idleBitmap(context: Context): Bitmap {
+        val density = context.resources.displayMetrics.density
+        val size = (34 * density).toInt().coerceAtLeast(48)
+        val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bmp)
+        val stroke = 3f * density
+        val inset = stroke / 2f + 1f
+        canvas.drawArc(
+            RectF(inset, inset, size - inset, size - inset), 0f, 360f, false,
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.STROKE
+                strokeWidth = stroke
+                color = Color.argb(70, 255, 69, 58)
+            }
+        )
+        val dot = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = BRAND }
+        canvas.drawCircle(size / 2f, size / 2f, size / 7f, dot)
+        return bmp
     }
 
     private fun bindActive(
@@ -80,11 +104,28 @@ class StopAlertWidgetProvider : HomeWidgetProvider() {
         val line = data.getString("line", "") ?: ""
         val target = data.getString("target", "") ?: ""
         views.setTextViewText(R.id.line_code, line)
-        views.setTextColor(R.id.line_code, accent)
+        // Rozet hat rengini alır. setBackgroundColor kullanılmaz — yuvarlak
+        // köşeleri olan drawable'ı düz renkle ezerdi; tint şekli korur.
+        // (API 31 öncesinde rozet marka kırmızısı kalır, kabul edilebilir.)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            views.setColorStateList(
+                R.id.line_code, "setBackgroundTintList",
+                ColorStateList.valueOf(accent)
+            )
+        }
         views.setTextViewText(R.id.target_stop, target)
 
-        views.setTextViewText(R.id.current_stop, "Şu an  ·  ${data.getString("current", "—")}")
-        views.setTextViewText(R.id.next_stop, "Sonraki  ·  ${data.getString("next", "—")}")
+        // Dar widget: iki ayrı satır yerine "şimdiki → sonraki".
+        val current = data.getString("current", "") ?: ""
+        val next = data.getString("next", "") ?: ""
+        views.setTextViewText(
+            R.id.stops_line,
+            when {
+                current.isNotEmpty() && next.isNotEmpty() -> "$current  →  $next"
+                next.isNotEmpty() -> "Sonraki: $next"
+                else -> current
+            }
+        )
 
         val distance = data.getString("distance", "—") ?: "—"
         val eta = data.getInt("eta", 0)
@@ -138,8 +179,9 @@ class StopAlertWidgetProvider : HomeWidgetProvider() {
         accent: Int
     ): Bitmap {
         val density = context.resources.displayMetrics.density
-        val size = (94 * density).toInt().coerceAtLeast(120)
-        val stroke = 9f * density
+        // Düzendeki ImageView 62dp; bitmap birebir o ölçüde üretilir.
+        val size = (62 * density).toInt().coerceAtLeast(96)
+        val stroke = 6f * density
         val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bmp)
 
@@ -168,17 +210,18 @@ class StopAlertWidgetProvider : HomeWidgetProvider() {
         val number = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
             textAlign = Paint.Align.CENTER
-            textSize = 30f * density
+            textSize = 21f * density
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         }
         val caption = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(160, 255, 255, 255)
+            color = Color.argb(150, 255, 255, 255)
             textAlign = Paint.Align.CENTER
-            textSize = 10.5f * density
+            textSize = 7.5f * density
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         }
         val cx = size / 2f
-        canvas.drawText("$remaining", cx, cx + 4f * density, number)
-        canvas.drawText("DURAK", cx, cx + 19f * density, caption)
+        canvas.drawText("$remaining", cx, cx + 3f * density, number)
+        canvas.drawText("DURAK", cx, cx + 13f * density, caption)
         return bmp
     }
 

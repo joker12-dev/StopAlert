@@ -1,56 +1,78 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  StopAlert ana ekran widget'ı (4x2).
+  StopAlert ana ekran widget'ı (4x1 — alçak ve geniş).
 
   Tek düzen içinde iki durum var; sağlayıcı (StopAlertWidgetProvider) hangisinin
   görüneceğini setViewVisibility ile seçer:
     widget_idle   → aktif alarm yok
     widget_active → kalan durak halkası + durak bilgileri
+
+  Yükseklik bilinçli olarak dar tutuldu: ana ekranda iki sıra kaplamak yerine
+  tek sıraya sığsın. Bu yüzden "şu anki durak" ve "sonraki durak" ayrı satırlar
+  değil, tek satırda "şimdiki → sonraki" biçiminde gösteriliyor.
 -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/widget_background"
-    android:padding="14dp">
+    android:paddingLeft="12dp"
+    android:paddingTop="10dp"
+    android:paddingRight="12dp"
+    android:paddingBottom="10dp">
 
     <!-- ================= AKTİF ALARM YOK ================= -->
     <LinearLayout
         android:id="@+id/widget_idle"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:gravity="center"
-        android:orientation="vertical">
+        android:baselineAligned="false"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/widget_idle_title"
-            android:textColor="#FFFFFF"
-            android:textSize="17sp"
-            android:textStyle="bold" />
+        <ImageView
+            android:id="@+id/idle_icon"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:contentDescription="@string/widget_idle_title" />
 
-        <TextView
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="3dp"
-            android:text="@string/widget_idle_subtitle"
-            android:textColor="#99FFFFFF"
-            android:textSize="12sp" />
+            android:layout_marginStart="10dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/widget_idle_title"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="@string/widget_idle_subtitle"
+                android:textColor="#8AFFFFFF"
+                android:textSize="11sp" />
+        </LinearLayout>
 
         <TextView
             android:id="@+id/idle_button"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
             android:background="@drawable/widget_button"
-            android:paddingLeft="26dp"
-            android:paddingTop="9dp"
-            android:paddingRight="26dp"
-            android:paddingBottom="9dp"
+            android:paddingLeft="18dp"
+            android:paddingTop="8dp"
+            android:paddingRight="18dp"
+            android:paddingBottom="8dp"
             android:text="@string/widget_create_alarm"
             android:textColor="#FFFFFF"
-            android:textSize="14sp"
+            android:textSize="13sp"
             android:textStyle="bold" />
     </LinearLayout>
 
@@ -67,43 +89,48 @@
         <!-- Kalan durak halkası (Canvas'ta çizilip bitmap olarak basılır) -->
         <ImageView
             android:id="@+id/ring"
-            android:layout_width="94dp"
-            android:layout_height="94dp"
+            android:layout_width="62dp"
+            android:layout_height="62dp"
             android:contentDescription="@string/widget_ring_desc" />
 
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="14dp"
+            android:layout_marginStart="12dp"
             android:layout_weight="1"
             android:orientation="vertical">
 
-            <!-- Hat kodu · durum -->
+            <!-- Hat kodu rozeti · durum -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:gravity="center_vertical"
                 android:orientation="horizontal">
 
                 <TextView
                     android:id="@+id/line_code"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:background="@drawable/widget_chip"
                     android:maxLines="1"
-                    android:textColor="#FF453A"
-                    android:textSize="16sp"
+                    android:paddingLeft="7dp"
+                    android:paddingTop="1dp"
+                    android:paddingRight="7dp"
+                    android:paddingBottom="1dp"
+                    android:textColor="#FFFFFF"
+                    android:textSize="11sp"
                     android:textStyle="bold" />
 
                 <TextView
                     android:id="@+id/state_label"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
+                    android:layout_marginStart="7dp"
                     android:layout_weight="1"
                     android:ellipsize="end"
-                    android:gravity="end"
                     android:maxLines="1"
                     android:textColor="#FF453A"
-                    android:textSize="10sp"
+                    android:textSize="9sp"
                     android:textStyle="bold" />
             </LinearLayout>
 
@@ -112,10 +139,11 @@
                 android:id="@+id/target_stop"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="3dp"
                 android:ellipsize="end"
                 android:maxLines="1"
                 android:textColor="#FFFFFF"
-                android:textSize="15sp"
+                android:textSize="14sp"
                 android:textStyle="bold" />
 
             <!-- Kalan mesafe · ETA -->
@@ -123,33 +151,21 @@
                 android:id="@+id/distance"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="1dp"
                 android:ellipsize="end"
                 android:maxLines="1"
                 android:textColor="#B3FFFFFF"
-                android:textSize="12sp" />
-
-            <!-- Şu an / sonraki durak -->
-            <TextView
-                android:id="@+id/current_stop"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="7dp"
-                android:drawablePadding="6dp"
-                android:ellipsize="end"
-                android:maxLines="1"
-                android:textColor="#99FFFFFF"
                 android:textSize="11sp" />
 
+            <!-- "şimdiki durak → sonraki durak" tek satırda -->
             <TextView
-                android:id="@+id/next_stop"
+                android:id="@+id/stops_line"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="1dp"
                 android:ellipsize="end"
                 android:maxLines="1"
-                android:textColor="#99FFFFFF"
-                android:textSize="11sp" />
+                android:textColor="#8AFFFFFF"
+                android:textSize="10sp" />
         </LinearLayout>
     </LinearLayout>
 </FrameLayout>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Hat kodu rozeti. Dolgu rengi hat türüne göre koddan atanır
+     (setInt/setColorFilter), buradaki renk yalnızca ön izleme içindir. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#FF453A" />
+    <corners android:radius="7dp" />
+</shape>
