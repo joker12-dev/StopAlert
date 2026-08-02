@@ -240,7 +240,8 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
   Widget _header(TextTheme text) {
     final line = _line;
     final type = line?.type ?? LineType.bus;
-    final color = lineTypeColor(type);
+    // Hattın kendi resmi rengi varsa onu kullan (Kocaeli beslemesi veriyor).
+    final color = lineColorOf(line?.color ?? '', type);
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 8, 20, 0),
       child: Row(
@@ -274,7 +275,12 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(type.label,
+                Text(
+                    // İşletmeci varsa yaz: belediye otobüsü ile minibüs
+                    // kooperatifi kullanıcı için farklı deneyim.
+                    (line?.operator.isNotEmpty ?? false)
+                        ? '${type.label} · ${line!.operator}'
+                        : type.label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: text.labelMedium

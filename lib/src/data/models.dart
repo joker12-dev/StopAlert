@@ -92,6 +92,8 @@ class TransitLine {
     required this.stops,
     this.segmentSeconds,
     this.defaultSegmentSeconds = 120,
+    this.color = '',
+    this.operator = '',
   });
 
   factory TransitLine.fromJson(Map<String, dynamic> json) => TransitLine(
@@ -99,6 +101,8 @@ class TransitLine {
         code: json['code'] as String,
         name: json['name'] as String,
         type: LineType.fromName(json['type'] as String),
+        color: (json['color'] as String?) ?? '',
+        operator: (json['operator'] as String?) ?? '',
         stops: [
           for (final s in json['stops'] as List)
             Stop.fromJson(s as Map<String, dynamic>),
@@ -126,6 +130,12 @@ class TransitLine {
 
   /// Duraklar hat yönünde sıralıdır; ters yön listeyi tersine çevirerek elde edilir.
   final List<Stop> stops;
+
+  /// Hattın RESMİ rengi ("#1EA9BD"); boşsa [lineTypeColor] kullanılır.
+  final String color;
+
+  /// İşletmeci adı (belediye şirketi / minibüs kooperatifi).
+  final String operator;
 
   /// GTFS'ten gelen gerçek durak arası süreler (saniye);
   /// i. eleman stops[i] -> stops[i+1] arasıdır.

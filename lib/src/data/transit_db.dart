@@ -148,7 +148,9 @@ class TransitDb {
     // Hat NO başına TEK sonuç (İETT gibi: "MK13" tek çıkar; gidiş/dönüş
     // varyantları hat detay sayfasında). Temsili: kodun bir varyantı.
     final rows = await db.rawQuery(
-      'SELECT id, code, name, type FROM lines '
+      // `*`: eski sürüm bir DB'de `color`/`operator` sütunları bulunmayabilir;
+      // tek tek saymak o durumda SQL hatası verirdi.
+      'SELECT * FROM lines '
       'WHERE code LIKE ? OR name_norm LIKE ? '
       'GROUP BY code ORDER BY LENGTH(code), code LIMIT ?',
       ['$n%', '%$n%', limit],
@@ -189,7 +191,7 @@ class TransitDb {
     final raw = _stripId(externalStopId);
     if (raw == null) return const [];
     final rows = await db.rawQuery(
-      'SELECT l.code AS code, l.id AS id, l.name AS name, l.type AS type, '
+      'SELECT l.*, '
       'MIN(l.depar * 1000000 - '
       '(SELECT COUNT(*) FROM line_stops WHERE line_id = l.id)) AS k '
       'FROM line_stops ls JOIN lines l ON l.id = ls.line_id '
@@ -237,9 +239,9 @@ class TransitDb {
       id: kBusPrefix + (l['id'] as String),
       code: l['code'] as String,
       name: l['name'] as String,
-      type: (l['type'] as String?) == 'metrobus'
-          ? LineType.metrobus
-          : LineType.bus,
+      type: _typeOf(l['type'] as String?),
+      color: (l['color'] as String?) ?? '',
+      operator: (l['operator'] as String?) ?? '',
       stops: stops,
       segmentSeconds: segs,
     );
@@ -259,10 +261,23 @@ class TransitDb {
         code: r['code'] as String,
         name: r['name'] as String,
         // Eski sürüm DB'de `type` bulunmayabilir → otobüs varsayılır.
-        type: (r['type'] as String?) == 'metrobus'
-            ? LineType.metrobus
-            : LineType.bus,
+        type: _typeOf(r['type'] as String?),
+        color: (r['color'] as String?) ?? '',
+        operator: (r['operator'] as String?) ?? '',
       );
+
+  /// DB'deki tür adını [LineType]'a çevir. Kocaeli paketinde tramvay, vapur
+  /// ve teleferik de aynı tabloda geliyor.
+  static LineType _typeOf(String? name) => switch (name) {
+        'metrobus' => LineType.metrobus,
+        'tram' => LineType.tram,
+        'ferry' => LineType.ferry,
+        'funicular' => LineType.funicular,
+        'cableCar' => LineType.cableCar,
+        'metro' => LineType.metro,
+        'marmaray' => LineType.marmaray,
+        _ => LineType.bus,
+      };
 
   String? _stripId(String id) =>
       id.startsWith(kBusPrefix) ? id.substring(kBusPrefix.length) : null;
@@ -275,11 +290,21 @@ class TransitLineBrief {
     required this.code,
     required this.name,
     this.type = LineType.bus,
+    this.color = '',
+    this.operator = '',
   });
 
   final String id;
   final String code;
   final String name;
+
+  /// Hattın RESMİ rengi ("#1EA9BD") — beslemede varsa tür rengi yerine bu
+  /// kullanılır. Boşsa çağıran [lineTypeColor]'a düşer.
+  final String color;
+
+  /// İşletmeci ("ULAŞIM PARK A.Ş.", "SS. 5 Nolu Şehiriçi Koop.") — belediye
+  /// otobüsü ile minibüs kooperatifi kullanıcı için farklı deneyim.
+  final String operator;
 
   /// Otobüs mü metrobüs mü — arama sonuçlarında ayrı gösterilir.
   final LineType type;

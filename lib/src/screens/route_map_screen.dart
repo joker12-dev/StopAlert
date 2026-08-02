@@ -152,7 +152,7 @@ class _RouteMapScreenState extends ConsumerState<RouteMapScreen> {
     final stops = _stops;
     final drawRoute = _drawRoute;
     final showLabels = _zoom >= _labelZoom;
-    final color = lineTypeColor(widget.line.type);
+    final color = lineColorOf(widget.line.color, widget.line.type);
 
     return Scaffold(
       body: Stack(

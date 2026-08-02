@@ -324,6 +324,10 @@ def build(version):
         by_route[key][sid] += 1
 
     route_by_id = {r['route_id']: r for r in routes}
+    # İşletmeci adı: Ulaşım Park (belediye) ile minibüs kooperatiflerini
+    # ayırmak kullanıcı için anlamlı — ücret ve sefer düzeni farklı.
+    agency_name = {a['agency_id']: (a.get('agency_name') or '').strip()
+                   for a in read_csv('agency.txt')}
 
     if os.path.exists(OUT):
         os.remove(OUT)
@@ -333,7 +337,8 @@ def build(version):
       CREATE TABLE stops(id INTEGER PRIMARY KEY, name TEXT, name_norm TEXT,
                          direction TEXT, district TEXT, lat REAL, lon REAL);
       CREATE TABLE lines(id TEXT PRIMARY KEY, code TEXT, name TEXT,
-                         name_norm TEXT, dir TEXT, depar INTEGER, type TEXT);
+                         name_norm TEXT, dir TEXT, depar INTEGER, type TEXT,
+                         color TEXT, operator TEXT);
       CREATE TABLE line_stops(line_id TEXT, seq INTEGER, stop_id INTEGER,
                               seconds INTEGER);
       CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT);
@@ -407,7 +412,7 @@ def build(version):
             out.extend(g)
         return (out, dropped) if len(out) >= 2 else (seq_stops, 0)
 
-    def add_line(code, yon, ltype, stops_seq, seconds):
+    def add_line(code, yon, ltype, stops_seq, seconds, color='', operator=''):
         """stops_seq: [(stop_id, ad, lat, lon)]  seconds: [0, s1, s2, ...]"""
         lid = f'{code}_{yon}'
         n = 2
@@ -416,7 +421,8 @@ def build(version):
             n += 1
         seen_ids.add(lid)
         lname = f'{stops_seq[0][1]} - {stops_seq[-1][1]}'
-        line_rows.append((lid, code, lname, norm(lname), yon, 0, ltype))
+        line_rows.append(
+            (lid, code, lname, norm(lname), yon, 0, ltype, color, operator))
         for k, (sid, name, lat, lon) in enumerate(stops_seq):
             # Durak ana kaydı TEK kaynaktan: GTFS. Hat sayfasından gelen değer
             # yalnızca GTFS'te olmayan durak için kullanılır. Aksi halde aynı
@@ -428,6 +434,11 @@ def build(version):
     for i, (code, variants) in enumerate(sorted(codes.items()), 1):
         route = route_by_id[variants[0][0]]
         ltype = TYPE_BY_GTFS.get(route.get('route_type', '3'), 'bus')
+        # Beslemede her hattın kendi rengi var (373/373) — genel tür rengi
+        # yerine bunu kullanmak hatları gerçek hâline yaklaştırıyor.
+        raw_color = (route.get('route_color') or '').strip().lstrip('#')
+        color = f'#{raw_color.upper()}' if len(raw_color) == 6 else ''
+        operator = agency_name.get(route.get('agency_id', ''), '')
         speed = {'bus': 5.0, 'tram': 7.0, 'ferry': 8.0,
                  'funicular': 4.0, 'cableCar': 4.0}.get(ltype, 5.0)
 
@@ -446,7 +457,8 @@ def build(version):
                     b = stops_seq[k]
                     dist = meters((a[2], a[3]), (b[2], b[3]))
                     secs.append(int(max(20, min(600, round(dist / speed)))))
-                add_line(code, 'G' if d == 0 else 'D', ltype, stops_seq, secs)
+                add_line(code, 'G' if d == 0 else 'D', ltype, stops_seq, secs,
+                         color, operator)
             from_site += 1
             time.sleep(0.15)                       # siteye nazik ol
             continue
@@ -477,13 +489,13 @@ def build(version):
                              (seq[k][2], seq[k][3]))
                 secs.append(int(max(20, min(600, round(gap / speed)))))
             add_line(code, 'G' if str(direction) == '0' else 'D',
-                     ltype, seq, secs)
+                     ltype, seq, secs, color, operator)
             from_shape += 1
         if i % 25 == 0:
             print(f'  {i}/{len(codes)} hat  (site={from_site} '
                   f'geometri={from_shape})  {time.time()-t0:.0f}s')
 
-    db.executemany('INSERT OR IGNORE INTO lines VALUES(?,?,?,?,?,?,?)',
+    db.executemany('INSERT OR IGNORE INTO lines VALUES(?,?,?,?,?,?,?,?,?)',
                    line_rows)
     db.executemany('INSERT INTO line_stops VALUES(?,?,?,?)', ls_rows)
     db.executemany('INSERT OR IGNORE INTO stops VALUES(?,?,?,?,?,?,?)', [

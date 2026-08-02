@@ -194,6 +194,20 @@ String colorHex(Color c) {
   return '#${h(ch(c.r))}${h(ch(c.g))}${h(ch(c.b))}';
 }
 
+/// Hattın gösterileceği renk: beslemede RESMİ rengi varsa o, yoksa tür rengi.
+///
+/// Kocaeli beslemesi 373 hattın hepsine renk veriyor (Ulaşım Park turkuazı,
+/// kooperatifler yeşil...). Hepsini tek "otobüs yeşili" ile göstermek yerel
+/// hattın kimliğini siliyordu.
+Color lineColorOf(String hex, LineType type) {
+  final h = hex.trim().replaceFirst('#', '');
+  if (h.length == 6) {
+    final v = int.tryParse(h, radix: 16);
+    if (v != null) return Color(0xFF000000 | v);
+  }
+  return lineTypeColor(type);
+}
+
 /// Hat türü başına vurgu rengi (tasarımdaki Hızlı Başlat çipleri ile uyumlu:
 /// Marmaray mercan, metro mavi, otobüs/metrobüs yeşil).
 Color lineTypeColor(LineType type) => switch (type) {
