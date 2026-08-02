@@ -5,5 +5,13 @@
   "sha256": "de0bc1391892f6d86a5d89ac39db558cbed08f00652e0e35b8fb5385367d7e6a",
   "lines": 2425,
   "stops": 13370,
-  "source": "IETT resmi web servisi (api.ibb.gov.tr) + GTFS depar"
+  "source": "IETT resmi web servisi (api.ibb.gov.tr) + GTFS depar",
+  "rail": {
+    "version": "20260802",
+    "file": "rail_20260802.json",
+    "bytes": 92894,
+    "sha256": "046d27f1de388b79a23761f1365c2e90a6ed2b3e439e1879c03dd37ad1b49c8b",
+    "lines": 122,
+    "stops": 746
+  }
 }

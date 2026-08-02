@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -14,6 +15,7 @@ import '../data/recent_search.dart';
 import '../data/sample_lines.dart';
 import '../data/transit_db.dart';
 import '../services/bus_data_service.dart';
+import 'city_provider.dart';
 import '../data/transit_city.dart';
 import '../services/journey_repository.dart';
 import '../services/location_service.dart';
@@ -25,7 +27,20 @@ import '../services/location_service.dart';
 /// uygulama hiçbir koşulda boş kalmasın.
 final linesProvider = FutureProvider<List<TransitLine>>((ref) async {
   try {
-    final raw = await rootBundle.loadString('assets/data/lines.json');
+    // ÖNCE indirilen paket: metro/tramvay hatları uzadıkça mağaza güncellemesi
+    // beklemeden tazelenebilsin. Yoksa APK'daki gömülü kopyaya düşülür — ilk
+    // açılışta ağ olmasa da uygulama ray/vapurla çalışmak zorunda.
+    String? raw;
+    final city = ref.watch(activeCityProvider);
+    final path = await BusDataService.instance.railPath(city);
+    if (path != null) {
+      try {
+        raw = await File(path).readAsString();
+      } catch (_) {
+        raw = null;                       // bozuk dosya: gömülüye düş
+      }
+    }
+    raw ??= await rootBundle.loadString('assets/data/lines.json');
     final json = jsonDecode(raw) as Map<String, dynamic>;
     final lines = [
       for (final l in json['lines'] as List)

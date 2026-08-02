@@ -59,6 +59,54 @@ class BusDataService {
         : '${dir.path}/bus_${c.id}.sqlite';
   }
 
+  /// İndirilmiş RAY/VAPUR dosyasının yolu — yoksa null.
+  ///
+  /// Ray verisi de artık paketle iniyor: metro hatları uzadıkça (Akçaray
+  /// Kuruçeşme, M9 uzatması...) mağaza güncellemesi beklemek gerekmesin.
+  /// APK'daki gömülü kopya SİLİNMEDİ: ilk açılışta ağ yoksa uygulama yine de
+  /// ray/vapur hatlarıyla çalışsın diye yedek olarak duruyor.
+  Future<String?> railPath([TransitCity? city]) async {
+    if (!isMobileDevice) return null;
+    try {
+      final dir = await getApplicationSupportDirectory();
+      final c = city ?? TransitCities.fallback;
+      final f = File('${dir.path}/rail_${c.id}.json');
+      return await f.exists() ? f.path : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Manifestteki `rail` bölümünü indirir (sürüm değiştiyse).
+  Future<void> _syncRail(
+      Map<String, dynamic> manifest, TransitCity city) async {
+    final rail = manifest['rail'];
+    if (rail is! Map) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'rail_version_${city.id}';
+      final remote = rail['version'] as String?;
+      final dir = await getApplicationSupportDirectory();
+      final file = File('${dir.path}/rail_${city.id}.json');
+      if (await file.exists() && prefs.getString(key) == remote) return;
+
+      final res = await http
+          .get(Uri.parse('${_fileBase(city)}/${rail['file']}'))
+          .timeout(const Duration(seconds: 25));
+      if (res.statusCode != 200) return;
+      final bytes = res.bodyBytes;
+      final expectSha = rail['sha256'] as String?;
+      if (expectSha != null &&
+          sha256.convert(bytes).toString() != expectSha) {
+        return;                       // bozuk indirme: gömülü kopya kalsın
+      }
+      await file.writeAsBytes(bytes, flush: true);
+      await prefs.setString(key, remote ?? '');
+    } catch (_) {
+      // Ağ yok / hata: gömülü kopya kullanılır.
+    }
+  }
+
   /// İndirilmiş DB'nin yolu — yoksa null.
   ///
   /// Arka plan isolate'i (widget kısayolu) veritabanını kendisi açmak zorunda:
@@ -174,6 +222,8 @@ class BusDataService {
 
     final remoteVer = manifest?['version'] as String?;
     final exists = await file.exists();
+
+    if (manifest != null) await _syncRail(manifest, target);
 
     if (manifest != null && (!exists || remoteVer != localVer)) {
       final ok = await _download(manifest, target, path, onProgress);

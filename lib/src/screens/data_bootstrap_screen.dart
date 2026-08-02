@@ -99,12 +99,25 @@ class _DataBootstrapScreenState extends ConsumerState<DataBootstrapScreen> {
                         ?.copyWith(color: VigilantColors.onSurfaceVariant),
                   ),
                   const SizedBox(height: 28),
+                  // Ray/vapur da paketle iniyor (gömülü kopya yalnızca ağsız
+                  // ilk açılış için yedek). Metro hatları uzadıkça mağaza
+                  // güncellemesi beklemeden tazelenebilsin diye.
                   _PackageCard(
                     icon: Icons.directions_transit_rounded,
-                    title: 'İstanbul · Ray & Vapur',
-                    subtitle: 'Marmaray, metro, tramvay, vapur',
-                    status: _PkgStatus.ready,
-                    statusText: 'Gömülü · Hazır',
+                    title: '${city?.name ?? 'Şehir'} · Ray & Vapur',
+                    subtitle: city?.id == 'kocaeli'
+                        ? 'Akçaray, vapur, teleferik'
+                        : 'Marmaray, metro, tramvay, vapur',
+                    status: _busDone
+                        ? (_phase == BusDataPhase.offline
+                            ? _PkgStatus.offline
+                            : _PkgStatus.ready)
+                        : _PkgStatus.downloading,
+                    statusText: _busDone
+                        ? (_phase == BusDataPhase.offline
+                            ? 'Gömülü sürüm kullanılıyor'
+                            : 'Güncel')
+                        : 'İndiriliyor…',
                   ),
                   const SizedBox(height: 12),
                   _PackageCard(
