@@ -47,6 +47,7 @@ import sqlite3
 import ssl
 import sys
 import time
+import urllib.parse
 import urllib.request
 
 DATASET_ID = 'e2a87342-d39a-4742-ae25-165e10d2bc72'
@@ -232,7 +233,10 @@ def site_directions(code):
     """
     import re
     try:
-        html = fetch(f'{SITE}/{code}/', timeout=45).decode('utf-8', 'replace')
+        # Kod Türkçe harf içerebiliyor (115Ç, 41Ç). Kodlanmazsa istek düşüyor
+        # ve hat sessizce geometri yedeğine kayıyordu.
+        safe = urllib.parse.quote(code, safe='')
+        html = fetch(f'{SITE}/{safe}/', timeout=45).decode('utf-8', 'replace')
     except Exception:
         return []
     import html as htmlmod
@@ -291,6 +295,7 @@ def build(version):
                               float(s['stop_lat']), float(s['stop_lon'])))
         except (ValueError, KeyError):
             continue
+    gtfs_stops = {sid: (name, lat, lon) for sid, name, lat, lon in all_stops}
     grid = {}
     CELL = 0.01                                   # ~1.1 km
     for st in all_stops:
@@ -337,7 +342,7 @@ def build(version):
     line_rows, ls_rows = [], []
     used_stops = {}
     seen_ids = set()
-    from_site = from_shape = skipped = 0
+    from_site = from_shape = skipped = outliers = 0
     t0 = time.time()
 
     # Hat KODU başına işlenir: site sayfası kod bazlı ve iki yönü birden verir.
@@ -348,6 +353,59 @@ def build(version):
             continue
         code = (route.get('route_short_name') or '').strip() or route_id
         codes.setdefault(code, []).append((route_id, direction))
+
+    def canonical(stop_id, name, lat, lon):
+        """Durağın ad ve konumunu GTFS ana kaydından al.
+
+        Site sayfası SIRAYI doğru veriyor ama iki kusuru var: bazı adlarda
+        bozuk bayt (`OMURCALI SAPA?I 1`) ve bazı Google Maps bağlantılarında
+        yanlış koordinat. GTFS ana kaydı ikisinde de temiz, o yüzden kimlik
+        GTFS'te varsa DAİMA GTFS kazanır.
+
+        Tek kaynak olması şart: bir dönem koordinat siteden, ad GTFS'ten
+        alınıyordu ve aykırı eleme ile durak tablosu FARKLI konumlara bakıp
+        birbirini tutmuyordu. Kimlik yanlış eşleşirse (nadir) durak zaten
+        aykırı çıkıp [drop_outliers] tarafından atılır.
+        """
+        g = gtfs_stops.get(stop_id)
+        if g:
+            return (stop_id, g[0], g[1], g[2])
+        return (stop_id, name, lat, lon)
+
+    def drop_outliers(seq_stops, max_gap_km=5.0, max_run=3):
+        """Sıradan kopan durak ÖBEĞİNİ at (sitedeki hatalı koordinatlar).
+
+        Site sayfasındaki bazı Google Maps bağlantıları yanlış konum veriyor.
+        Tek durak kaçtığında (115Ç'de "CEBECİ BALÇIK CADDESİ" 60 km öteye)
+        komşu kontrolü yetiyordu, ama bazen ARDIŞIK İKİ durak birlikte kaçıyor
+        (141/143'te "YONCA SOKAK 2-3" 23 km öteye) ve o zaman her birinin bir
+        komşusu yakın kaldığı için tek-durak kontrolü kör kalıyor.
+
+        Bu yüzden dizi önce öbeklere ayrılır (ardışık boşluk < eşik olanlar
+        aynı öbek), sonra ana gövdeden kopmuş KÜÇÜK öbekler atılır. Uzun
+        şehirlerarası hatlar tek büyük öbek olduğu için etkilenmez.
+        """
+        if len(seq_stops) < 3:
+            return seq_stops, 0
+        limit = max_gap_km * 1000
+        groups = [[seq_stops[0]]]
+        for prev, cur in zip(seq_stops, seq_stops[1:]):
+            if meters((prev[2], prev[3]), (cur[2], cur[3])) > limit:
+                groups.append([cur])
+            else:
+                groups[-1].append(cur)
+        if len(groups) == 1:
+            return seq_stops, 0
+        biggest = max(len(g) for g in groups)
+        out, dropped = [], 0
+        for g in groups:
+            # Ana gövde ve makul büyüklükteki öbekler korunur; yalnızca birkaç
+            # duraklık kopuk parçalar (hatalı koordinat) atılır.
+            if len(g) <= max_run and len(g) < biggest:
+                dropped += len(g)
+                continue
+            out.extend(g)
+        return (out, dropped) if len(out) >= 2 else (seq_stops, 0)
 
     def add_line(code, yon, ltype, stops_seq, seconds):
         """stops_seq: [(stop_id, ad, lat, lon)]  seconds: [0, s1, s2, ...]"""
@@ -360,7 +418,11 @@ def build(version):
         lname = f'{stops_seq[0][1]} - {stops_seq[-1][1]}'
         line_rows.append((lid, code, lname, norm(lname), yon, 0, ltype))
         for k, (sid, name, lat, lon) in enumerate(stops_seq):
-            used_stops[sid] = (name, lat, lon)
+            # Durak ana kaydı TEK kaynaktan: GTFS. Hat sayfasından gelen değer
+            # yalnızca GTFS'te olmayan durak için kullanılır. Aksi halde aynı
+            # durağı yazan son hat kazanıyordu ve bir hattın temizlenmiş
+            # koordinatı, başka hattın hatalı değeriyle eziliyordu.
+            used_stops.setdefault(sid, (name, lat, lon))
             ls_rows.append((lid, k, sid, seconds[k]))
 
     for i, (code, variants) in enumerate(sorted(codes.items()), 1):
@@ -373,6 +435,11 @@ def build(version):
         dirs = site_directions(code)
         if dirs:
             for d, stops_seq in enumerate(dirs[:2]):
+                stops_seq = [canonical(*s) for s in stops_seq]
+                stops_seq, n_out = drop_outliers(stops_seq)
+                outliers += n_out
+                if len(stops_seq) < 2:
+                    continue
                 secs = [0]
                 for k in range(1, len(stops_seq)):
                     a = stops_seq[k - 1]
@@ -396,11 +463,18 @@ def build(version):
             if len(ordered) < 2:
                 skipped += 1
                 continue
-            seq = [(sid, name, lat, lon)
+            seq = [canonical(sid, name, lat, lon)
                    for _along, sid, name, lat, lon in ordered]
+            if ltype != 'ferry':          # deniz geçişinde uzun atlama meşru
+                seq, n_out = drop_outliers(seq)
+                outliers += n_out
+                if len(seq) < 2:
+                    skipped += 1
+                    continue
             secs = [0]
-            for k in range(1, len(ordered)):
-                gap = ordered[k][0] - ordered[k - 1][0]
+            for k in range(1, len(seq)):
+                gap = meters((seq[k - 1][2], seq[k - 1][3]),
+                             (seq[k][2], seq[k][3]))
                 secs.append(int(max(20, min(600, round(gap / speed)))))
             add_line(code, 'G' if str(direction) == '0' else 'D',
                      ltype, seq, secs)
@@ -436,7 +510,7 @@ def build(version):
     print(f'\nYAZILDI: {OUT}  ({size:.1f} MB)')
     print(f'  hat(yön): {len(line_rows)}  durak: {len(used_stops)}')
     print(f'  yetkili (site): {from_site} hat   yedek (geometri): {from_shape} '
-          f'yön   atlanan: {skipped}')
+          f'yön   atlanan: {skipped}   elenen aykırı durak: {outliers}')
     return 0
 
 
