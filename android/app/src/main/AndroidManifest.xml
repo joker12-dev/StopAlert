@@ -57,6 +57,19 @@
             android:foregroundServiceType="location"
             android:stopWithTask="false"
             android:exported="false" />
+        <!-- Ana ekran widget'ı: aktif alarm yokken "Alarm kur", alarm varken
+             kalan durak halkası + mesafe + şu anki/sonraki durak. Veriyi
+             Flutter tarafı home_widget ile yazar. -->
+        <receiver
+            android:name=".StopAlertWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/stopalert_widget_info" />
+        </receiver>
         <!-- AdMob Uygulama Kimliği (App ID) — StopAlert Android. -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"

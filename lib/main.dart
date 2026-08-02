@@ -13,6 +13,7 @@ import 'src/services/alarm_notifications.dart';
 import 'src/services/bus_data_service.dart';
 import 'src/services/cloud_learning_service.dart';
 import 'src/services/firebase_bootstrap.dart';
+import 'src/services/home_widget_service.dart';
 import 'src/services/permission_service.dart';
 import 'src/services/telemetry.dart';
 import 'src/services/tracking_service.dart';
@@ -72,6 +73,8 @@ class _RootGateState extends ConsumerState<_RootGate>
   /// (ilk açılış indirme), true=devam. Mobil dışında hep true (atlanır).
   bool? _dataReady = isMobileDevice ? null : true;
 
+  StreamSubscription<Uri?>? _widgetClicks;
+
   @override
   void initState() {
     super.initState();
@@ -79,6 +82,25 @@ class _RootGateState extends ConsumerState<_RootGate>
     if (isMobileDevice) _checkData();
     _refreshPermissionStatus();
     _flushCloudLearning();
+    _listenHomeWidget();
+  }
+
+  /// Ana ekran widget'ından gelen dokunuşlar.
+  ///
+  /// Takip sürerken widget'a dokunmak zaten [_ResumeGate] üzerinden Canlı
+  /// Takip'e düşer; burada yalnızca "Alarm kur" bağlantısı karşılanır.
+  Future<void> _listenHomeWidget() async {
+    if (!isAndroidDevice) return;
+    _handleWidgetUri(await HomeWidgetService.initialLaunchUri());
+    _widgetClicks = HomeWidgetService.clicks.listen(_handleWidgetUri);
+  }
+
+  void _handleWidgetUri(Uri? uri) {
+    if (uri == null || !mounted) return;
+    if (uri.path == HomeWidgetService.pathNewAlarm) {
+      // Rotalar sekmesi: hat/durak aranıp alarm kurulur.
+      ref.read(bottomNavIndexProvider.notifier).state = 1;
+    }
   }
 
   /// İlk açılışta yerel otobüs DB'si yoksa dolum ekranını göster; varsa arka
@@ -110,6 +132,7 @@ class _RootGateState extends ConsumerState<_RootGate>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _widgetClicks?.cancel();
     super.dispose();
   }
 

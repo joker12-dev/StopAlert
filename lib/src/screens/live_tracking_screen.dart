@@ -259,19 +259,13 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
         line != null ? lineTypeColor(line.type) : VigilantColors.primary;
     LiveActivityService.instance.sync(
       lineCode: _lineLabel,
-      lineColor: _colorHex(color),
+      lineColor: colorHex(color),
       targetStop: _targetStopName,
       stopsRemaining: status.stopsRemaining,
       nextStop: status.nextStopName,
       etaMinutes: (status.etaSeconds / 60).ceil(),
       state: status.state.name,
     );
-  }
-
-  String _colorHex(Color c) {
-    int ch(double v) => (v * 255).round().clamp(0, 255);
-    String h(int v) => v.toRadixString(16).padLeft(2, '0');
-    return '#${h(ch(c.r))}${h(ch(c.g))}${h(ch(c.b))}';
   }
 
   /// Fiilen hedefe varıldıysa İndin sayfasına yalnızca bir kez geç.

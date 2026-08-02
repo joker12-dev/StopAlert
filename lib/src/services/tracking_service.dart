@@ -9,8 +9,10 @@ import '../data/journey_payload.dart';
 import '../engine/geo.dart' as geo;
 import '../engine/journey_engine.dart';
 import '../engine/stop_detector.dart';
+import '../theme/app_theme.dart';
 import '../util/platform_check.dart';
 import 'alarm_notifications.dart';
+import 'home_widget_service.dart';
 import 'permission_service.dart';
 import 'segment_learning_store.dart';
 
@@ -309,6 +311,28 @@ class TrackingTaskHandler extends TaskHandler {
 
     FlutterForegroundTask.sendDataToMain(update.encode());
     FlutterForegroundTask.saveData(key: 'last_update', value: update.encode());
+    _syncHomeWidget(status, currentStopName);
+  }
+
+  /// Ana ekran widget'ını tazele. Burada yapılır (ekranda değil): takip
+  /// uygulama kapalıyken de sürdüğü için widget'ın tek güvenilir kaynağı bu
+  /// servistir.
+  void _syncHomeWidget(JourneyStatus status, String currentStopName) {
+    final payload = _payload;
+    if (payload == null) return;
+    final stops = _engine?.routeStops.length ?? 0;
+    unawaited(HomeWidgetService.update(
+      lineCode: payload.line.code,
+      lineColor: colorHex(lineTypeColor(payload.line.type)),
+      targetStop: payload.targetStop?.name ?? '',
+      currentStop: currentStopName,
+      nextStop: status.nextStopName,
+      stopsRemaining: status.stopsRemaining,
+      stopsTotal: stops > 1 ? stops - 1 : 1,
+      distanceMeters: status.distanceToTargetMeters,
+      etaMinutes: (status.etaSeconds / 60).ceil(),
+      state: status.state.name,
+    ));
   }
 
   String _currentStopName(JourneyStatus status) {
@@ -422,6 +446,8 @@ class TrackingTaskHandler extends TaskHandler {
     _simTimer?.cancel();
     await _sub?.cancel();
     await _accelSub?.cancel();
+    // Takip bitti: ana ekran widget'ı "Aktif alarm yok" durumuna dönsün.
+    await HomeWidgetService.clear();
   }
 
   String _fmtDist(double m) => m >= 1000
@@ -507,6 +533,9 @@ abstract final class TrackingController {
     if (await FlutterForegroundTask.isRunningService) {
       await FlutterForegroundTask.stopService();
     }
+    // Servis isolate'inin onDestroy'u da temizliyor; servis hiç başlamadıysa
+    // (ör. izin reddi) widget aktif takılı kalmasın diye burada da yapılır.
+    await HomeWidgetService.clear();
   }
 
   static void sendCommand(String command) {

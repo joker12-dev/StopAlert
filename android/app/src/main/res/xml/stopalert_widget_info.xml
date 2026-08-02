@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  4x2 widget (PUBG Mobile widget'ı ile aynı gövde).
+  minWidth/minHeight eski Android'ler için, targetCell* Android 12+ için.
+  updatePeriodMillis=0: sistem periyodik tazelemesi kapalı; tazeleme takip
+  servisinden gelir (bkz. HomeWidgetService).
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/widget_description"
+    android:initialLayout="@layout/widget_stopalert"
+    android:minHeight="110dp"
+    android:minWidth="250dp"
+    android:previewLayout="@layout/widget_stopalert"
+    android:resizeMode="horizontal|vertical"
+    android:targetCellHeight="2"
+    android:targetCellWidth="4"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen" />
