@@ -59,3 +59,5 @@ firebase_hosting/data/*.sqlite
 tools/gtfs/*.sqlite
 tools/gtfs/*.csv
 tools/gtfs/stop_times.txt
+tools/kocaeli/raw/
+tools/kocaeli/*.sqlite
