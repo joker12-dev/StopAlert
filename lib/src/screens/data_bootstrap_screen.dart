@@ -1,24 +1,32 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../data/transit_city.dart';
 import '../services/bus_data_service.dart';
+import '../state/city_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/mascot.dart';
 
 /// İlk açılış VERİ PAKETLERİ ekranı. Otomatik geçmez — kullanıcı ne indirdiğini
-/// görür ve "Devam Et" ile ilerler. İstanbul otobüs paketi indirilir; ray/vapur
-/// zaten gömülü; Kocaeli/Sakarya gibi bölgeler "yakında" (ileride manuel indirme).
-class DataBootstrapScreen extends StatefulWidget {
+/// görür ve "Devam Et" ile ilerler.
+///
+/// İndirilen paket KONUMA göre seçilir (bkz. [cityProvider]); diğer şehirler
+/// Ayarlar → Veri Paketleri'nden sonradan indirilebilir. Ray/vapur İstanbul
+/// için APK'da gömülü geldiğinden ayrıca inmez.
+class DataBootstrapScreen extends ConsumerStatefulWidget {
   const DataBootstrapScreen({super.key, required this.onCompleted});
 
   final VoidCallback onCompleted;
 
   @override
-  State<DataBootstrapScreen> createState() => _DataBootstrapScreenState();
+  ConsumerState<DataBootstrapScreen> createState() =>
+      _DataBootstrapScreenState();
 }
 
-class _DataBootstrapScreenState extends State<DataBootstrapScreen> {
+class _DataBootstrapScreenState extends ConsumerState<DataBootstrapScreen> {
   BusDataPhase _phase = BusDataPhase.checking;
   double _frac = 0;
+  TransitCity? _city;
 
   @override
   void initState() {
@@ -27,7 +35,12 @@ class _DataBootstrapScreenState extends State<DataBootstrapScreen> {
   }
 
   Future<void> _run() async {
+    // Konuma göre belirlenen şehrin paketi indirilir (bkz. [cityProvider]).
+    final city = await ref.read(cityProvider.future);
+    if (!mounted) return;
+    setState(() => _city = city);
     await BusDataService.instance.ensureReady(
+      city: city,
       onProgress: (phase, frac) {
         if (!mounted) return;
         setState(() {
@@ -61,6 +74,7 @@ class _DataBootstrapScreenState extends State<DataBootstrapScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final city = _city;
     final text = Theme.of(context).textTheme;
     return Scaffold(
       body: SafeArea(
@@ -95,8 +109,12 @@ class _DataBootstrapScreenState extends State<DataBootstrapScreen> {
                   const SizedBox(height: 12),
                   _PackageCard(
                     icon: Icons.directions_bus_filled_rounded,
-                    title: 'İstanbul · Otobüs (İETT)',
-                    subtitle: '785 hat · ~13.000 durak · resmi veri',
+                    title: '${city?.name ?? 'Şehir'} · Otobüs',
+                    subtitle: city == null
+                        ? 'Konum belirleniyor…'
+                        : (city.id == 'istanbul'
+                            ? '785 hat · ~13.000 durak · resmi veri'
+                            : '720 hat · ~8.400 durak · resmi veri'),
                     status: _busDone
                         ? (_phase == BusDataPhase.offline
                             ? _PkgStatus.offline
@@ -107,21 +125,19 @@ class _DataBootstrapScreenState extends State<DataBootstrapScreen> {
                         _phase == BusDataPhase.downloading ? _frac : null,
                   ),
                   const SizedBox(height: 12),
-                  const _PackageCard(
-                    icon: Icons.directions_bus_outlined,
-                    title: 'Kocaeli · Otobüs',
-                    subtitle: 'Yakında — manuel indirme',
-                    status: _PkgStatus.soon,
-                    statusText: 'Yakında',
-                  ),
-                  const SizedBox(height: 12),
-                  const _PackageCard(
-                    icon: Icons.directions_bus_outlined,
-                    title: 'Sakarya · Otobüs',
-                    subtitle: 'Yakında — manuel indirme',
-                    status: _PkgStatus.soon,
-                    statusText: 'Yakında',
-                  ),
+                  // Diğer şehirler Ayarlar'dan indirilir — ilk açılışı
+                  // gereksiz yere uzatmamak için burada yalnızca haber verilir.
+                  for (final other in TransitCities.all)
+                    if (other.id != city?.id) ...[
+                      _PackageCard(
+                        icon: Icons.directions_bus_outlined,
+                        title: '${other.name} · Otobüs',
+                        subtitle: 'Ayarlar → Veri Paketleri’nden indirilir',
+                        status: _PkgStatus.soon,
+                        statusText: 'İsteğe bağlı',
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                   const SizedBox(height: 12),
                   Row(
                     children: [
@@ -140,8 +156,8 @@ class _DataBootstrapScreenState extends State<DataBootstrapScreen> {
                   const SizedBox(height: 16),
                   // Lisans şartı: kaynak atfı (İBB Açık Veri / CC BY 4.0).
                   Text(
-                    'Otobüs ve durak verileri İETT · İBB Açık Veri Portalı’ndan '
-                    'alınmıştır. Harita © OpenStreetMap katkıcıları.',
+                    '${city?.attribution ?? TransitCities.fallback.attribution}'
+                    '. Harita © OpenStreetMap katkıcıları.',
                     textAlign: TextAlign.center,
                     style: text.labelSmall
                         ?.copyWith(color: VigilantColors.onSurfaceVariant),

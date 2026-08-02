@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../data/transit_city.dart';
 import '../data/transit_db.dart';
 import '../util/platform_check.dart';
 
@@ -20,35 +21,108 @@ enum BusDataPhase {
   skipped, // mobil değil (test/masaüstü): otobüs katmanı atlanır
 }
 
-/// Otobüs (İETT) veri paketini Firebase Hosting'den İLK AÇILIŞTA indirir,
-/// bütünlüğünü doğrular, cihazda saklar ve [TransitDb]'yi açar. Yeni sürüm
-/// yayınlanınca (manifest.version değişince) arka planda tazeler.
+/// Şehir veri paketlerini Firebase Hosting'den indirir, bütünlüğünü doğrular,
+/// cihazda saklar ve [TransitDb]'yi açar. Yeni sürüm yayınlanınca
+/// (manifest.version değişince) tazeler.
 ///
 /// StopAlert çevrimdışı (tünel/yeraltı) çalışmalıdır: veri CANLI sorgulanmaz,
 /// bir kez indirilip yerelden okunur. Ray/vapur ayrıca APK'da gömülüdür.
+///
+/// ÇOK ŞEHİR: her şehrin paketi ayrı dosyada (`bus_istanbul.sqlite`) ve aynı
+/// anda yalnızca AKTİF şehrin veritabanı açık tutulur (bkz. [TransitCity]).
 class BusDataService {
   BusDataService._();
   static final BusDataService instance = BusDataService._();
 
   static const _base = 'https://stopalert-15716.web.app/data';
-  static const _versionKey = 'bus_db_version_v1';
+  static const _versionKeyPrefix = 'bus_db_version_';
 
-  bool _done = false;
+  /// Hangi şehrin veritabanı açık — tekrar tekrar açmayı önler.
+  String? _openCityId;
 
-  Future<String> _dbPath() async {
+  /// Şehir paketinin manifest adresi. İstanbul eski (şehirsiz) yolda kaldı ki
+  /// önceki sürümlerden gelen kurulumlar bozulmasın.
+  String _manifestUrl(TransitCity city) => city.id == TransitCities.istanbul.id
+      ? '$_base/manifest.json'
+      : '$_base/${city.id}/manifest.json';
+
+  String _fileBase(TransitCity city) => city.id == TransitCities.istanbul.id
+      ? _base
+      : '$_base/${city.id}';
+
+  Future<String> _dbPath([TransitCity? city]) async {
     final dir = await getApplicationSupportDirectory();
-    return '${dir.path}/bus.sqlite';
+    final c = city ?? TransitCities.fallback;
+    // İstanbul dosya adı korunuyor: eski kurulumlar yeniden indirmesin.
+    return c.id == TransitCities.istanbul.id
+        ? '${dir.path}/bus.sqlite'
+        : '${dir.path}/bus_${c.id}.sqlite';
   }
 
   /// İndirilmiş DB'nin yolu — yoksa null.
   ///
   /// Arka plan isolate'i (widget kısayolu) veritabanını kendisi açmak zorunda:
   /// orada uygulamanın açık bağlantısı yoktur.
-  Future<String?> localPath() async {
+  Future<String?> localPath([TransitCity? city]) async {
     if (!isMobileDevice) return null;
     try {
-      final path = await _dbPath();
+      final path = await _dbPath(city);
       return await File(path).exists() ? path : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Paket cihazda var mı + hangi sürüm (Ayarlar → Veri Paketleri).
+  Future<({bool installed, int bytes, String? version})> packageInfo(
+      TransitCity city) async {
+    if (!isMobileDevice) {
+      return (installed: false, bytes: 0, version: null);
+    }
+    try {
+      final file = File(await _dbPath(city));
+      if (!await file.exists()) {
+        return (installed: false, bytes: 0, version: null);
+      }
+      final prefs = await SharedPreferences.getInstance();
+      return (
+        installed: true,
+        bytes: await file.length(),
+        version: prefs.getString(_versionKeyPrefix + city.id),
+      );
+    } catch (_) {
+      return (installed: false, bytes: 0, version: null);
+    }
+  }
+
+  /// Paketi cihazdan sil (yer açmak için). Aktif şehrin paketi siliniyorsa
+  /// veritabanı da kapatılır.
+  Future<void> removePackage(TransitCity city) async {
+    if (!isMobileDevice) return;
+    try {
+      if (_openCityId == city.id) {
+        await TransitDb.instance.close();
+        _openCityId = null;
+      }
+      final file = File(await _dbPath(city));
+      if (await file.exists()) await file.delete();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_versionKeyPrefix + city.id);
+    } catch (_) {}
+  }
+
+  /// Sunucudaki paket bilgisi (boyut/sürüm) — indirmeden önce göstermek için.
+  Future<({String? version, int bytes})?> remoteInfo(TransitCity city) async {
+    try {
+      final res = await http
+          .get(Uri.parse(_manifestUrl(city)))
+          .timeout(const Duration(seconds: 8));
+      if (res.statusCode != 200) return null;
+      final m = jsonDecode(res.body) as Map<String, dynamic>;
+      return (
+        version: m['version'] as String?,
+        bytes: (m['bytes'] as num?)?.toInt() ?? 0,
+      );
     } catch (_) {
       return null;
     }
@@ -56,10 +130,10 @@ class BusDataService {
 
   /// Cihazda indirilmiş DB var mı? (Dolum ekranını yalnızca ilk açılışta —
   /// yani yerel DB yokken — göstermek için.) Mobil dışında true (atlanır).
-  Future<bool> hasLocal() async {
+  Future<bool> hasLocal([TransitCity? city]) async {
     if (!isMobileDevice) return true;
     try {
-      return File(await _dbPath()).exists();
+      return File(await _dbPath(city)).exists();
     } catch (_) {
       return false;
     }
@@ -68,9 +142,11 @@ class BusDataService {
   /// Gerekiyorsa indir/doğrula, ardından DB'yi aç. Mobil dışı platformlarda
   /// (test/masaüstü) no-op. Ağ/indirme hatası uygulamayı ENGELLEMEZ.
   Future<void> ensureReady({
+    TransitCity? city,
     void Function(BusDataPhase phase, double fraction)? onProgress,
   }) async {
-    if (_done) {
+    final target = city ?? TransitCities.fallback;
+    if (_openCityId == target.id) {
       onProgress?.call(BusDataPhase.ready, 1);
       return;
     }
@@ -79,15 +155,15 @@ class BusDataService {
       return;
     }
     onProgress?.call(BusDataPhase.checking, 0);
-    final path = await _dbPath();
+    final path = await _dbPath(target);
     final file = File(path);
     final prefs = await SharedPreferences.getInstance();
-    final localVer = prefs.getString(_versionKey);
+    final localVer = prefs.getString(_versionKeyPrefix + target.id);
 
     Map<String, dynamic>? manifest;
     try {
       final res = await http
-          .get(Uri.parse('$_base/manifest.json'))
+          .get(Uri.parse(_manifestUrl(target)))
           .timeout(const Duration(seconds: 8));
       if (res.statusCode == 200) {
         manifest = jsonDecode(res.body) as Map<String, dynamic>;
@@ -100,14 +176,18 @@ class BusDataService {
     final exists = await file.exists();
 
     if (manifest != null && (!exists || remoteVer != localVer)) {
-      final ok = await _download(manifest, path, onProgress);
-      if (ok) await prefs.setString(_versionKey, remoteVer ?? '');
+      final ok = await _download(manifest, target, path, onProgress);
+      if (ok) {
+        await prefs.setString(_versionKeyPrefix + target.id, remoteVer ?? '');
+      }
     }
 
     if (await file.exists()) {
       try {
+        // Şehir değiştiyse önceki veritabanı kapatılır: aynı anda tek paket.
+        await TransitDb.instance.close();
         await TransitDb.instance.open(path);
-        _done = true;
+        _openCityId = target.id;
         onProgress?.call(BusDataPhase.ready, 1);
         return;
       } catch (_) {
@@ -122,6 +202,7 @@ class BusDataService {
 
   Future<bool> _download(
     Map<String, dynamic> manifest,
+    TransitCity city,
     String path,
     void Function(BusDataPhase, double)? onProgress,
   ) async {
@@ -130,7 +211,8 @@ class BusDataService {
       final fileName = manifest['file'] as String;
       final expectSha = manifest['sha256'] as String?;
       final expectBytes = (manifest['bytes'] as num?)?.toInt();
-      final req = http.Request('GET', Uri.parse('$_base/$fileName'));
+      final req =
+          http.Request('GET', Uri.parse('${_fileBase(city)}/$fileName'));
       final resp =
           await http.Client().send(req).timeout(const Duration(seconds: 40));
       if (resp.statusCode != 200) return false;

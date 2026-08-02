@@ -20,6 +20,7 @@ import 'src/services/home_widget_service.dart';
 import 'src/services/permission_service.dart';
 import 'src/services/telemetry.dart';
 import 'src/services/tracking_service.dart';
+import 'src/state/city_provider.dart';
 import 'src/state/journey_provider.dart';
 import 'src/state/onboarding_provider.dart';
 import 'src/state/settings_provider.dart';
@@ -153,10 +154,13 @@ class _RootGateState extends ConsumerState<_RootGate>
   /// İlk açılışta yerel otobüs DB'si yoksa dolum ekranını göster; varsa arka
   /// planda aç/güncelle ve akışa hemen devam et.
   Future<void> _checkData() async {
-    final hasLocal = await BusDataService.instance.hasLocal();
+    // Hangi şehirdeyiz? Paket seçimi buna bağlı (konumdan tahmin edilir,
+    // kullanıcı Ayarlar'dan sabitleyebilir).
+    final city = await ref.read(cityProvider.future);
+    final hasLocal = await BusDataService.instance.hasLocal(city);
     if (!mounted) return;
     if (hasLocal) {
-      unawaited(BusDataService.instance.ensureReady());
+      unawaited(BusDataService.instance.ensureReady(city: city));
       setState(() => _dataReady = true);
     } else {
       setState(() => _dataReady = false);

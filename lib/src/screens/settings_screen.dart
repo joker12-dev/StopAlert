@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../data/transit_city.dart';
 import '../services/account_service.dart';
 import '../services/auth_service.dart';
+import '../services/bus_data_service.dart';
 import '../services/segment_learning_store.dart';
+import '../state/city_provider.dart';
 import '../state/journey_provider.dart';
 import '../state/settings_provider.dart';
 import '../theme/app_theme.dart';
 import '../util/insets.dart';
 import '../util/haptics.dart';
+import 'data_packages_screen.dart';
 import 'help_screen.dart';
 import 'privacy_screen.dart';
 
@@ -190,6 +194,87 @@ class SettingsScreen extends ConsumerWidget {
             stopsIndex: result.stopsIndex,
           );
     }
+  }
+
+  /// Şehir seçimi. "Otomatik" seçeneği elle sabitlemeyi kaldırır ve şehir
+  /// yeniden konumdan belirlenir — İstanbul-Kocaeli arası gidip gelenler için.
+  Future<void> _pickCity(BuildContext context, WidgetRef ref) async {
+    Haptics.light();
+    final active = ref.read(activeCityProvider);
+    final manual = await ref.read(cityProvider.notifier).isManual();
+    if (!context.mounted) return;
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: VigilantColors.surfaceContainer,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        final t = Theme.of(context).textTheme;
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 6),
+                child: Row(
+                  children: [
+                    Text('Şehir',
+                        style: t.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w800)),
+                  ],
+                ),
+              ),
+              ListTile(
+                leading: Icon(Icons.my_location_rounded,
+                    color: manual
+                        ? VigilantColors.onSurfaceVariant
+                        : VigilantColors.primary),
+                title: const Text('Otomatik (konuma göre)'),
+                subtitle: Text('Şu an: ${active.name}',
+                    style: t.labelSmall
+                        ?.copyWith(color: VigilantColors.onSurfaceVariant)),
+                trailing: manual
+                    ? null
+                    : const Icon(Icons.check_rounded,
+                        color: VigilantColors.primary),
+                onTap: () => Navigator.pop(context, '_auto'),
+              ),
+              const Divider(height: 1),
+              for (final c in TransitCities.all)
+                ListTile(
+                  leading: Icon(Icons.location_city_rounded,
+                      color: manual && c.id == active.id
+                          ? VigilantColors.primary
+                          : VigilantColors.onSurfaceVariant),
+                  title: Text(c.name),
+                  subtitle: Text(c.attribution,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: t.labelSmall
+                          ?.copyWith(color: VigilantColors.onSurfaceVariant)),
+                  trailing: manual && c.id == active.id
+                      ? const Icon(Icons.check_rounded,
+                          color: VigilantColors.primary)
+                      : null,
+                  onTap: () => Navigator.pop(context, c.id),
+                ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
+    if (choice == null) return;
+    final notifier = ref.read(cityProvider.notifier);
+    if (choice == '_auto') {
+      await notifier.useAutomatic();
+    } else {
+      await notifier.select(TransitCities.byId(choice));
+    }
+    // Yeni şehrin paketini aç (yoksa indirir).
+    await BusDataService.instance
+        .ensureReady(city: ref.read(activeCityProvider));
   }
 
   Future<void> _pickMapStyle(
@@ -432,6 +517,37 @@ class SettingsScreen extends ConsumerWidget {
                   ],
                 ),
                 onTap: () => _pickMapStyle(context, ref, settings),
+              ),
+            ],
+          ),
+          _Section(
+            title: 'ŞEHİR & VERİ',
+            children: [
+              _SettingsTile(
+                icon: Icons.location_city_rounded,
+                title: 'Şehir',
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(ref.watch(activeCityProvider).name,
+                        style: text.labelMedium
+                            ?.copyWith(color: VigilantColors.onSurfaceVariant)),
+                    const Icon(Icons.chevron_right,
+                        color: VigilantColors.onSurfaceVariant),
+                  ],
+                ),
+                onTap: () => _pickCity(context, ref),
+              ),
+              _SettingsTile(
+                icon: Icons.sim_card_download_outlined,
+                title: 'Veri Paketleri',
+                subtitle: 'Şehir verilerini indir, güncelle veya sil',
+                trailing: const Icon(Icons.chevron_right,
+                    color: VigilantColors.onSurfaceVariant),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                      builder: (_) => const DataPackagesScreen()),
+                ),
               ),
             ],
           ),
