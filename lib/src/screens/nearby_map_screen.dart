@@ -10,6 +10,7 @@ import '../data/models.dart';
 import '../data/transit_db.dart';
 import '../services/routing_service.dart';
 import '../state/journey_provider.dart';
+import '../state/live_location_provider.dart';
 import '../state/settings_provider.dart';
 import '../theme/app_theme.dart';
 import '../util/haptics.dart';
@@ -83,10 +84,11 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
   double _panelFraction = 0.42;
   double _availableHeight = 0;
 
-  LatLng? get _userLoc {
-    final p = ref.read(currentLocationProvider).valueOrNull?.point;
-    return p == null ? null : LatLng(p.latitude, p.longitude);
-  }
+  /// Kullanıcının ANLIK konumu — canlı GPS akışından (mavi nokta bunu izler).
+  ///
+  /// Eskiden tek seferlik [currentLocationProvider] okunuyordu ve nokta
+  /// açılışta donup kalıyordu; yürürken hareket etmiyordu.
+  LatLng? get _userLoc => ref.read(liveLocationProvider).valueOrNull;
 
   @override
   void dispose() {
@@ -502,6 +504,8 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Akışı İZLE: her yeni konumda mavi nokta yeniden çizilsin.
+    ref.watch(liveLocationProvider);
     final text = Theme.of(context).textTheme;
     // Panel + markerlar GÖRÜNEN alandan gelir (viewport/chunk yükleme).
     final stops = _visible;

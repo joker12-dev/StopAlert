@@ -12,6 +12,7 @@ import '../services/location_service.dart';
 import '../services/telemetry.dart';
 import '../services/permission_service.dart';
 import '../state/journey_provider.dart';
+import '../state/live_location_provider.dart';
 import '../state/settings_provider.dart';
 import '../theme/app_theme.dart';
 import '../util/haptics.dart';
@@ -288,7 +289,11 @@ class _AlarmSetupScreenState extends ConsumerState<AlarmSetupScreen> {
                         line: draft.line,
                         boardingStopId: draft.boardingStopId,
                         targetStopId: draft.targetStopId,
-                        currentLocation: _location,
+                        // Canlı akış varsa onu kullan; yoksa açılıştaki tek
+                        // seferlik konum (izin yok/akış henüz gelmedi).
+                        currentLocation:
+                            ref.watch(liveLocationProvider).valueOrNull ??
+                                _location,
                       ),
                     ),
                     SafeArea(

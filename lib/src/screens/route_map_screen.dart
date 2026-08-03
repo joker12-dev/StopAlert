@@ -8,6 +8,7 @@ import 'package:latlong2/latlong.dart';
 import '../data/models.dart';
 import '../services/routing_service.dart';
 import '../state/journey_provider.dart';
+import '../state/live_location_provider.dart';
 import '../theme/app_theme.dart';
 import '../util/haptics.dart';
 import '../util/map_style.dart';
@@ -225,6 +226,16 @@ class _RouteMapScreenState extends ConsumerState<RouteMapScreen> {
                     _terminalMarker(stops.first, isStart: true),
                   if (stops.length > 1)
                     _terminalMarker(stops.last, isStart: false),
+                ]),
+                // Kullanıcının CANLI konumu — en üstte çizilir.
+                MarkerLayer(markers: [
+                  if (ref.watch(liveLocationProvider).valueOrNull case final me?)
+                    Marker(
+                      point: LatLng(me.latitude, me.longitude),
+                      width: 24,
+                      height: 24,
+                      child: const _UserDot(),
+                    ),
                 ]),
               ],
             ),
@@ -588,6 +599,27 @@ class _StopCard extends StatelessWidget {
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Kullanıcının canlı konumu — mavi nokta.
+class _UserDot extends StatelessWidget {
+  const _UserDot();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: VigilantColors.accentBlue,
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white, width: 3),
+        boxShadow: [
+          BoxShadow(
+              color: VigilantColors.accentBlue.withValues(alpha: 0.5),
+              blurRadius: 12),
         ],
       ),
     );
