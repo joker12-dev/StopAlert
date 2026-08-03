@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../data/models.dart';
+import '../data/transit_city.dart';
+import '../data/transit_db.dart';
 import '../services/routing_service.dart';
 import '../state/journey_provider.dart';
 import '../state/live_location_provider.dart';
@@ -20,9 +22,14 @@ import 'alarm_setup_screen.dart';
 /// GÖRÜR. Durak adları yakınlaşınca yazılır, durağa dokununca alarm kartı
 /// açılır ve hat ZATEN belli olduğu için doğrudan Alarm Kur'a geçilir.
 class RouteMapScreen extends ConsumerStatefulWidget {
-  const RouteMapScreen({super.key, required this.line});
+  const RouteMapScreen({super.key, required this.line, this.city});
 
   final TransitLine line;
+
+  /// Hat BAŞKA şehrin paketindeyse o şehir. Null = aktif şehir.
+  /// Yön varyantları bu şehrin veritabanından okunur; taşınmazsa sorgu
+  /// yanlış pakete gidip "bu hattın tek yönü var" hatası veriyordu.
+  final TransitCity? city;
 
   @override
   ConsumerState<RouteMapScreen> createState() => _RouteMapScreenState();
@@ -35,6 +42,10 @@ class _RouteMapScreenState extends ConsumerState<RouteMapScreen> {
   /// Güzergâhın YOLLARA oturmuş hali (OSRM). Boşsa duraklar arası düz çizgi.
   List<LatLng> _road = const [];
   Stop? _selected;
+
+  /// Gösterilen yön varyantı — "yön değiştir" ile gidiş/dönüş arasında geçilir.
+  late TransitLine _line;
+  bool _switching = false;
 
   /// Durak adlarını yazmak için yakınlaşma eşiği — daha uzakta etiketler
   /// üst üste binip haritayı okunmaz yapıyor.
@@ -55,14 +66,54 @@ class _RouteMapScreenState extends ConsumerState<RouteMapScreen> {
   @override
   void initState() {
     super.initState();
+    _line = widget.line;
     _loadRoad();
+  }
+
+  /// Gidiş ↔ dönüş. Dönüş yolu çoğu hatta farklı sokaklardan geçtiği için
+  /// yalnızca süzgeç değil, güzergâh ve duraklar da yenilenir.
+  Future<void> _switchDirection() async {
+    if (_switching) return;
+    Haptics.selection();
+    setState(() => _switching = true);
+    final variants = await TransitDb.instance
+        .directionsForCode(_line.code, cityId: widget.city?.id);
+    LineVariant? other;
+    for (final v in variants) {
+      if (v.depar || v.id == _line.id) continue;   // depar = garaj seferi
+      other = v;
+      break;
+    }
+    if (other == null) {
+      if (mounted) {
+        setState(() => _switching = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Bu hattın tek yönü var')));
+      }
+      return;
+    }
+    final line = await TransitDb.instance
+        .buildLine(other.id, cityId: widget.city?.id);
+    if (!mounted) return;
+    setState(() {
+      _switching = false;
+      if (line != null) {
+        _line = line;
+        _road = const [];
+        _selected = null;
+        _arrowsRouteLen = -1;      // oklar yeni güzergâha göre yeniden çizilir
+      }
+    });
+    if (line != null) {
+      _fit();
+      await _loadRoad();
+    }
   }
 
   Future<void> _loadRoad() async {
     // OSRM yalnızca karayolu hatlarında anlamlı: ray kendi rayında, vapur
     // denizde gider ve yola oturtmak absürt bir çizgi üretir.
-    if (widget.line.type != LineType.bus &&
-        widget.line.type != LineType.metrobus) {
+    if (_line.type != LineType.bus && _line.type != LineType.metrobus) {
       return;
     }
     final pts = _stopPoints;
@@ -72,7 +123,7 @@ class _RouteMapScreenState extends ConsumerState<RouteMapScreen> {
   }
 
   List<Stop> get _stops =>
-      [for (final s in widget.line.stops) if (s.lat != 0 || s.lon != 0) s];
+      [for (final s in _line.stops) if (s.lat != 0 || s.lon != 0) s];
 
   List<LatLng> get _stopPoints =>
       [for (final s in _stops) LatLng(s.lat, s.lon)];
@@ -93,11 +144,11 @@ class _RouteMapScreenState extends ConsumerState<RouteMapScreen> {
     Haptics.light();
     ref.read(journeyDraftProvider.notifier)
       ..reset()
-      ..selectLine(widget.line)
+      ..selectLine(_line)
       ..selectTargetStop(stop.id);
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => AlarmSetupScreen(
-          stopName: stop.name, lineLabel: widget.line.code),
+          stopName: stop.name, lineLabel: _line.code),
     ));
   }
 
@@ -153,7 +204,7 @@ class _RouteMapScreenState extends ConsumerState<RouteMapScreen> {
     final stops = _stops;
     final drawRoute = _drawRoute;
     final showLabels = _zoom >= _labelZoom;
-    final color = lineColorOf(widget.line.color, widget.line.type);
+    final color = lineColorOf(_line.color, _line.type);
 
     return Scaffold(
       body: Stack(
@@ -265,7 +316,11 @@ class _RouteMapScreenState extends ConsumerState<RouteMapScreen> {
               // sabit 20 px verilince panel çubuğun altında kalıyordu.
               bottom: 20 + MediaQuery.viewPaddingOf(context).bottom,
               child: _HintCard(
-                  stopCount: stops.length, lineName: widget.line.name),
+                  stopCount: stops.length,
+                lineName: _line.name,
+                switching: _switching,
+                onSwitchDirection: _switchDirection,
+              ),
             ),
         ],
       ),
@@ -398,11 +453,11 @@ class _RouteMapScreenState extends ConsumerState<RouteMapScreen> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(lineTypeIcon(widget.line.type),
+                      Icon(lineTypeIcon(_line.type),
                           size: 16, color: color),
                       const SizedBox(width: 6),
                       Flexible(
-                        child: Text('${widget.line.code} · güzergâh',
+                        child: Text('${_line.code} · güzergâh',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: text.labelLarge
@@ -468,10 +523,17 @@ class _MapLabel extends StatelessWidget {
 
 /// Durak seçilmeden önceki ipucu kartı.
 class _HintCard extends StatelessWidget {
-  const _HintCard({required this.stopCount, required this.lineName});
+  const _HintCard({
+    required this.stopCount,
+    required this.lineName,
+    required this.switching,
+    required this.onSwitchDirection,
+  });
 
   final int stopCount;
   final String lineName;
+  final bool switching;
+  final VoidCallback onSwitchDirection;
 
   @override
   Widget build(BuildContext context) {
@@ -484,26 +546,54 @@ class _HintCard extends StatelessWidget {
         border: Border.all(
             color: VigilantColors.surfaceVariant.withValues(alpha: 0.4)),
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.touch_app_rounded,
-              color: VigilantColors.primary, size: 20),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(lineName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style:
-                        text.bodyMedium?.copyWith(fontWeight: FontWeight.w700)),
-                Text('$stopCount durak · alarm kurmak için bir durağa dokun',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: text.labelMedium
-                        ?.copyWith(color: VigilantColors.onSurfaceVariant)),
-              ],
+          Row(
+            children: [
+              const Icon(Icons.touch_app_rounded,
+                  color: VigilantColors.primary, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(lineName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: text.bodyMedium
+                            ?.copyWith(fontWeight: FontWeight.w700)),
+                    Text('$stopCount durak · alarm için bir durağa dokun',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: text.labelMedium
+                            ?.copyWith(color: VigilantColors.onSurfaceVariant)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: switching ? null : onSwitchDirection,
+              icon: switching
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: VigilantColors.onSurfaceVariant),
+                    )
+                  : const Icon(Icons.swap_horiz_rounded, size: 18),
+              label: Text(switching ? 'Yükleniyor…' : 'Yön değiştir'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: VigilantColors.onSurface,
+                padding: const EdgeInsets.symmetric(vertical: 11),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
             ),
           ),
         ],

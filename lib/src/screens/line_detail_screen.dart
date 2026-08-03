@@ -389,7 +389,8 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
               onTap: () {
                 Haptics.light();
                 Navigator.of(context).push(MaterialPageRoute(
-                    builder: (_) => RouteMapScreen(line: line)));
+                    builder: (_) =>
+                        RouteMapScreen(line: line, city: widget.city)));
               },
             ),
           ),
@@ -403,7 +404,8 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
                 onTap: () {
                   Haptics.light();
                   Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => LiveBusScreen(line: line)));
+                      builder: (_) =>
+                        LiveBusScreen(line: line, city: widget.city)));
                 },
               ),
             ),

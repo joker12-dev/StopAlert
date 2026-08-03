@@ -25,7 +25,11 @@ class FavoritesScreen extends ConsumerWidget {
 
     return Scaffold(
       floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 88),
+        // Alt menü `extendBody: true` ile içeriğin ÜSTÜNDE duruyor; sabit
+        // 88 px sistem gezinme çubuğu olan cihazlarda yetmiyordu ve düğme
+        // menünün altında kalıyordu.
+        padding: EdgeInsets.only(
+            bottom: 88 + MediaQuery.viewPaddingOf(context).bottom),
         child: FloatingActionButton(
           onPressed: () => Navigator.of(context).push(
             MaterialPageRoute(

@@ -324,13 +324,19 @@ class RecentSearchesNotifier extends AsyncNotifier<List<RecentSearch>> {
     }
   }
 
-  /// Bir durak seçildiğinde çağrılır: kaydı başa alır, 5 ile sınırlar.
+  /// Bir durak veya hat seçildiğinde çağrılır: kaydı başa alır, sınırlar.
+  ///
+  /// Tekilleştirme HAT + DURAK ikilisine göre yapılır. Yalnızca `stopId`'ye
+  /// bakmak hatalıydı: hat kayıtlarında (durak seçilmeden açılan hat sayfası)
+  /// `stopId` boş olduğu için her yeni hat araması bir öncekini siliyordu ve
+  /// listede tek bir hat kalabiliyordu.
   Future<void> add(RecentSearch entry) async {
     final current = state.valueOrNull ?? const <RecentSearch>[];
     final next = [
       entry,
-      ...current.where((e) => e.stopId != entry.stopId),
-    ].take(5).toList();
+      ...current.where(
+          (e) => !(e.lineId == entry.lineId && e.stopId == entry.stopId)),
+    ].take(8).toList();
     state = AsyncData(next);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(

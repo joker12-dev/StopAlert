@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../data/models.dart';
+import '../data/transit_city.dart';
 import '../data/transit_db.dart';
 import '../services/iett_service.dart';
 import '../services/live_bus_service.dart';
@@ -24,10 +25,15 @@ import 'alarm_setup_screen.dart';
 /// yoklamak ne veriyi tazeler ne pili korur. Kullanıcı ne zaman baktığını
 /// kendi bilir.
 class LiveBusScreen extends ConsumerStatefulWidget {
-  const LiveBusScreen({super.key, required this.line});
+  const LiveBusScreen({super.key, required this.line, this.city});
 
   /// Konumları gösterilecek hat (güzergâh çizgisi + duraklar buradan).
   final TransitLine line;
+
+  /// Hat BAŞKA şehrin paketindeyse o şehir. Null = aktif şehir.
+  /// Yön varyantları bu şehrin veritabanından okunur; taşınmazsa sorgu
+  /// yanlış pakete gidip "bu hattın tek yönü var" hatası veriyordu.
+  final TransitCity? city;
 
   @override
   ConsumerState<LiveBusScreen> createState() => _LiveBusScreenState();
@@ -108,7 +114,8 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen> {
     if (_switchingDirection) return;
     Haptics.selection();
     setState(() => _switchingDirection = true);
-    final variants = await TransitDb.instance.directionsForCode(_code);
+    final variants = await TransitDb.instance
+        .directionsForCode(_code, cityId: widget.city?.id);
     // Depar (garaj) seferleri hariç: kullanıcı normal gidiş/dönüş bekliyor.
     LineVariant? other;
     for (final v in variants) {
@@ -124,7 +131,8 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen> {
       }
       return;
     }
-    final line = await TransitDb.instance.buildLine(other.id);
+    final line = await TransitDb.instance
+        .buildLine(other.id, cityId: widget.city?.id);
     if (!mounted) return;
     setState(() {
       _switchingDirection = false;
