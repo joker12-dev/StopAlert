@@ -22,9 +22,23 @@ class LocationService {
           permission != LocationPermission.whileInUse) {
         return null;
       }
+
+      // ÖNCE SON BİLİNEN KONUM: anında döner. Şehir tahmini için fazlasıyla
+      // yeterli — İstanbul ile Kocaeli arası ~80 km, metrelik hassasiyet
+      // gereksiz.
+      final last = await Geolocator.getLastKnownPosition();
+      if (last != null) return LatLng(last.latitude, last.longitude);
+
+      // Son bilinen yoksa taze konum İSTE ama SÜRE SINIRIYLA. Cihaz sabitken
+      // Android konum sağlayıcısını kısıyor ("stationary throttling") ve
+      // sınırsız bekleyen çağrı 10-30 sn sürüyor; kullanıcı o boyunca boş
+      // ekrana bakıyordu. Süre dolarsa İstanbul'a düşülür, kullanıcı şehri
+      // Ayarlar'dan değiştirebilir.
       final pos = await Geolocator.getCurrentPosition(
-        locationSettings:
-            const LocationSettings(accuracy: LocationAccuracy.medium),
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.low,
+          timeLimit: Duration(seconds: 4),
+        ),
       );
       return LatLng(pos.latitude, pos.longitude);
     } catch (_) {

@@ -6,6 +6,7 @@ import 'package:home_widget/home_widget.dart';
 
 import 'src/data/journey_payload.dart';
 import 'src/data/models.dart';
+import 'src/data/transit_city.dart';
 import 'src/screens/data_bootstrap_screen.dart';
 import 'src/screens/live_tracking_screen.dart';
 import 'src/screens/onboarding_screen.dart';
@@ -153,25 +154,41 @@ class _RootGateState extends ConsumerState<_RootGate>
     }
   }
 
-  /// İzin kapısı geçildikten sonra: şehri konumdan tazele, paketi kontrol et.
+  /// İzin kapısı geçildikten sonra veri durumunu kontrol et.
+  ///
+  /// Şehir tahmini AKIŞI BEKLETMEZ (arka planda tazelenir): cihaz sabitken
+  /// Android konum sağlayıcısını kısıyor ve bekleyen çağrı kullanıcıyı boş
+  /// ekranda tutuyordu. Zaten veri paketi ekranı konuma bakmıyor — kullanıcı
+  /// hangi şehri istiyorsa onun düğmesine basıyor.
   Future<void> _afterPermissions() async {
-    await ref.read(cityProvider.notifier).refreshFromLocation();
-    if (mounted) await _checkData();
+    unawaited(ref.read(cityProvider.notifier).refreshFromLocation());
+    await _checkData();
   }
 
   /// İlk açılışta yerel otobüs DB'si yoksa dolum ekranını göster; varsa arka
   /// planda aç/güncelle ve akışa hemen devam et.
   Future<void> _checkData() async {
-    // Hangi şehirdeyiz? Paket seçimi buna bağlı (konumdan tahmin edilir,
-    // kullanıcı Ayarlar'dan sabitleyebilir).
-    final city = await ref.read(cityProvider.future);
-    final hasLocal = await BusDataService.instance.hasLocal(city);
+    // HERHANGİ bir şehrin paketi var mı? Hiçbiri yoksa veri paketi ekranı
+    // gösterilir; oradaki indirme tamamen kullanıcının seçimidir.
+    var has = false;
+    for (final c in TransitCities.all) {
+      if (await BusDataService.instance.hasLocal(c)) {
+        has = true;
+        break;
+      }
+    }
     if (!mounted) return;
-    if (hasLocal) {
-      unawaited(BusDataService.instance.ensureReady(city: city));
-      setState(() => _dataReady = true);
-    } else {
-      setState(() => _dataReady = false);
+    setState(() => _dataReady = has);
+    // Aktif şehrin veritabanını arka planda aç — akışı bekletmeden.
+    if (has) unawaited(_openActiveCity());
+  }
+
+  Future<void> _openActiveCity() async {
+    try {
+      final city = await ref.read(cityProvider.future);
+      await BusDataService.instance.ensureReady(city: city);
+    } catch (_) {
+      // Paket yoksa/açılamazsa ray-vapur ile devam edilir.
     }
   }
 
@@ -265,7 +282,9 @@ class _RootGateState extends ConsumerState<_RootGate>
         if (!dataReady) {
           return DataBootstrapScreen(
             onCompleted: () {
-              if (mounted) setState(() => _dataReady = true);
+              if (!mounted) return;
+              setState(() => _dataReady = true);
+              unawaited(_openActiveCity());
             },
           );
         }

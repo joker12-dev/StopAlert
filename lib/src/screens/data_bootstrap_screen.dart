@@ -4,15 +4,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/transit_city.dart';
 import '../services/bus_data_service.dart';
 import '../state/city_provider.dart';
+import '../state/journey_provider.dart';
 import '../theme/app_theme.dart';
+import '../util/haptics.dart';
 import '../widgets/mascot.dart';
 
-/// İlk açılış VERİ PAKETLERİ ekranı. Otomatik geçmez — kullanıcı ne indirdiğini
-/// görür ve "Devam Et" ile ilerler.
+/// İlk açılış VERİ PAKETLERİ ekranı.
 ///
-/// İndirilen paket KONUMA göre seçilir (bkz. [cityProvider]); diğer şehirler
-/// Ayarlar → Veri Paketleri'nden sonradan indirilebilir. Ray/vapur İstanbul
-/// için APK'da gömülü geldiğinden ayrıca inmez.
+/// HİÇBİR ŞEY KENDİLİĞİNDEN İNMEZ. Kullanıcı hangi şehri istiyorsa onun
+/// "İndir" düğmesine basar; konumun bir önemi yoktur. Böylece kimse
+/// istemediği bir indirmeyle — ve onu bekleten bir ekranla — karşılaşmaz;
+/// İstanbul'da yaşayıp Kocaeli'ye gidip gelen biri ikisini birden indirir.
+///
+/// Ray/vapur hatları şehir paketinin içinde gelir; İstanbul'unki ayrıca
+/// APK'da gömülü olduğundan hiç paket inmese de temel akış çalışır.
 class DataBootstrapScreen extends ConsumerStatefulWidget {
   const DataBootstrapScreen({super.key, required this.onCompleted});
 
@@ -24,21 +29,43 @@ class DataBootstrapScreen extends ConsumerStatefulWidget {
 }
 
 class _DataBootstrapScreenState extends ConsumerState<DataBootstrapScreen> {
-  BusDataPhase _phase = BusDataPhase.checking;
+  /// Şehir kimliği -> cihazdaki paket durumu.
+  final Map<String, bool> _installed = {};
+
+  /// Şehir kimliği -> sunucudaki boyut (yalnızca göstermek için).
+  final Map<String, int> _remoteBytes = {};
+
+  String? _busyCity;
   double _frac = 0;
-  TransitCity? _city;
+  BusDataPhase _phase = BusDataPhase.checking;
 
   @override
   void initState() {
     super.initState();
-    _run();
+    _refresh();
   }
 
-  Future<void> _run() async {
-    // Konuma göre belirlenen şehrin paketi indirilir (bkz. [cityProvider]).
-    final city = await ref.read(cityProvider.future);
-    if (!mounted) return;
-    setState(() => _city = city);
+  Future<void> _refresh() async {
+    for (final c in TransitCities.all) {
+      final has = await BusDataService.instance.hasLocal(c);
+      if (!mounted) return;
+      setState(() => _installed[c.id] = has);
+    }
+    // Boyut bilgisi için yalnızca manifest okunur — paket İNDİRİLMEZ.
+    for (final c in TransitCities.all) {
+      final r = await BusDataService.instance.remoteInfo(c);
+      if (!mounted) return;
+      if (r != null) setState(() => _remoteBytes[c.id] = r.bytes);
+    }
+  }
+
+  Future<void> _download(TransitCity city) async {
+    Haptics.light();
+    setState(() {
+      _busyCity = city.id;
+      _frac = 0;
+      _phase = BusDataPhase.checking;
+    });
     await BusDataService.instance.ensureReady(
       city: city,
       onProgress: (phase, frac) {
@@ -49,32 +76,35 @@ class _DataBootstrapScreenState extends ConsumerState<DataBootstrapScreen> {
         });
       },
     );
+    if (!mounted) return;
+    setState(() => _busyCity = null);
+    // İndirilen şehir aktif olur: kullanıcı onu bilinçli seçmiş sayılır.
+    await ref.read(cityProvider.notifier).select(city);
+    ref.invalidate(installedCitiesProvider);
+    await _refresh();
   }
 
-  bool get _busDone =>
-      _phase == BusDataPhase.ready ||
-      _phase == BusDataPhase.offline ||
-      _phase == BusDataPhase.skipped;
+  bool get _anyInstalled => _installed.values.any((v) => v);
 
-  String get _busStatus {
-    switch (_phase) {
-      case BusDataPhase.checking:
-        return 'Sürüm kontrol ediliyor…';
-      case BusDataPhase.downloading:
-        return 'İniyor · %${(_frac * 100).clamp(0, 100).toStringAsFixed(0)}';
-      case BusDataPhase.verifying:
-        return 'Doğrulanıyor…';
-      case BusDataPhase.ready:
-      case BusDataPhase.skipped:
-        return 'Hazır · çevrimdışı kullanılabilir';
-      case BusDataPhase.offline:
-        return 'Çevrimdışı — sonra tekrar denenecek';
-    }
+  String _statusText(TransitCity city) {
+    if (_busyCity != city.id) return '';
+    return switch (_phase) {
+      BusDataPhase.checking => 'Sürüm kontrol ediliyor…',
+      BusDataPhase.downloading =>
+        'İniyor · %${(_frac * 100).clamp(0, 100).toStringAsFixed(0)}',
+      BusDataPhase.verifying => 'Doğrulanıyor…',
+      BusDataPhase.ready => 'Hazır',
+      BusDataPhase.offline => 'İnternet yok — sonra tekrar dene',
+      BusDataPhase.skipped => '',
+    };
   }
+
+  String _size(int? bytes) => (bytes == null || bytes <= 0)
+      ? ''
+      : '${(bytes / 1024 / 1024).toStringAsFixed(1).replaceAll('.', ',')} MB';
 
   @override
   Widget build(BuildContext context) {
-    final city = _city;
     final text = Theme.of(context).textTheme;
     return Scaffold(
       body: SafeArea(
@@ -85,73 +115,34 @@ class _DataBootstrapScreenState extends ConsumerState<DataBootstrapScreen> {
                 padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
                 children: [
                   const Center(
-                    child: AnimatedMascot(MascotAssets.poseTelefon, height: 130),
+                    child:
+                        AnimatedMascot(MascotAssets.poseTelefon, height: 120),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 18),
                   Text('Veri Paketleri',
                       textAlign: TextAlign.center, style: text.headlineSmall),
                   const SizedBox(height: 8),
                   Text(
-                    'Durak ve hat verileri cihazına inince yeraltında bile '
-                    'çalışır. İndir, çevrimdışı kullan.',
+                    'Kullanacağın şehri indir. Durak ve hat verileri cihazında '
+                    'saklanır; alarm tünelde, internetsiz de çalışır.',
                     textAlign: TextAlign.center,
                     style: text.bodyMedium
                         ?.copyWith(color: VigilantColors.onSurfaceVariant),
                   ),
-                  const SizedBox(height: 28),
-                  // Ray/vapur da paketle iniyor (gömülü kopya yalnızca ağsız
-                  // ilk açılış için yedek). Metro hatları uzadıkça mağaza
-                  // güncellemesi beklemeden tazelenebilsin diye.
-                  _PackageCard(
-                    icon: Icons.directions_transit_rounded,
-                    title: '${city?.name ?? 'Şehir'} · Ray & Vapur',
-                    subtitle: city?.id == 'kocaeli'
-                        ? 'Akçaray, vapur, teleferik'
-                        : 'Marmaray, metro, tramvay, vapur',
-                    status: _busDone
-                        ? (_phase == BusDataPhase.offline
-                            ? _PkgStatus.offline
-                            : _PkgStatus.ready)
-                        : _PkgStatus.downloading,
-                    statusText: _busDone
-                        ? (_phase == BusDataPhase.offline
-                            ? 'Gömülü sürüm kullanılıyor'
-                            : 'Güncel')
-                        : 'İndiriliyor…',
-                  ),
-                  const SizedBox(height: 12),
-                  _PackageCard(
-                    icon: Icons.directions_bus_filled_rounded,
-                    title: '${city?.name ?? 'Şehir'} · Otobüs',
-                    subtitle: city == null
-                        ? 'Konum belirleniyor…'
-                        : (city.id == 'istanbul'
-                            ? '785 hat · ~13.000 durak · resmi veri'
-                            : '720 hat · ~8.400 durak · resmi veri'),
-                    status: _busDone
-                        ? (_phase == BusDataPhase.offline
-                            ? _PkgStatus.offline
-                            : _PkgStatus.ready)
-                        : _PkgStatus.downloading,
-                    statusText: _busStatus,
-                    progress:
-                        _phase == BusDataPhase.downloading ? _frac : null,
-                  ),
-                  const SizedBox(height: 12),
-                  // Diğer şehirler Ayarlar'dan indirilir — ilk açılışı
-                  // gereksiz yere uzatmamak için burada yalnızca haber verilir.
-                  for (final other in TransitCities.all)
-                    if (other.id != city?.id) ...[
-                      _PackageCard(
-                        icon: Icons.directions_bus_outlined,
-                        title: '${other.name} · Otobüs',
-                        subtitle: 'Ayarlar → Veri Paketleri’nden indirilir',
-                        status: _PkgStatus.soon,
-                        statusText: 'İsteğe bağlı',
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 24),
+                  for (final city in TransitCities.all) ...[
+                    _CityPackage(
+                      city: city,
+                      installed: _installed[city.id] ?? false,
+                      sizeLabel: _size(_remoteBytes[city.id]),
+                      busy: _busyCity == city.id,
+                      progress: _frac,
+                      status: _statusText(city),
+                      onDownload: () => _download(city),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  const SizedBox(height: 4),
                   Row(
                     children: [
                       const Icon(Icons.map_rounded,
@@ -159,18 +150,20 @@ class _DataBootstrapScreenState extends ConsumerState<DataBootstrapScreen> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'Harita internetle canlı yüklenir (paket gerekmez).',
+                          'Harita internetle canlı yüklenir (paket gerekmez). '
+                          'Şehirleri sonradan Ayarlar’dan da indirebilirsin.',
                           style: text.labelMedium?.copyWith(
                               color: VigilantColors.onSurfaceVariant),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
-                  // Lisans şartı: kaynak atfı (İBB Açık Veri / CC BY 4.0).
+                  const SizedBox(height: 14),
+                  // Lisans şartı: kaynak atfı (İBB Açık Veri / Kocaeli CC BY).
                   Text(
-                    '${city?.attribution ?? TransitCities.fallback.attribution}'
-                    '. Harita © OpenStreetMap katkıcıları.',
+                    '${TransitCities.istanbul.attribution} · '
+                    '${TransitCities.kocaeli.attribution}. '
+                    'Harita © OpenStreetMap katkıcıları.',
                     textAlign: TextAlign.center,
                     style: text.labelSmall
                         ?.copyWith(color: VigilantColors.onSurfaceVariant),
@@ -178,7 +171,6 @@ class _DataBootstrapScreenState extends ConsumerState<DataBootstrapScreen> {
                 ],
               ),
             ),
-            // Otomatik GEÇMEZ — kullanıcı görür ve buradan ilerler.
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 8, 24, 20),
               child: SizedBox(
@@ -187,14 +179,23 @@ class _DataBootstrapScreenState extends ConsumerState<DataBootstrapScreen> {
                   style: FilledButton.styleFrom(
                     backgroundColor: VigilantColors.primary,
                     foregroundColor: Colors.white,
+                    disabledBackgroundColor:
+                        VigilantColors.surfaceContainerHigh,
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16)),
                   ),
-                  onPressed: _busDone ? widget.onCompleted : null,
+                  // İndirme sürerken beklenir; hiç paket yokken de devam
+                  // edilebilir (ray/vapur gömülü kopyayla çalışır).
+                  onPressed: _busyCity != null ? null : widget.onCompleted,
                   child: Text(
-                    _busDone ? 'Devam Et' : 'İndiriliyor…',
+                    _busyCity != null
+                        ? 'İndiriliyor…'
+                        : (_anyInstalled ? 'Devam Et' : 'Şimdilik Atla'),
                     style: text.bodyLarge?.copyWith(
-                        fontWeight: FontWeight.w700, color: Colors.white),
+                        fontWeight: FontWeight.w700,
+                        color: _busyCity != null
+                            ? VigilantColors.onSurfaceVariant
+                            : Colors.white),
                   ),
                 ),
               ),
@@ -206,119 +207,120 @@ class _DataBootstrapScreenState extends ConsumerState<DataBootstrapScreen> {
   }
 }
 
-enum _PkgStatus { ready, downloading, offline, soon }
-
-class _PackageCard extends StatelessWidget {
-  const _PackageCard({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
+/// Tek şehir paketi kartı — indirme YALNIZCA düğmeyle başlar.
+class _CityPackage extends StatelessWidget {
+  const _CityPackage({
+    required this.city,
+    required this.installed,
+    required this.sizeLabel,
+    required this.busy,
+    required this.progress,
     required this.status,
-    required this.statusText,
-    this.progress,
+    required this.onDownload,
   });
 
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final _PkgStatus status;
-  final String statusText;
-  final double? progress;
+  final TransitCity city;
+  final bool installed;
+  final String sizeLabel;
+  final bool busy;
+  final double progress;
+  final String status;
+  final VoidCallback onDownload;
+
+  /// Şehirde hangi taşıma türleri var — kullanıcı ne indirdiğini bilsin.
+  String get _contents => city.id == 'kocaeli'
+      ? 'Otobüs, Akçaray tramvay, vapur, teleferik'
+      : 'Otobüs, metrobüs, Marmaray, metro, tramvay, vapur';
 
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    final soon = status == _PkgStatus.soon;
-    final Color accent = switch (status) {
-      _PkgStatus.ready => VigilantColors.secondary,
-      _PkgStatus.downloading => VigilantColors.primary,
-      _PkgStatus.offline => VigilantColors.tertiaryContainer,
-      _PkgStatus.soon => VigilantColors.onSurfaceVariant,
-    };
-    return Opacity(
-      opacity: soon ? 0.55 : 1,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: VigilantColors.surfaceContainer,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-              color: VigilantColors.surfaceVariant.withValues(alpha: 0.3)),
-        ),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: accent.withValues(alpha: 0.15),
-                  ),
-                  child: Icon(icon, size: 22, color: accent),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: text.bodyLarge
-                              ?.copyWith(fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 2),
-                      Text(subtitle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: text.labelMedium?.copyWith(
-                              color: VigilantColors.onSurfaceVariant)),
-                      const SizedBox(height: 4),
-                      Text(statusText,
-                          style: text.labelMedium?.copyWith(
-                              color: accent, fontWeight: FontWeight.w600)),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                _trailing(accent),
-              ],
-            ),
-            if (progress != null) ...[
-              const SizedBox(height: 12),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(999),
-                child: LinearProgressIndicator(
-                  value: progress!.clamp(0.0, 1.0),
-                  minHeight: 5,
-                  backgroundColor: VigilantColors.surfaceContainerHigh,
-                  valueColor:
-                      const AlwaysStoppedAnimation(VigilantColors.primary),
-                ),
-              ),
-            ],
-          ],
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: VigilantColors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: installed
+              ? VigilantColors.secondary.withValues(alpha: 0.45)
+              : VigilantColors.surfaceVariant.withValues(alpha: 0.4),
         ),
       ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.location_city_rounded,
+                  size: 20,
+                  color: installed
+                      ? VigilantColors.secondary
+                      : VigilantColors.primary),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(city.name,
+                    style: text.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w800)),
+              ),
+              if (installed)
+                const Icon(Icons.download_done_rounded,
+                    size: 20, color: VigilantColors.secondary),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(_contents,
+              style: text.labelMedium
+                  ?.copyWith(color: VigilantColors.onSurfaceVariant)),
+          if (sizeLabel.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(installed ? 'İndirildi · $sizeLabel' : sizeLabel,
+                style: text.labelSmall
+                    ?.copyWith(color: VigilantColors.onSurfaceVariant)),
+          ],
+          const SizedBox(height: 12),
+          if (busy) ...[
+            LinearProgressIndicator(
+              value: progress > 0 && progress < 1 ? progress : null,
+              minHeight: 6,
+              backgroundColor: VigilantColors.surfaceVariant,
+              color: VigilantColors.primary,
+              borderRadius: BorderRadius.circular(999),
+            ),
+            const SizedBox(height: 6),
+            Text(status,
+                style: text.labelSmall
+                    ?.copyWith(color: VigilantColors.onSurfaceVariant)),
+          ] else
+            SizedBox(
+              width: double.infinity,
+              child: installed
+                  ? OutlinedButton.icon(
+                      onPressed: null,
+                      icon: const Icon(Icons.check_rounded, size: 18),
+                      label: const Text('Cihazında hazır'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: VigilantColors.secondary,
+                        disabledForegroundColor: VigilantColors.secondary,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                      ),
+                    )
+                  : FilledButton.icon(
+                      onPressed: onDownload,
+                      icon: const Icon(Icons.download_rounded, size: 18),
+                      label: const Text('İndir'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: VigilantColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+            ),
+        ],
+      ),
     );
-  }
-
-  Widget _trailing(Color accent) {
-    switch (status) {
-      case _PkgStatus.ready:
-        return Icon(Icons.check_circle_rounded, color: accent, size: 24);
-      case _PkgStatus.downloading:
-        return const SizedBox(
-          width: 22,
-          height: 22,
-          child: CircularProgressIndicator(
-              strokeWidth: 2.4, color: VigilantColors.primary),
-        );
-      case _PkgStatus.offline:
-        return Icon(Icons.wifi_off_rounded, color: accent, size: 22);
-      case _PkgStatus.soon:
-        return Icon(Icons.lock_clock_rounded, color: accent, size: 20);
-    }
   }
 }
