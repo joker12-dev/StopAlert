@@ -7,6 +7,7 @@ import '../data/journey_record.dart';
 import '../data/journey_suggestion.dart';
 import '../data/models.dart';
 import '../data/transit_db.dart';
+import '../services/bus_data_service.dart';
 import '../data/stopi_tips.dart';
 import '../state/city_provider.dart';
 import '../state/journey_provider.dart';
@@ -320,35 +321,49 @@ class HomeScreen extends ConsumerWidget {
     ));
   }
 
-  void _startFavorite(BuildContext context, WidgetRef ref, FavoriteRoute fav) {
-    Haptics.light();
-    final lines = ref.read(linesProvider).valueOrNull ?? const <TransitLine>[];
-    TransitLine? line;
-    for (final l in lines) {
-      if (l.id == fav.lineId) {
-        line = l;
-        break;
-      }
+  /// Kayıtlı bir hattı kimliğinden çöz.
+  ///
+  /// Otobüs hatları indirilen SQLite paketinde, ray/vapur ise gömülü
+  /// listede. Favori/geçmiş yalnızca kimlik sakladığı için ikisine de
+  /// bakılmalı — eskiden sadece gömülü listeye bakılıyor ve tüm OTOBÜS
+  /// favorileri "verisi güncel değil" diye reddediliyordu.
+  Future<TransitLine?> _resolveLine(WidgetRef ref, String lineId) async {
+    if (isBusId(lineId)) {
+      // Favori başka şehirde eklenmiş olabilir; kurulu paketleri açıp ara.
+      await BusDataService.instance.openAllForLookup();
+      return TransitDb.instance.buildLineAnyCity(lineId);
     }
+    final lines = ref.read(linesProvider).valueOrNull ?? const <TransitLine>[];
+    for (final l in lines) {
+      if (l.id == lineId) return l;
+    }
+    return null;
+  }
+
+  Future<void> _startFavorite(
+      BuildContext context, WidgetRef ref, FavoriteRoute fav) async {
+    Haptics.light();
+    final line = await _resolveLine(ref, fav.lineId);
+    if (!context.mounted) return;
     if (line == null ||
         line.indexOfStop(fav.boardingStopId) == -1 ||
         line.indexOfStop(fav.targetStopId) == -1) {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(const SnackBar(
-            content: Text('Bu favorinin hat/durak verisi güncel değil.')));
+            content: Text('Bu favorinin hattı bu cihazda yüklü değil — '
+                'şehir paketini Ayarlar’dan indir.')));
       return;
     }
-    final resolved = line;
     ref.read(journeyDraftProvider.notifier)
       ..reset()
-      ..selectLine(resolved)
+      ..selectLine(line)
       ..selectBoardingStop(fav.boardingStopId)
       ..selectTargetStop(fav.targetStopId);
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => LiveTrackingScreen(
         payload: JourneyPayload(
-          line: resolved,
+          line: line,
           boardingStopId: fav.boardingStopId,
           targetStopId: fav.targetStopId,
           alarmDistanceMeters: 500,
@@ -357,61 +372,72 @@ class HomeScreen extends ConsumerWidget {
     ));
   }
 
-  void _startSuggestion(
-      BuildContext context, WidgetRef ref, JourneySuggestion s) {
-    Haptics.light();
+  /// Hat KODU ve durak ADIndan çöz — geçmiş/öneri kayıtlarında kimlik yok.
+  ///
+  /// Ray/vapur gömülü listede, otobüs indirilen pakette aranır.
+  Future<(TransitLine, Stop)?> _resolveByCode(
+      WidgetRef ref, String code, String stopName) async {
     final lines = ref.read(linesProvider).valueOrNull ?? const <TransitLine>[];
-    TransitLine? line;
-    Stop? target;
     for (final l in lines) {
-      if (l.code != s.lineCode) continue;
+      if (l.code != code) continue;
       for (final st in l.stops) {
-        if (st.name == s.targetStopName) {
-          line = l;
-          target = st;
-          break;
+        if (st.name == stopName) return (l, st);
+      }
+    }
+    // Otobüs: hat kodunun varyantları arasında durağı içeren ilkini al.
+    try {
+      await BusDataService.instance.openAllForLookup();
+      final briefs = await TransitDb.instance.searchLines(code, limit: 6);
+      for (final b in briefs) {
+        if (b.code != code) continue;
+        final line = await TransitDb.instance.buildLineAnyCity(b.id);
+        if (line == null) continue;
+        for (final st in line.stops) {
+          if (st.name == stopName) return (line, st);
         }
       }
-      if (target != null) break;
+    } catch (_) {
+      // Paket yok/okunamadı: alarm ekranı ad ile açılır.
     }
-    if (line != null && target != null) {
+    return null;
+  }
+
+  Future<void> _startSuggestion(
+      BuildContext context, WidgetRef ref, JourneySuggestion s) async {
+    Haptics.light();
+    final hit = await _resolveByCode(ref, s.lineCode, s.targetStopName);
+    if (!context.mounted) return;
+    if (hit != null) {
       ref.read(journeyDraftProvider.notifier)
         ..reset()
-        ..selectLine(line)
-        ..selectTargetStop(target.id);
+        ..selectLine(hit.$1)
+        ..selectTargetStop(hit.$2.id);
     }
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => AlarmSetupScreen(
-          stopName: target?.name ?? s.targetStopName, lineLabel: line?.code),
+          stopName: hit?.$2.name ?? s.targetStopName,
+          lineLabel: hit?.$1.code ?? s.lineCode),
     ));
   }
 
-  void _repeatJourney(BuildContext context, WidgetRef ref, JourneyRecord r) {
-    final lines = ref.read(linesProvider).valueOrNull ?? const <TransitLine>[];
-    TransitLine? line;
-    Stop? stop;
-    for (final l in lines) {
-      if (l.code != r.lineCode) continue;
-      for (final s in l.stops) {
-        if (s.name == r.targetStopName) {
-          line = l;
-          stop = s;
-          break;
-        }
-      }
-      if (stop != null) break;
-    }
-    if (line != null && stop != null) {
+  Future<void> _repeatJourney(
+      BuildContext context, WidgetRef ref, JourneyRecord r) async {
+    Haptics.light();
+    final hit = await _resolveByCode(ref, r.lineCode, r.targetStopName);
+    if (!context.mounted) return;
+    if (hit != null) {
       ref.read(journeyDraftProvider.notifier)
         ..reset()
-        ..selectLine(line)
-        ..selectTargetStop(stop.id);
+        ..selectLine(hit.$1)
+        ..selectTargetStop(hit.$2.id);
     }
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => AlarmSetupScreen(
-          stopName: stop?.name ?? r.targetStopName, lineLabel: line?.code),
+          stopName: hit?.$2.name ?? r.targetStopName,
+          lineLabel: hit?.$1.code ?? r.lineCode),
     ));
   }
+
 
   String _relativeTime(DateTime? t) {
     if (t == null) return 'yeni';

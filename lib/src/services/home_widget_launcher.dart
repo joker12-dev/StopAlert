@@ -60,7 +60,8 @@ Future<TransitLine?> _resolveLine(String lineId) async {
         if (path == null) return null;
         await TransitDb.instance.open(path);
       }
-      return TransitDb.instance.buildLine(lineId);
+      // Favori başka şehirdeyken eklenmiş olabilir.
+      return TransitDb.instance.buildLineAnyCity(lineId);
     }
     final raw = await rootBundle.loadString('assets/data/lines.json');
     final json = jsonDecode(raw) as Map<String, dynamic>;

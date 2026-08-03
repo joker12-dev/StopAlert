@@ -121,6 +121,19 @@ class BusDataService {
     }
   }
 
+  /// Kurulu TÜM şehirlerin paketlerini aramaya/çözümlemeye açar.
+  ///
+  /// Arama ve favori çözümü aktif şehirle sınırlı kalmamalı: kullanıcı
+  /// Kocaeli'de favori ekleyip İstanbul'a geçtiğinde favorisi çalışmalı.
+  Future<void> openAllForLookup() async {
+    if (!isMobileDevice) return;
+    for (final c in TransitCities.all) {
+      if (c.id == _openCityId) continue;          // aktif şehir zaten açık
+      final path = await localPath(c);
+      if (path != null) await TransitDb.instance.openAux(c.id, path);
+    }
+  }
+
   /// Paket cihazda var mı + hangi sürüm (Ayarlar → Veri Paketleri).
   Future<({bool installed, int bytes, String? version})> packageInfo(
       TransitCity city) async {

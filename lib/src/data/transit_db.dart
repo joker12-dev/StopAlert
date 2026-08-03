@@ -251,6 +251,21 @@ class TransitDb {
     );
   }
 
+  /// Hattı ÖNCE aktif şehirde, bulunamazsa açık diğer şehirlerde arar.
+  ///
+  /// Favoriler ve geçmiş yalnızca hat kimliği saklıyor. Kullanıcı Kocaeli'de
+  /// favori ekleyip İstanbul'a geçtiğinde aktif veritabanında o hat yok ve
+  /// favori "güncel değil" gibi görünüyordu; oysa paketi duruyor.
+  Future<TransitLine?> buildLineAnyCity(String externalLineId) async {
+    final direct = await buildLine(externalLineId);
+    if (direct != null) return direct;
+    for (final cityId in _aux.keys) {
+      final line = await buildLine(externalLineId, cityId: cityId);
+      if (line != null) return line;
+    }
+    return null;
+  }
+
   Stop _stop(Map<String, Object?> r) => Stop(
         id: kBusPrefix + r['id'].toString(),
         name: r['name'] as String,
