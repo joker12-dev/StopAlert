@@ -120,8 +120,7 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
   /// sayılır: aynı hattın karşı yönündeki otobüsü "bu durakta" göstermek
   /// kullanıcıyı yanlış otobüse bindirirdi.
   Future<void> _loadLiveBuses() async {
-    if (!ref.read(activeCityProvider).hasLiveBus) return;
-    if (widget.city != null) return;     // başka şehrin hattı: canlı veri yok
+    if (!_lineCity.hasLiveBus) return;
     final id = _selectedId;
     if (id == null) return;
     final isGidis = id.endsWith('_G');
@@ -145,6 +144,13 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
   }
 
   bool get _selectedIsDepar => _depar.any((d) => d.id == _selectedId);
+
+  /// HATTIN ait olduğu şehir — aktif şehir DEĞİL.
+  ///
+  /// Canlı konum bu şehre göre belirlenir: Kocaeli'deyken İstanbul hattına
+  /// bakan kullanıcıdan canlı takibi saklamak yanlıştı (İETT servisi hattın
+  /// şehrine bağlı, kullanıcının bulunduğu şehre değil).
+  TransitCity get _lineCity => widget.city ?? ref.read(activeCityProvider);
 
   void _pickTarget(Stop stop) {
     final line = _line;
@@ -366,7 +372,10 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
   Widget _actions(TextTheme text) {
     final line = _line;
     if (line == null) return const SizedBox.shrink();
-    final hasLive = ref.watch(activeCityProvider).hasLiveBus &&
+    // Hattın şehri canlı filo servisi veriyorsa göster — kullanıcının hangi
+    // şehirde olduğu belirleyici değil.
+    final TransitCity lineCity = widget.city ?? ref.watch(activeCityProvider);
+    final hasLive = lineCity.hasLiveBus &&
         (line.type == LineType.bus || line.type == LineType.metrobus);
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
