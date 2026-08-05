@@ -7,6 +7,7 @@ import '../data/models.dart';
 import '../engine/geo.dart' as geo;
 import '../services/routing_service.dart';
 import '../theme/app_theme.dart';
+import '../util/latlng_guard.dart';
 import '../util/map_style.dart';
 import '../util/platform_check.dart';
 
@@ -190,9 +191,11 @@ class _RouteMapState extends State<RouteMap> {
       acc = 0;
       final dLon =
           (b.longitude - a.longitude) * math.cos(a.latitude * math.pi / 180);
+      final mid = safeLatLng((a.latitude + b.latitude) / 2,
+          (a.longitude + b.longitude) / 2);
+      if (mid == null) continue;
       out.add(Marker(
-        point: LatLng((a.latitude + b.latitude) / 2,
-            (a.longitude + b.longitude) / 2),
+        point: mid,
         width: 18,
         height: 18,
         child: IgnorePointer(
@@ -344,8 +347,9 @@ class _RouteMapState extends State<RouteMap> {
                   if ((s.lat != 0 || s.lon != 0) &&
                       s.id != widget.boardingStopId &&
                       s.id != widget.targetStopId)
+                    if (safeLatLng(s.lat, s.lon) case final sp?)
                     Marker(
-                      point: LatLng(s.lat, s.lon),
+                      point: sp,
                       width: 14,
                       height: 14,
                       child: _StopDot(color: lineColor),
@@ -358,8 +362,9 @@ class _RouteMapState extends State<RouteMap> {
                 markers: [
                   for (final s in _stops)
                     if (s.lat != 0 || s.lon != 0)
+                      if (safeLatLng(s.lat, s.lon) case final sp?)
                       Marker(
-                        point: LatLng(s.lat, s.lon),
+                        point: sp,
                         width: 130,
                         height: 46,
                         alignment: Alignment.topCenter,

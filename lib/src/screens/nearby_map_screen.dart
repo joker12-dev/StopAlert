@@ -15,6 +15,7 @@ import '../state/settings_provider.dart';
 import '../theme/app_theme.dart';
 import '../util/haptics.dart';
 import '../util/insets.dart';
+import '../util/latlng_guard.dart';
 import '../util/map_style.dart';
 import 'alarm_setup_screen.dart';
 import 'line_detail_screen.dart';
@@ -107,7 +108,11 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
     // Görünen alanın ortası, ekran merkezinden panelin yarısı kadar yukarıda.
     final y = (size.height - _panelHeight) / 2;
     try {
-      return cam.screenOffsetToLatLng(Offset(size.width / 2, y));
+      final p = cam.screenOffsetToLatLng(Offset(size.width / 2, y));
+      // SONLULUK ŞART: çok parmaklı jest sırasında bu dönüşüm NaN
+      // üretebiliyor ve NaN'lı bir marker flutter_map'i her karede
+      // hataya düşürüp uygulamayı ANR'a kilitliyordu.
+      return p.isUsable ? p : cam.center;
     } catch (_) {
       return cam.center;
     }
@@ -118,13 +123,15 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
   /// Adlar eskiden yalnızca dokununca görünüyordu; kullanıcı hangi durağın
   /// hangisi olduğunu tek tek dokunarak bulmak zorunda kalıyordu. Uzak
   /// zoom'da yazılmaz — 200 durak etiketi haritayı okunmaz yapar.
-  Marker _stopMarker(MapStop m) {
+  Marker? _stopMarker(MapStop m) {
+    final point = safeLatLng(m.stop.lat, m.stop.lon);
+    if (point == null) return null;   // bozuk koordinat: çizme
     final selected = _isSelected(m);
     final showLabel = _zoom >= _labelZoom;
     final dotBox = selected ? 38.0 : 20.0;
     final height = showLabel ? dotBox + 34 : dotBox;
     return Marker(
-      point: LatLng(m.stop.lat, m.stop.lon),
+      point: point,
       width: showLabel ? 128 : dotBox,
       height: height,
       // Yuvarlağın MERKEZİ koordinata otursun (etiket kutuyu uzatıyor).
@@ -192,14 +199,13 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
       // Görünen alanın ortasındaki koordinat...
       final visibleCenter = cam.screenOffsetToLatLng(
           Offset(size.width / 2, (size.height - _panelHeight) / 2));
+      if (!visibleCenter.isUsable) return;
       // ...noktaya eşit olacak şekilde kamerayı ötele.
-      _map.move(
-        LatLng(
-          cam.center.latitude + (point.latitude - visibleCenter.latitude),
-          cam.center.longitude + (point.longitude - visibleCenter.longitude),
-        ),
-        zoom,
+      final target = LatLng(
+        cam.center.latitude + (point.latitude - visibleCenter.latitude),
+        cam.center.longitude + (point.longitude - visibleCenter.longitude),
       );
+      if (target.isUsable) _map.move(target, zoom);
     } catch (_) {
       // Kamera henüz ölçülmediyse düz ortalama yeterli.
     }
@@ -547,7 +553,7 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
                             : const Distance()
                                 .as(LengthUnit.Meter, user, target);
                         _selectStop(MapStop(stop: focus, meters: m));
-                      } else if (user != null) {
+                      } else if (user != null && user.isUsable) {
                         _centerOnVisible(user, 15);
                       }
                       _reloadVisible(); // ilk parçayı yükle
@@ -589,7 +595,7 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
                     ValueListenableBuilder<LatLng?>(
                       valueListenable: _probe,
                       builder: (context, p, _) => CircleLayer(circles: [
-                        if (p != null)
+                        if (p != null && p.isUsable)
                         CircleMarker(
                           point: p,
                           radius: _radius,
@@ -618,10 +624,10 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
                     MarkerLayer(
                       markers: [
                         for (final m in _markerStops(stops))
-                          _stopMarker(m),
+                          if (_stopMarker(m) case final mk?) mk,
                       ],
                     ),
-                    if (user != null)
+                    if (user != null && user.isUsable)
                       MarkerLayer(markers: [
                         Marker(
                           point: user,
@@ -634,7 +640,7 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
                     ValueListenableBuilder<LatLng?>(
                       valueListenable: _probe,
                       builder: (context, p, _) => MarkerLayer(markers: [
-                        if (p != null)
+                        if (p != null && p.isUsable)
                           Marker(
                             point: p,
                             width: 22,

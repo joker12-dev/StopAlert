@@ -13,6 +13,7 @@ import '../state/journey_provider.dart';
 import '../state/live_location_provider.dart';
 import '../theme/app_theme.dart';
 import '../util/haptics.dart';
+import '../util/latlng_guard.dart';
 import '../util/map_style.dart';
 import 'alarm_setup_screen.dart';
 
@@ -123,12 +124,18 @@ class _RouteMapScreenState extends ConsumerState<RouteMapScreen> {
   }
 
   List<Stop> get _stops =>
-      [for (final s in _line.stops) if (s.lat != 0 || s.lon != 0) s];
+      [
+        for (final s in _line.stops)
+          // Sonlu olmayan koordinat flutter_map'i her karede hataya
+          // düşürüyor (bkz. latlng_guard.dart) — kaynağında elenir.
+          if ((s.lat != 0 || s.lon != 0) && safeLatLng(s.lat, s.lon) != null) s,
+      ];
 
   List<LatLng> get _stopPoints =>
       [for (final s in _stops) LatLng(s.lat, s.lon)];
 
-  List<LatLng> get _drawRoute => _road.length >= 2 ? _road : _stopPoints;
+  List<LatLng> get _drawRoute =>
+      onlyUsable(_road.length >= 2 ? _road : _stopPoints);
 
   void _fit() {
     final pts = _stopPoints;
@@ -169,8 +176,9 @@ class _RouteMapScreenState extends ConsumerState<RouteMapScreen> {
       acc += len;
       if (acc < spacing) continue;
       acc = 0;
-      final mid = LatLng(
+      final mid = safeLatLng(
           (a.latitude + b.latitude) / 2, (a.longitude + b.longitude) / 2);
+      if (mid == null) continue;
       final dLon =
           (b.longitude - a.longitude) * math.cos(a.latitude * math.pi / 180);
       final bearing = math.atan2(dLon, b.latitude - a.latitude);
@@ -280,9 +288,10 @@ class _RouteMapScreenState extends ConsumerState<RouteMapScreen> {
                 ]),
                 // Kullanıcının CANLI konumu — en üstte çizilir.
                 MarkerLayer(markers: [
-                  if (ref.watch(liveLocationProvider).valueOrNull case final me?)
+                  if (ref.watch(liveLocationProvider).valueOrNull
+                      case final me? when me.isUsable)
                     Marker(
-                      point: LatLng(me.latitude, me.longitude),
+                      point: me,
                       width: 24,
                       height: 24,
                       child: const _UserDot(),

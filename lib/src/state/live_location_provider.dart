@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../util/latlng_guard.dart';
 import '../util/platform_check.dart';
 
 /// Kullanıcının ANLIK konumu — haritalardaki mavi nokta bunu izler.
@@ -32,7 +33,10 @@ final liveLocationProvider = StreamProvider.autoDispose<LatLng?>((ref) async* {
 
   try {
     final last = await Geolocator.getLastKnownPosition();
-    if (last != null) yield LatLng(last.latitude, last.longitude);
+    if (last != null) {
+      final p = safeLatLng(last.latitude, last.longitude);
+      if (p != null) yield p;
+    }
   } catch (_) {
     // Son bilinen yoksa doğrudan akışa geçilir.
   }
@@ -44,5 +48,9 @@ final liveLocationProvider = StreamProvider.autoDispose<LatLng?>((ref) async* {
       // noktayı titretir ve boşuna güç harcar.
       distanceFilter: 5,
     ),
-  ).map((p) => LatLng(p.latitude, p.longitude));
+  )
+      // Sonlu olmayan düzeltmeyi ELE: NaN'lı bir nokta haritada marker olarak
+      // çizilirse flutter_map her karede hata atıp uygulamayı kilitliyor.
+      .map((p) => safeLatLng(p.latitude, p.longitude))
+      .where((p) => p != null);
 });
