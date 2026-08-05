@@ -43,6 +43,24 @@ abstract final class AppMapStyle {
   /// Kaydırma yönünde ÖN YÜKLEME halkası. 0 = yalnızca görünen alan.
   static const panBuffer = 0;
 
+  /// En fazla uzaklaşma sınırı.
+  ///
+  /// Eskiden 3'tü — kıta ölçeği. Uygulama şehir içi bir alarm aracı; tüm
+  /// dünyayı görmenin bir faydası yok ama ciddi bir zararı var: tam
+  /// uzaklaşınca hattın/şehrin BÜTÜN durakları görünen alana giriyor,
+  /// ekran dışını eleyen kırpma işlevsiz kalıyor ve harita her kamera
+  /// hareketinde binlerce işareti yeniden kuruyor (cihaz profilinde
+  /// MarkerLayer.build toplam CPU'nun %93'ü, sonuç ANR).
+  ///
+  /// 9: yaklaşık 300 km genişlik — İstanbul-Kocaeli arası şehirlerarası bir
+  /// hat bile tek ekrana sığar.
+  static const minZoom = 9.0;
+
+  /// Yakındaki duraklar haritası daha yerel: 10 ≈ 150 km.
+  static const minZoomLocal = 10.0;
+
+  static const maxZoom = 18.0;
+
   /// Eski API — true = açık tema. Ayarlardaki 'light'/'dark' ile uyum için.
   static bool get light => style == MapTileStyle.sade;
   static set light(bool v) => style = v ? MapTileStyle.sade : MapTileStyle.gece;

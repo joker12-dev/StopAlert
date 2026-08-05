@@ -231,8 +231,8 @@ class _RouteMapState extends State<RouteMap> {
           options: MapOptions(
             initialCenter: center,
             initialZoom: widget.initialZoom,
-            minZoom: 3,
-            maxZoom: 18,
+            minZoom: AppMapStyle.minZoom,
+            maxZoom: AppMapStyle.maxZoom,
             backgroundColor: VigilantColors.surfaceContainerLowest,
             interactionOptions: InteractionOptions(
               flags: widget.interactive
@@ -249,13 +249,21 @@ class _RouteMapState extends State<RouteMap> {
             },
             onPositionChanged: (camera, hasGesture) {
               // Kullanıcı haritayı ELLE oynattıysa takip kilidini bırak.
-              if (hasGesture && _follow) setState(() => _follow = false);
+              if (hasGesture && _follow) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) setState(() => _follow = false);
+                });
+              }
               final show = camera.zoom >= _labelZoomThreshold;
               // Ok sıklığı eşiği de zoom'a bağlı; ikisi birlikte tazelenir.
               final before = _arrowSpacingBucket;
               _currentZoom = camera.zoom;
+              // setState LAYOUT SIRASINDA çağrılmamalı — bkz. harita
+              // ekranlarındaki aynı açıklama (sonsuz yeniden çizim/ANR).
               if (show != _showLabels || before != _arrowSpacingBucket) {
-                setState(() => _showLabels = show);
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) setState(() => _showLabels = show);
+                });
               }
             },
           ),

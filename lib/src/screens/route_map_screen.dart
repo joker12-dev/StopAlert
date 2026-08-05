@@ -15,6 +15,7 @@ import '../theme/app_theme.dart';
 import '../util/haptics.dart';
 import '../util/latlng_guard.dart';
 import '../util/map_style.dart';
+import '../util/marker_cull.dart';
 import 'alarm_setup_screen.dart';
 
 /// "Rotayı görüntüle" — bir hattın güzergâhı harita üzerinde.
@@ -225,8 +226,8 @@ class _RouteMapScreenState extends ConsumerState<RouteMapScreen> {
                     ? LatLng(stops.first.lat, stops.first.lon)
                     : const LatLng(41.0082, 28.9784),
                 initialZoom: _zoom,
-                minZoom: 3,
-                maxZoom: 18,
+                minZoom: AppMapStyle.minZoom,
+                maxZoom: AppMapStyle.maxZoom,
                 backgroundColor: VigilantColors.surfaceContainerLowest,
                 onMapReady: () {
                   _mapReady = true;
@@ -235,9 +236,15 @@ class _RouteMapScreenState extends ConsumerState<RouteMapScreen> {
                 onPositionChanged: (cam, _) {
                   final before = (_zoom >= _labelZoom, _arrowSpacing);
                   _zoom = cam.zoom;
+                  // setState LAYOUT SIRASINDA çağrılmamalı: flutter_map bu
+                  // geri çağrıyı kendi layout aşamasında tetikliyor ve burada
+                  // yeniden çizim istemek layout'u tekrar başlatıp sonsuz
+                  // döngüye sokuyor (ANR).
                   if (mounted &&
                       before != (_zoom >= _labelZoom, _arrowSpacing)) {
-                    setState(() {});
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (mounted) setState(() {});
+                    });
                   }
                 },
                 onTap: (_, __) {
@@ -272,13 +279,26 @@ class _RouteMapScreenState extends ConsumerState<RouteMapScreen> {
                       borderColor: Colors.white.withValues(alpha: 0.25),
                     ),
                   ]),
-                MarkerLayer(markers: _directionArrows()),
+                Builder(builder: (context) {
+                  final b = MarkerCull.paddedBounds(MapCamera.of(context));
+                  return MarkerLayer(markers: [
+                    for (final m in _directionArrows())
+                      if (MarkerCull.visible(b, m.point.latitude,
+                          m.point.longitude))
+                        m,
+                  ]);
+                }),
                 // Ara duraklar
-                MarkerLayer(markers: [
-                  for (var i = 0; i < stops.length; i++)
-                    if (i != 0 && i != stops.length - 1)
-                      _stopMarker(stops[i], color, showLabels: showLabels),
-                ]),
+                // Ara duraklar — GÖRÜNEN ALANA kırpılır (bkz. MarkerCull).
+                Builder(builder: (context) {
+                  final b = MarkerCull.paddedBounds(MapCamera.of(context));
+                  return MarkerLayer(markers: [
+                    for (var i = 0; i < stops.length; i++)
+                      if (i != 0 && i != stops.length - 1)
+                        if (MarkerCull.visible(b, stops[i].lat, stops[i].lon))
+                          _stopMarker(stops[i], color, showLabels: showLabels),
+                  ]);
+                }),
                 // Başlangıç ve bitiş
                 MarkerLayer(markers: [
                   if (stops.isNotEmpty)

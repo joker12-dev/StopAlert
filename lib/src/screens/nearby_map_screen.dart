@@ -17,6 +17,7 @@ import '../util/haptics.dart';
 import '../util/insets.dart';
 import '../util/latlng_guard.dart';
 import '../util/map_style.dart';
+import '../util/marker_cull.dart';
 import 'alarm_setup_screen.dart';
 import 'line_detail_screen.dart';
 import 'stop_lines_screen.dart';
@@ -216,11 +217,37 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
     if (!_mapReady || !mounted) return;
     try {
       final p = _probeLatLng();
-      if (_probe.value == p) return;
-      _probe.value = p;
+      final cur = _probe.value;
+      // EŞİK ŞART: `==` karşılaştırması yetmiyordu. Ekran koordinatından
+      // üretilen değer her hesapta epsilon kadar oynuyor, guard hiç tutmuyor
+      // ve her layout geçişinde katmanlar yeniden kuruluyordu.
+      if (cur != null && const Distance().as(LengthUnit.Meter, cur, p) < 1) {
+        return;
+      }
+      // LAYOUT SIRASINDA BİLDİRME: flutter_map bu geri çağrıyı kendi layout
+      // aşamasında tetikliyor; burada dinleyicileri uyandırmak aynı karede
+      // yeniden çizim başlatıp layout'u tekrar çalıştırıyor ve döngü
+      // kapanmıyordu (profilde MarkerLayer.build 28.000 kez görüldü, ANR).
+      _pendingProbe = p;
+      _flushProbeAfterFrame();
     } catch (_) {
       // kamera henüz hazır değil
     }
+  }
+
+  LatLng? _pendingProbe;
+  bool _probeFlushScheduled = false;
+
+  /// Bekleyen sonda konumunu KARE BİTTİKTEN sonra yayınla.
+  void _flushProbeAfterFrame() {
+    if (_probeFlushScheduled) return;
+    _probeFlushScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _probeFlushScheduled = false;
+      if (!mounted) return;
+      final p = _pendingProbe;
+      if (p != null) _probe.value = p;
+    });
   }
 
   /// Veri yüklemesi yalnızca hareket durunca yapılır (sorgu israfı olmasın).
@@ -538,8 +565,8 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
                   options: MapOptions(
                     initialCenter: center,
                     initialZoom: 15,
-                    minZoom: 3,
-                    maxZoom: 18,
+                    minZoom: AppMapStyle.minZoomLocal,
+                    maxZoom: AppMapStyle.maxZoom,
                     backgroundColor: VigilantColors.surfaceContainerLowest,
                     onMapReady: () {
                       _mapReady = true;
@@ -566,8 +593,12 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
                       // Etiket eşiği geçildiyse yeniden çiz (her karede değil).
                       final was = _zoom >= _labelZoom;
                       _zoom = cam.zoom;
+                      // setState'i layout sırasında ÇAĞIRMA (yukarıdaki
+                      // açıklama): kareyi bitir, sonra yeniden çiz.
                       if (mounted && was != (_zoom >= _labelZoom)) {
-                        setState(() {});
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (mounted) setState(() {});
+                        });
                       }
                     },
                   ),
@@ -621,12 +652,17 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
                       ]),
                     // Durak işaretleri (yalnızca görünen alandakiler). Seçili
                     // durak listede olmasa da (kaydırıldıysa) işaretli kalır.
-                    MarkerLayer(
-                      markers: [
+                    // Durak işaretleri GÖRÜNEN ALANA kırpılır: kamera her
+                    // karede değiştiği için 200 durağı (etiketleriyle) her
+                    // seferinde kurmak ana iş parçacığını kilitliyordu.
+                    Builder(builder: (context) {
+                      final b = MarkerCull.paddedBounds(MapCamera.of(context));
+                      return MarkerLayer(markers: [
                         for (final m in _markerStops(stops))
-                          if (_stopMarker(m) case final mk?) mk,
-                      ],
-                    ),
+                          if (MarkerCull.visible(b, m.stop.lat, m.stop.lon))
+                            if (_stopMarker(m) case final mk?) mk,
+                      ]);
+                    }),
                     if (user != null && user.isUsable)
                       MarkerLayer(markers: [
                         Marker(
