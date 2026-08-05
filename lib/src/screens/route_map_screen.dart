@@ -14,8 +14,8 @@ import '../state/live_location_provider.dart';
 import '../theme/app_theme.dart';
 import '../util/haptics.dart';
 import '../util/latlng_guard.dart';
+import '../util/map_settle.dart';
 import '../util/map_style.dart';
-import '../util/marker_cull.dart';
 import 'alarm_setup_screen.dart';
 
 /// "Rotayı görüntüle" — bir hattın güzergâhı harita üzerinde.
@@ -41,9 +41,18 @@ class _RouteMapScreenState extends ConsumerState<RouteMapScreen> {
   final _map = MapController();
   bool _mapReady = false;
 
+  /// Harita hareket ederken yoğun katmanlar çizilmez (bkz. [MapSettle]).
+  final _settle = MapSettle();
+
   /// Güzergâhın YOLLARA oturmuş hali (OSRM). Boşsa duraklar arası düz çizgi.
   List<LatLng> _road = const [];
   Stop? _selected;
+
+  @override
+  void dispose() {
+    _settle.dispose();
+    super.dispose();
+  }
 
   /// Gösterilen yön varyantı — "yön değiştir" ile gidiş/dönüş arasında geçilir.
   late TransitLine _line;
@@ -156,6 +165,50 @@ class _RouteMapScreenState extends ConsumerState<RouteMapScreen> {
     _drawRouteCache =
         onlyUsable(_road.length >= 2 ? _road : _stopPointsCache);
     _arrowsRouteLen = -1;              // oklar yeniden hesaplansın
+    _markersKey = null;                // işaretler yeniden kurulsun
+    _terminalsBuilt = false;
+  }
+
+  /// Durak işaretleri ÖNBELLEKTE.
+  ///
+  /// `MarkerLayer.build`, kamera her değiştiğinde (jest boyunca HER KAREDE)
+  /// çalışır. İşaret listesi orada üretilirse 200 durağın widget ağacı da her
+  /// karede yeniden kurulur — profilde ölçülen %93'lük CPU payının kaynağı bu.
+  /// Hazır kurulmuş listeyi vermek, kare başına sıfır widget inşası demek.
+  ///
+  /// Kırpmayı flutter_map zaten kendisi yapıyor (`getPositioned` görünen alan
+  /// dışındaki işaret için `Positioned` bile kurmadan null döner), o yüzden
+  /// burada elle kırpmak gereksiz.
+  List<Marker> _stopMarkers = const [];
+  (bool, String?)? _markersKey;
+  List<Marker> _terminals = const [];
+
+  List<Marker> _buildStopMarkers(Color color, {required bool showLabels}) {
+    final key = (showLabels, _selected?.id);
+    if (_markersKey == key) return _stopMarkers;
+    final stops = _stopsCache;
+    _stopMarkers = [
+      for (var i = 1; i < stops.length - 1; i++)
+        _stopMarker(stops[i], color, showLabels: showLabels),
+    ];
+    _markersKey = key;
+    return _stopMarkers;
+  }
+
+  String? _terminalsFor;
+  bool _terminalsBuilt = false;
+
+  List<Marker> _terminalMarkers() {
+    // Uç işaretleri de seçime göre vurgulanır — anahtar seçili durak.
+    if (_terminalsBuilt && _terminalsFor == _selected?.id) return _terminals;
+    final stops = _stopsCache;
+    _terminals = [
+      if (stops.isNotEmpty) _terminalMarker(stops.first, isStart: true),
+      if (stops.length > 1) _terminalMarker(stops.last, isStart: false),
+    ];
+    _terminalsFor = _selected?.id;
+    _terminalsBuilt = true;
+    return _terminals;
   }
 
   void _fit() {
@@ -254,6 +307,8 @@ class _RouteMapScreenState extends ConsumerState<RouteMapScreen> {
                   _fit();
                 },
                 onPositionChanged: (cam, _) {
+                  // Jest sürerken durak işaretleri ve oklar çizilmesin.
+                  _settle.touch();
                   final before = (_zoom >= _labelZoom, _arrowSpacing);
                   _zoom = cam.zoom;
                   // setState LAYOUT SIRASINDA çağrılmamalı: flutter_map bu
@@ -299,33 +354,21 @@ class _RouteMapScreenState extends ConsumerState<RouteMapScreen> {
                       borderColor: Colors.white.withValues(alpha: 0.25),
                     ),
                   ]),
-                Builder(builder: (context) {
-                  final b = MarkerCull.paddedBounds(MapCamera.of(context));
-                  return MarkerLayer(markers: [
-                    for (final m in _directionArrows())
-                      if (MarkerCull.visible(b, m.point.latitude,
-                          m.point.longitude))
-                        m,
-                  ]);
-                }),
-                // Ara duraklar
-                // Ara duraklar — GÖRÜNEN ALANA kırpılır (bkz. MarkerCull).
-                Builder(builder: (context) {
-                  final b = MarkerCull.paddedBounds(MapCamera.of(context));
-                  return MarkerLayer(markers: [
-                    for (var i = 0; i < stops.length; i++)
-                      if (i != 0 && i != stops.length - 1)
-                        if (MarkerCull.visible(b, stops[i].lat, stops[i].lon))
-                          _stopMarker(stops[i], color, showLabels: showLabels),
-                  ]);
-                }),
-                // Başlangıç ve bitiş
-                MarkerLayer(markers: [
-                  if (stops.isNotEmpty)
-                    _terminalMarker(stops.first, isStart: true),
-                  if (stops.length > 1)
-                    _terminalMarker(stops.last, isStart: false),
-                ]),
+                // Yön okları + ara duraklar: YOĞUN katmanlar, harita DURUNCA
+                // çizilir (bkz. MapSettle). Jest boyunca her karede yüzlerce
+                // işaret kurmak ana iş parçacığını kilitliyordu.
+                ValueListenableBuilder<bool>(
+                  valueListenable: _settle,
+                  builder: (_, settled, __) => settled
+                      ? MarkerLayer(markers: [
+                          ..._directionArrows(),
+                          ..._buildStopMarkers(color, showLabels: showLabels),
+                        ])
+                      : const SizedBox.shrink(),
+                ),
+                // Başlangıç ve bitiş — hareket sırasında da görünür kalır
+                // (harita bomboş görünmesin; yalnızca iki işaret).
+                MarkerLayer(markers: _terminalMarkers()),
                 // Kullanıcının CANLI konumu — en üstte çizilir.
                 MarkerLayer(markers: [
                   if (ref.watch(liveLocationProvider).valueOrNull

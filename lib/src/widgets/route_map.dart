@@ -8,6 +8,7 @@ import '../engine/geo.dart' as geo;
 import '../services/routing_service.dart';
 import '../theme/app_theme.dart';
 import '../util/latlng_guard.dart';
+import '../util/map_settle.dart';
 import '../util/map_style.dart';
 import '../util/platform_check.dart';
 
@@ -104,6 +105,15 @@ class _RouteMapState extends State<RouteMap> {
   double _currentZoom = 13;
 
   List<Stop> get _stops => widget.line?.stops ?? const <Stop>[];
+
+  /// Harita hareket ederken yoğun katmanlar çizilmez (bkz. [MapSettle]).
+  final _settle = MapSettle();
+
+  @override
+  void dispose() {
+    _settle.dispose();
+    super.dispose();
+  }
 
   // Hat noktaları ve izdüşüm için kullanılan kopyaları ÖNBELLEKTE.
   //
@@ -280,6 +290,8 @@ class _RouteMapState extends State<RouteMap> {
               _fit();
             },
             onPositionChanged: (camera, hasGesture) {
+              // Jest sürerken yoğun katmanlar çizilmesin.
+              _settle.touch();
               // Kullanıcı haritayı ELLE oynattıysa takip kilidini bırak.
               if (hasGesture && _follow) {
                 WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -377,41 +389,42 @@ class _RouteMapState extends State<RouteMap> {
                   ],
                 ),
               ],
-            // Gidiş yönü okları — çizgiye bakınca hangi uçtan hangi uca
-            // gidildiği anlaşılmıyordu.
-            if (widget.interactive) MarkerLayer(markers: _directionArrows(drawPts)),
-            // Ara durak noktaları
-            MarkerLayer(
-              markers: [
-                for (final s in _stops)
-                  if ((s.lat != 0 || s.lon != 0) &&
-                      s.id != widget.boardingStopId &&
-                      s.id != widget.targetStopId)
-                    if (safeLatLng(s.lat, s.lon) case final sp?)
-                    Marker(
-                      point: sp,
-                      width: 14,
-                      height: 14,
-                      child: _StopDot(color: lineColor),
-                    ),
-              ],
+            // YOĞUN katmanlar (yön okları, ara duraklar, isim etiketleri):
+            // harita DURUNCA çizilir. Jest boyunca her karede yüzlerce işaret
+            // kurmak ana iş parçacığını kilitliyordu (bkz. MapSettle).
+            ValueListenableBuilder<bool>(
+              valueListenable: _settle,
+              builder: (_, settled, __) {
+                if (!settled) return const SizedBox.shrink();
+                return MarkerLayer(
+                  markers: [
+                    if (widget.interactive) ..._directionArrows(drawPts),
+                    for (final s in _stops)
+                      if ((s.lat != 0 || s.lon != 0) &&
+                          s.id != widget.boardingStopId &&
+                          s.id != widget.targetStopId)
+                        if (safeLatLng(s.lat, s.lon) case final sp?)
+                          Marker(
+                            point: sp,
+                            width: 14,
+                            height: 14,
+                            child: _StopDot(color: lineColor),
+                          ),
+                    if (_showLabels && widget.interactive)
+                      for (final s in _stops)
+                        if (s.lat != 0 || s.lon != 0)
+                          if (safeLatLng(s.lat, s.lon) case final sp?)
+                            Marker(
+                              point: sp,
+                              width: 130,
+                              height: 46,
+                              alignment: Alignment.topCenter,
+                              child: _StopLabel(name: s.name),
+                            ),
+                  ],
+                );
+              },
             ),
-            // Durak isim etiketleri (yakınlaşınca)
-            if (_showLabels && widget.interactive)
-              MarkerLayer(
-                markers: [
-                  for (final s in _stops)
-                    if (s.lat != 0 || s.lon != 0)
-                      if (safeLatLng(s.lat, s.lon) case final sp?)
-                      Marker(
-                        point: sp,
-                        width: 130,
-                        height: 46,
-                        alignment: Alignment.topCenter,
-                        child: _StopLabel(name: s.name),
-                      ),
-                ],
-              ),
             // Ana işaretler: biniş, iniş, konum
             MarkerLayer(
               markers: [

@@ -16,8 +16,8 @@ import '../theme/app_theme.dart';
 import '../util/haptics.dart';
 import '../util/insets.dart';
 import '../util/latlng_guard.dart';
+import '../util/map_settle.dart';
 import '../util/map_style.dart';
-import '../util/marker_cull.dart';
 import 'alarm_setup_screen.dart';
 import 'line_detail_screen.dart';
 import 'stop_lines_screen.dart';
@@ -76,6 +76,9 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
   /// daire ve turuncu nokta yeniden çizilir.
   final _probe = ValueNotifier<LatLng?>(null);
 
+  /// Harita hareket ederken durak işaretleri çizilmez (bkz. [MapSettle]).
+  final _settle = MapSettle();
+
   /// Arama yarıçapı (metre) — kullanıcı çipten değiştirir.
   double _radius = 500;
   static const _radiusOptions = [250.0, 500.0, 1000.0];
@@ -96,6 +99,7 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
   void dispose() {
     _debounce?.cancel();
     _probe.dispose();
+    _settle.dispose();
     super.dispose();
   }
 
@@ -535,6 +539,30 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
     return [...visible, sel];
   }
 
+  /// İşaretler ÖNBELLEKTE — kamera her karesinde yeniden kurulmaz.
+  ///
+  /// `MarkerLayer.build` jest boyunca her karede çalışır; işaret listesi orada
+  /// üretilirse yüzlerce durağın widget ağacı da her karede yeniden kurulur.
+  /// Profilde ölçülen %93'lük CPU payının kaynağı buydu.
+  ///
+  /// Anahtar üç şeyden oluşuyor: görünen durak listesi (yeniden yükleme yeni
+  /// bir liste ÖRNEĞİ üretir, kimlik karşılaştırması yeter), seçili durak ve
+  /// etiketlerin açık olup olmadığı. Üçü de kare başına değil, olay başına
+  /// değişir.
+  List<Marker> _markerCache = const [];
+  (List<MapStop>, String?, bool)? _markerCacheKey;
+
+  List<Marker> _buildMarkers(List<MapStop> visible) {
+    final key = (visible, _selected?.stop.id, _zoom >= _labelZoom);
+    if (_markerCacheKey == key) return _markerCache;
+    _markerCache = [
+      for (final m in _markerStops(visible))
+        if (_stopMarker(m) case final mk?) mk,
+    ];
+    _markerCacheKey = key;
+    return _markerCache;
+  }
+
   @override
   Widget build(BuildContext context) {
     // Akışı İZLE: her yeni konumda mavi nokta yeniden çizilsin.
@@ -588,6 +616,8 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
                     // Kaydırma SIRASINDA turuncu nokta anında taşınır; ağır
                     // durak sorgusu ise hareket durunca (debounce) yapılır.
                     onPositionChanged: (cam, __) {
+                      // Jest sürerken durak işaretleri çizilmesin.
+                      _settle.touch();
                       _updateProbeLive();
                       _scheduleReload();
                       // Etiket eşiği geçildiyse yeniden çiz (her karede değil).
@@ -652,17 +682,14 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
                       ]),
                     // Durak işaretleri (yalnızca görünen alandakiler). Seçili
                     // durak listede olmasa da (kaydırıldıysa) işaretli kalır.
-                    // Durak işaretleri GÖRÜNEN ALANA kırpılır: kamera her
-                    // karede değiştiği için 200 durağı (etiketleriyle) her
-                    // seferinde kurmak ana iş parçacığını kilitliyordu.
-                    Builder(builder: (context) {
-                      final b = MarkerCull.paddedBounds(MapCamera.of(context));
-                      return MarkerLayer(markers: [
-                        for (final m in _markerStops(stops))
-                          if (MarkerCull.visible(b, m.stop.lat, m.stop.lon))
-                            if (_stopMarker(m) case final mk?) mk,
-                      ]);
-                    }),
+                    // Liste hazır kurulmuş gelir — bkz. _buildMarkers.
+                    // YOĞUN katman: harita DURUNCA çizilir (MapSettle).
+                    ValueListenableBuilder<bool>(
+                      valueListenable: _settle,
+                      builder: (_, settled, __) => settled
+                          ? MarkerLayer(markers: _buildMarkers(stops))
+                          : const SizedBox.shrink(),
+                    ),
                     if (user != null && user.isUsable)
                       MarkerLayer(markers: [
                         Marker(
