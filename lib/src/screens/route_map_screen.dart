@@ -69,6 +69,7 @@ class _RouteMapScreenState extends ConsumerState<RouteMapScreen> {
   void initState() {
     super.initState();
     _line = widget.line;
+    _rebuildGeometry();
     _loadRoad();
   }
 
@@ -103,7 +104,7 @@ class _RouteMapScreenState extends ConsumerState<RouteMapScreen> {
         _line = line;
         _road = const [];
         _selected = null;
-        _arrowsRouteLen = -1;      // oklar yeni güzergâha göre yeniden çizilir
+        _rebuildGeometry();
       }
     });
     if (line != null) {
@@ -121,22 +122,41 @@ class _RouteMapScreenState extends ConsumerState<RouteMapScreen> {
     final pts = _stopPoints;
     if (pts.length < 2) return;
     final road = await RoutingService.instance.route(pts);
-    if (mounted && road.length >= 2) setState(() => _road = road);
+    if (mounted && road.length >= 2) {
+      setState(() {
+        _road = road;
+        _rebuildGeometry();
+      });
+    }
   }
 
-  List<Stop> get _stops =>
-      [
-        for (final s in _line.stops)
-          // Sonlu olmayan koordinat flutter_map'i her karede hataya
-          // düşürüyor (bkz. latlng_guard.dart) — kaynağında elenir.
-          if ((s.lat != 0 || s.lon != 0) && safeLatLng(s.lat, s.lon) != null) s,
-      ];
+  // Temizlenmiş veri ÖNBELLEKTE tutulur, getter'da hesaplanmaz.
+  //
+  // Bunlar build sırasında birden çok kez okunuyor ve build jest boyunca her
+  // karede çalışıyor. Getter içinde üretilince binlerce noktalı listeler
+  // saniyede yüzlerce kez yeniden ayrılıyordu; ANR izinde ana iş parçacığı
+  // malloc/free (scudo) içinde kilitli görülmüştü.
+  List<Stop> _stopsCache = const [];
+  List<LatLng> _stopPointsCache = const [];
+  List<LatLng> _drawRouteCache = const [];
 
-  List<LatLng> get _stopPoints =>
-      [for (final s in _stops) LatLng(s.lat, s.lon)];
+  List<Stop> get _stops => _stopsCache;
+  List<LatLng> get _stopPoints => _stopPointsCache;
+  List<LatLng> get _drawRoute => _drawRouteCache;
 
-  List<LatLng> get _drawRoute =>
-      onlyUsable(_road.length >= 2 ? _road : _stopPoints);
+  /// Hat ya da yol geometrisi değiştiğinde çağrılır.
+  void _rebuildGeometry() {
+    _stopsCache = [
+      for (final s in _line.stops)
+        // Sonlu olmayan koordinat flutter_map'i hataya düşürüyor
+        // (bkz. latlng_guard.dart) — kaynağında elenir.
+        if ((s.lat != 0 || s.lon != 0) && safeLatLng(s.lat, s.lon) != null) s,
+    ];
+    _stopPointsCache = [for (final s in _stopsCache) LatLng(s.lat, s.lon)];
+    _drawRouteCache =
+        onlyUsable(_road.length >= 2 ? _road : _stopPointsCache);
+    _arrowsRouteLen = -1;              // oklar yeniden hesaplansın
+  }
 
   void _fit() {
     final pts = _stopPoints;

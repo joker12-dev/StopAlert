@@ -86,6 +86,7 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen> {
   void initState() {
     super.initState();
     _line = widget.line;
+    _rebuildGeometry();
     _load();
     _loadRoad();
   }
@@ -95,7 +96,12 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen> {
     final pts = _routePoints;
     if (pts.length < 2) return;
     final road = await RoutingService.instance.route(pts);
-    if (mounted && road.length >= 2) setState(() => _road = road);
+    if (mounted && road.length >= 2) {
+      setState(() {
+        _road = road;
+        _rebuildGeometry();
+      });
+    }
   }
 
   Future<void> _load() async {
@@ -143,6 +149,7 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen> {
       _road = const [];
       _selected = null;
       _selectedStop = null;
+      _rebuildGeometry();
     });
     if (line != null) {
       _fit();
@@ -184,20 +191,30 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen> {
   /// Gösterilen varyant gidiş mi — hat id'si `bus:147_G` biçiminde.
   bool get _isGidisLine => _line.id.endsWith('_G');
 
-  List<Stop> get _stops =>
-      [
-        for (final s in _line.stops)
-          // Sonlu olmayan koordinat flutter_map'i her karede hataya
-          // düşürüyor (bkz. latlng_guard.dart) — kaynağında elenir.
-          if ((s.lat != 0 || s.lon != 0) && safeLatLng(s.lat, s.lon) != null) s,
-      ];
+  // Temizlenmiş veri ÖNBELLEKTE — getter'da hesaplanmaz. build jest boyunca
+  // her karede çalışıyor ve bu listeler binlerce nokta içerebiliyor; her
+  // erişimde yeniden üretmek ana iş parçacığını malloc/free'de kilitliyordu.
+  List<Stop> _stopsCache = const [];
+  List<LatLng> _routePointsCache = const [];
+  List<LatLng> _drawRouteCache = const [];
 
-  List<LatLng> get _routePoints =>
-      [for (final s in _stops) LatLng(s.lat, s.lon)];
+  List<Stop> get _stops => _stopsCache;
+  List<LatLng> get _routePoints => _routePointsCache;
 
   /// Çizilen güzergâh: OSRM varsa yollara oturmuş hali, yoksa düz çizgi.
-  List<LatLng> get _drawRoute =>
-      onlyUsable(_road.length >= 2 ? _road : _routePoints);
+  List<LatLng> get _drawRoute => _drawRouteCache;
+
+  /// Hat ya da yol geometrisi değiştiğinde çağrılır.
+  void _rebuildGeometry() {
+    _stopsCache = [
+      for (final s in _line.stops)
+        if ((s.lat != 0 || s.lon != 0) && safeLatLng(s.lat, s.lon) != null) s,
+    ];
+    _routePointsCache = [for (final s in _stopsCache) LatLng(s.lat, s.lon)];
+    _drawRouteCache =
+        onlyUsable(_road.length >= 2 ? _road : _routePointsCache);
+    _arrowsRouteLen = -1;
+  }
 
   void _fit() {
     final pts = onlyUsable([

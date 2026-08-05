@@ -71,6 +71,7 @@ class _RouteMapState extends State<RouteMap> {
   @override
   void initState() {
     super.initState();
+    _rebuildLinePoints();
     _loadRoad();
   }
 
@@ -86,7 +87,12 @@ class _RouteMapState extends State<RouteMap> {
     final pts = _linePoints;
     if (pts.length < 2) return;
     final road = await RoutingService.instance.route(pts);
-    if (mounted && road.length >= 2) setState(() => _road = road);
+    if (mounted && road.length >= 2) {
+      setState(() {
+        _road = road;
+        _geoRouteFor = -1;      // izdüşüm kopyası yenilensin
+      });
+    }
   }
 
   /// Durak isim etiketleri yalnızca yeterince yakınlaşınca gösterilir
@@ -99,10 +105,35 @@ class _RouteMapState extends State<RouteMap> {
 
   List<Stop> get _stops => widget.line?.stops ?? const <Stop>[];
 
-  List<LatLng> get _linePoints => [
-        for (final s in _stops)
-          if (s.lat != 0 || s.lon != 0) LatLng(s.lat, s.lon),
-      ];
+  // Hat noktaları ve izdüşüm için kullanılan kopyaları ÖNBELLEKTE.
+  //
+  // build jest boyunca her karede çalışıyor; bu listeleri her seferinde
+  // yeniden üretmek (uzun bir OSRM güzergâhında binlerce nokta) ana iş
+  // parçacığını malloc/free'de kilitliyordu.
+  List<LatLng> _linePointsCache = const [];
+  List<geo.LatLng> _geoRouteCache = const [];
+  int _geoRouteFor = -1;
+
+  List<LatLng> get _linePoints => _linePointsCache;
+
+  void _rebuildLinePoints() {
+    _linePointsCache = [
+      for (final s in _stops)
+        if (s.lat != 0 || s.lon != 0)
+          if (safeLatLng(s.lat, s.lon) != null) LatLng(s.lat, s.lon),
+    ];
+    _geoRouteFor = -1;
+  }
+
+  /// İzdüşüm için geo tipindeki kopya — yalnızca güzergâh değişince kurulur.
+  List<geo.LatLng> _geoRoute(List<LatLng> pts) {
+    if (_geoRouteFor == pts.length && _geoRouteCache.isNotEmpty) {
+      return _geoRouteCache;
+    }
+    _geoRouteCache = [for (final p in pts) geo.LatLng(p.latitude, p.longitude)];
+    _geoRouteFor = pts.length;
+    return _geoRouteCache;
+  }
 
   @override
   void didUpdateWidget(RouteMap old) {
@@ -111,6 +142,7 @@ class _RouteMapState extends State<RouteMap> {
     final locChanged = old.currentLocation != widget.currentLocation;
     if (lineChanged) {
       _road = const [];
+      _rebuildLinePoints();
       _loadRoad();
     }
     if (lineChanged || (widget.autoFit && locChanged)) {
@@ -459,7 +491,7 @@ class _RouteMapState extends State<RouteMap> {
   (List<LatLng>, List<LatLng>)? _progressSplit(List<LatLng> pts) {
     final loc = widget.currentLocation;
     if (!widget.showProgress || loc == null || pts.length < 2) return null;
-    final geoPts = [for (final p in pts) geo.LatLng(p.latitude, p.longitude)];
+    final geoPts = _geoRoute(pts);
     final proj = geo.projectOntoLine(
       geo.LatLng(loc.latitude, loc.longitude),
       geoPts,
