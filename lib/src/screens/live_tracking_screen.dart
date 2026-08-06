@@ -22,6 +22,7 @@ import '../theme/app_theme.dart';
 import '../util/haptics.dart';
 import '../util/platform_check.dart';
 import '../widgets/glass_panel.dart';
+import '../widgets/map_style_sheet.dart';
 import '../widgets/mascot.dart';
 import '../widgets/progress_ring.dart';
 import '../widgets/route_map.dart';
@@ -720,6 +721,11 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
       ));
   }
 
+  /// Harita görünümü seçici — ortak sayfa (widgets/map_style_sheet.dart).
+  Future<void> _pickMapStyle() async {
+    if (await pickMapStyle(context, ref) && mounted) setState(() {});
+  }
+
   /// Haritanın üstünde yüzen başlık bloğu.
   Widget _topOverlay(JourneyStatus? status) {
     final text = Theme.of(context).textTheme;
@@ -728,8 +734,18 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-      child: GlassPanel(
-        borderRadius: 22,
+      // OPAK: yarı saydam camda harita döşemeleri yazının arkasından
+      // görünüyor ve metin okunmuyordu. Hareket hâlindeki bir haritada
+      // okunabilirlik saydamlıktan önce gelir.
+      child: Container(
+        decoration: BoxDecoration(
+          color: VigilantColors.surfaceContainer,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+          boxShadow: const [
+            BoxShadow(color: Color(0x59000000), blurRadius: 18, spreadRadius: 1),
+          ],
+        ),
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -752,6 +768,11 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                     onTap: _toggleUndergroundSimulation,
                   ),
                 ],
+                _IconAction(
+                  tooltip: 'Harita görünümü',
+                  icon: Icons.layers_rounded,
+                  onTap: _pickMapStyle,
+                ),
                 // Sorun bildir — şimdilik yalnızca tasarım (bkz. _reportIssue).
                 _IconAction(
                   tooltip: 'Sorun bildir',
@@ -1051,6 +1072,11 @@ class _ProgressHero extends StatelessWidget {
   final int totalStops;
   final String distanceText;
 
+  // Harita artık TAM EKRAN: bu blok haritanın üstünde duruyor ve eski
+  // boyutlarıyla panelin yarısını yiyip durak listesine yer bırakmıyordu.
+  // Ölçüler okunaklılığı bozmadan sıkılaştırıldı.
+  static const _ringSize = 96.0;
+
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
@@ -1062,17 +1088,18 @@ class _ProgressHero extends StatelessWidget {
       children: [
         ProgressRing(
           progress: progress,
-          size: 128,
+          size: _ringSize,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
                 '$remaining',
-                style: text.headlineLarge?.copyWith(fontSize: 40, height: 1),
+                style: text.headlineMedium?.copyWith(fontSize: 30, height: 1),
               ),
               Text(
-                'DURAK KALDI',
+                'DURAK',
                 style: text.labelSmall?.copyWith(
+                  fontSize: 9,
                   color: VigilantColors.onSurfaceVariant,
                   letterSpacing: 1,
                 ),
@@ -1080,7 +1107,7 @@ class _ProgressHero extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(width: 16),
+        const SizedBox(width: 14),
         Expanded(
           child: Column(
             children: [
@@ -1091,7 +1118,7 @@ class _ProgressHero extends StatelessWidget {
                 value: status.state == JourneyState.arrived ? '0' : '$etaMin',
                 unit: 'dk',
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               _MiniStat(
                 icon: Icons.route_outlined,
                 iconColor: VigilantColors.tertiaryContainer,
@@ -1115,23 +1142,23 @@ class _ProgressHeroSkeleton extends StatelessWidget {
     return Row(
       children: [
         Container(
-          width: 128,
-          height: 128,
+          width: 96,
+          height: 96,
           decoration: const BoxDecoration(
             shape: BoxShape.circle,
             color: VigilantColors.surfaceContainerHigh,
           ),
           child: const Center(
-            child: SkeletonBox(width: 40, height: 34, radius: 8),
+            child: SkeletonBox(width: 34, height: 28, radius: 8),
           ),
         ),
-        const SizedBox(width: 16),
+        const SizedBox(width: 14),
         const Expanded(
           child: Column(
             children: [
-              SkeletonTile(height: 58),
-              SizedBox(height: 12),
-              SkeletonTile(height: 58),
+              SkeletonTile(height: 48),
+              SizedBox(height: 8),
+              SkeletonTile(height: 48),
             ],
           ),
         ),
@@ -1159,12 +1186,12 @@ class _MiniStat extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     return GlassPanel(
-      borderRadius: 18,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      borderRadius: 16,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: iconColor),
-          const SizedBox(width: 10),
+          Icon(icon, size: 16, color: iconColor),
+          const SizedBox(width: 9),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1185,7 +1212,7 @@ class _MiniStat extends StatelessWidget {
                   text: TextSpan(
                     text: value,
                     style:
-                        text.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
+                        text.titleLarge?.copyWith(fontWeight: FontWeight.w700),
                     children: [
                       if (unit.isNotEmpty)
                         TextSpan(
@@ -1314,7 +1341,7 @@ class _TimelineEntry extends StatelessWidget {
         caption: label,
         captionColor: VigilantColors.primary,
         name: name,
-        nameSize: 24,
+        nameSize: 20,
         note: note,
       ),
     );
@@ -1403,10 +1430,12 @@ class _TimelineEntry extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(width: 20),
+            const SizedBox(width: 16),
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.only(bottom: 28),
+                // 28 idi: harita tam ekran olunca panel kısaldı ve listede
+                // aynı anda yalnızca iki durak görünüyordu.
+                padding: const EdgeInsets.only(bottom: 18),
                 child: body,
               ),
             ),

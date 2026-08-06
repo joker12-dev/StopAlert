@@ -12,13 +12,13 @@ import '../services/routing_service.dart';
 import '../state/city_provider.dart';
 import '../state/journey_provider.dart';
 import '../state/live_location_provider.dart';
-import '../state/settings_provider.dart';
 import '../theme/app_theme.dart';
 import '../util/haptics.dart';
 import '../util/insets.dart';
 import '../util/latlng_guard.dart';
 import '../util/map_settle.dart';
 import '../util/map_style.dart';
+import '../widgets/map_style_sheet.dart';
 import 'alarm_setup_screen.dart';
 import 'line_detail_screen.dart';
 import 'stop_lines_screen.dart';
@@ -339,70 +339,9 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
     });
   }
 
-  /// Harita görünümünü seç (Gece / Canlı / Uydu / Sade) — seçim Ayarlar'a
-  /// kalıcı yazılır, tüm haritalarda geçerli olur.
+  /// Harita görünümü seçici — ortak sayfa (bkz. widgets/map_style_sheet.dart).
   Future<void> _pickMapStyle() async {
-    Haptics.light();
-    final chosen = await showModalBottomSheet<MapTileStyle>(
-      context: context,
-      backgroundColor: VigilantColors.surfaceContainer,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) {
-        final t = Theme.of(context).textTheme;
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: BoxDecoration(
-                      color: VigilantColors.surfaceVariant,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                Text('Harita Görünümü',
-                    style: t.headlineSmall?.copyWith(fontSize: 20)),
-                const SizedBox(height: 12),
-                for (final s in MapTileStyle.values)
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: Icon(
-                      switch (s) {
-                        MapTileStyle.gece => Icons.dark_mode_rounded,
-                        MapTileStyle.canli => Icons.palette_rounded,
-                        MapTileStyle.uydu => Icons.satellite_alt_rounded,
-                        MapTileStyle.sade => Icons.light_mode_rounded,
-                      },
-                      color: AppMapStyle.style == s
-                          ? VigilantColors.primary
-                          : VigilantColors.onSurfaceVariant,
-                    ),
-                    title: Text(s.label, style: t.bodyMedium),
-                    trailing: AppMapStyle.style == s
-                        ? const Icon(Icons.check_rounded,
-                            color: VigilantColors.primary)
-                        : null,
-                    onTap: () => Navigator.of(context).pop(s),
-                  ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-    if (chosen == null || !mounted) return;
-    Haptics.selection();
-    setState(() => AppMapStyle.style = chosen);
-    await ref.read(settingsProvider.notifier).setMapStyle(chosen.name);
+    if (await pickMapStyle(context, ref) && mounted) setState(() {});
   }
 
   void _setRadius(double r) {
