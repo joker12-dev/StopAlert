@@ -1,9 +1,9 @@
 {
-  "version": "20260802b",
-  "file": "kocaeli_20260802b.sqlite",
-  "bytes": 2662400,
-  "sha256": "2169df3c3eb644c27ab61813de5a06037cd1b0dd06934c6fc3bee52cccce3a1e",
+  "version": "20260806",
+  "file": "kocaeli_20260806.sqlite",
+  "bytes": 4206592,
+  "sha256": "ef51d27a2a9e0ee991dc75cc6715af267ea38f77a5748238a4c96a7080d69742",
   "lines": 720,
-  "stops": 8434,
+  "stops": 8445,
   "source": "Veri: Kocaeli Büyükşehir Belediyesi Açık Veri Portalı (CC BY)"
 }

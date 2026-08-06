@@ -437,9 +437,10 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
     final line = _line;
     if (line == null) return const SizedBox.shrink();
     final TransitCity lineCity = widget.city ?? ref.watch(activeCityProvider);
-    final show = lineCity.hasTimetable &&
-        (line.type == LineType.bus || line.type == LineType.metrobus);
-    if (!show) return const SizedBox.shrink();
+    // TÜR KISITI YOK: İstanbul'da servis yalnızca lastikli hatlar için anlamlı
+    // olsa da, Kocaeli'de saatler pakette duruyor ve tramvay/vapur için de
+    // var. Veri yoksa ekran zaten "saat bilgisi yok" diyor.
+    if (!lineCity.hasTimetable) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
       child: _ActionButton(
@@ -452,6 +453,7 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
             builder: (_) => TimetableScreen(
               lineCode: line.code,
               lineName: line.name,
+              city: lineCity,
               outboundLabel: _terminalLabel(_gidis?.name) ?? 'Gidiş',
               inboundLabel: _terminalLabel(_donus?.name) ?? 'Dönüş',
             ),

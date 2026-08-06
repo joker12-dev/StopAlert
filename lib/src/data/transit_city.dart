@@ -120,6 +120,8 @@ abstract final class TransitCities {
     centerLon: 29.9408,
     // Akıllı Şehir Kocaeli anlık yoğunluk servisi veriyor.
     hasTraffic: true,
+    // Kalkış saatleri PAKETE GÖMÜLÜ (belediyenin hat sayfasından derlenir).
+    hasTimetable: true,
   );
 
   static const all = [istanbul, kocaeli];

@@ -225,20 +225,82 @@ def _stop_row_re():
     return _STOP_ROW
 
 
-def site_directions(code):
-    """Hattın YETKİLİ sıralı durakları: [[(stop_id, ad, lat, lon), ...], ...].
+# Sefer saati satırı: sıra no | hafta içi | cumartesi | pazar (HH:MM)
+_TIME_ROW = None
 
-    Her yön ayrı bir tablo. Sayfa yoksa/tablo bulunamazsa boş liste döner ve
-    çağıran yedek yönteme (izdüşüm) düşer.
+
+def _time_row_re():
+    global _TIME_ROW
+    if _TIME_ROW is None:
+        import re
+        # Hücrelerde <span style=...> sarmalı olabiliyor; etiketler yutulur.
+        cell = r'<td[^>]*>\s*(?:<span[^>]*>)?\s*([0-2]?\d:[0-5]\d)?\s*(?:</span>)?\s*(?:</td>|<)'
+        _TIME_ROW = re.compile(
+            r'<tr[^>]*>\s*<td[^>]*>\s*(\d+)\s*</td>\s*' + cell + r'.*?'
+            + cell + r'.*?' + cell, re.S)
+    return _TIME_ROW
+
+
+# Kullanıcıya gösterilen gün tipi kodları (DayType ile aynı: I/C/P).
+_DAY_CODES = ('I', 'C', 'P')
+
+
+def site_timetables(html):
+    """SAATLER sekmesindeki kalkış saatleri: [ {gün: [saat, ...]}, ... ].
+
+    Yön başına bir sözlük; sıra DURAK tablolarıyla AYNIDIR (sayfadaki
+    soldan sağa düzen), yani indeks 0 = gidiş, 1 = dönüş.
+
+    Sayfada saat tablosu yoksa boş liste döner — Kocaeli'nin bazı hatlarında
+    (vapur, teleferik) bu bölüm bulunmuyor.
     """
     import re
+    start = html.find('id="tab3-1"')
+    if start < 0:
+        return []
+    end = html.find('id="tab3-2"', start)
+    seg = html[start:end if end > 0 else len(html)]
+    out = []
+    for table in re.findall(r'<table.*?</table>', seg, re.S):
+        # Saat tablosunun başlığında gün adları geçer; durak tablosu elenir.
+        if 'Hafta' not in table:
+            continue
+        by_day = {c: [] for c in _DAY_CODES}
+        for m in _time_row_re().finditer(table):
+            times = m.group(2), m.group(3), m.group(4)
+            for code, t in zip(_DAY_CODES, times):
+                if t:
+                    # "6:15" -> "06:15" (sıralama ve gösterim tek biçim olsun)
+                    hh, mm = t.split(':')
+                    by_day[code].append(f'{int(hh):02d}:{mm}')
+        if any(by_day.values()):
+            out.append(by_day)
+    return out
+
+
+def site_page(code):
+    """Hat sayfasını bir kez indirir; (duraklar, saatler) döndürür.
+
+    TEK İSTEK: eskiden yalnızca duraklar okunuyordu. Saatler için ikinci kez
+    indirmek 720 hat x 200 KB fazladan trafik ve siteye gereksiz yük olurdu.
+    """
     try:
         # Kod Türkçe harf içerebiliyor (115Ç, 41Ç). Kodlanmazsa istek düşüyor
         # ve hat sessizce geometri yedeğine kayıyordu.
         safe = urllib.parse.quote(code, safe='')
         html = fetch(f'{SITE}/{safe}/', timeout=45).decode('utf-8', 'replace')
     except Exception:
-        return []
+        return [], []
+    return _parse_directions(html), site_timetables(html)
+
+
+def _parse_directions(html):
+    """Hattın YETKİLİ sıralı durakları: [[(stop_id, ad, lat, lon), ...], ...].
+
+    Her yön ayrı bir tablo. Tablo bulunamazsa boş liste döner ve çağıran
+    yedek yönteme (izdüşüm) düşer.
+    """
+    import re
     import html as htmlmod
     out = []
     for table in re.findall(r'<table.*?</table>', html, re.S):
@@ -342,9 +404,13 @@ def build(version):
       CREATE TABLE line_stops(line_id TEXT, seq INTEGER, stop_id INTEGER,
                               seconds INTEGER);
       CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT);
+      -- Sefer saatleri: hat varyantı x gün tipi (I/C/P) x kalkış saati.
+      -- Kaynak belediyenin hat sayfasındaki SAATLER sekmesi.
+      CREATE TABLE departures(line_id TEXT, day TEXT, time TEXT);
+      CREATE INDEX idx_dep_line ON departures(line_id);
     ''')
 
-    line_rows, ls_rows = [], []
+    line_rows, ls_rows, dep_rows = [], [], []
     used_stops = {}
     seen_ids = set()
     from_site = from_shape = skipped = outliers = 0
@@ -430,6 +496,8 @@ def build(version):
             # koordinatı, başka hattın hatalı değeriyle eziliyordu.
             used_stops.setdefault(sid, (name, lat, lon))
             ls_rows.append((lid, k, sid, seconds[k]))
+        # Sefer saatlerini bu varyanta bağlayabilmek için kimliği döndür.
+        return lid
 
     for i, (code, variants) in enumerate(sorted(codes.items()), 1):
         route = route_by_id[variants[0][0]]
@@ -442,8 +510,8 @@ def build(version):
         speed = {'bus': 5.0, 'tram': 7.0, 'ferry': 8.0,
                  'funicular': 4.0, 'cableCar': 4.0}.get(ltype, 5.0)
 
-        # 1) YETKİLİ: belediyenin hat sayfası.
-        dirs = site_directions(code)
+        # 1) YETKİLİ: belediyenin hat sayfası (duraklar + sefer saatleri).
+        dirs, times = site_page(code)
         if dirs:
             for d, stops_seq in enumerate(dirs[:2]):
                 stops_seq = [canonical(*s) for s in stops_seq]
@@ -457,8 +525,13 @@ def build(version):
                     b = stops_seq[k]
                     dist = meters((a[2], a[3]), (b[2], b[3]))
                     secs.append(int(max(20, min(600, round(dist / speed)))))
-                add_line(code, 'G' if d == 0 else 'D', ltype, stops_seq, secs,
-                         color, operator)
+                lid = add_line(code, 'G' if d == 0 else 'D', ltype,
+                               stops_seq, secs, color, operator)
+                # Saat tablosu YÖN SIRASI durak tablolarıyla aynı.
+                if lid and d < len(times):
+                    for day, hours in times[d].items():
+                        for t in hours:
+                            dep_rows.append((lid, day, t))
             from_site += 1
             time.sleep(0.15)                       # siteye nazik ol
             continue
@@ -498,6 +571,8 @@ def build(version):
     db.executemany('INSERT OR IGNORE INTO lines VALUES(?,?,?,?,?,?,?,?,?)',
                    line_rows)
     db.executemany('INSERT INTO line_stops VALUES(?,?,?,?)', ls_rows)
+    db.executemany('INSERT INTO departures VALUES(?,?,?)', dep_rows)
+    print(f'  sefer saati: {len(dep_rows)} kalkış')
     db.executemany('INSERT OR IGNORE INTO stops VALUES(?,?,?,?,?,?,?)', [
         (sid, v[0], norm(v[0]), '', '', v[1], v[2])
         for sid, v in used_stops.items()

@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../data/timetable.dart';
+import '../data/transit_city.dart';
+import '../data/transit_db.dart';
 
 /// Hat sefer saatleri (İETT "Planlanan Sefer Saati" servisi).
 ///
@@ -24,13 +26,27 @@ class TimetableService {
 
   final Map<String, Timetable> _cache = {};
 
-  /// [lineCode] için takvim. Ağ yoksa ya da servis yanıt vermezse BOŞ takvim
-  /// döner — çağıran tarafta "saat bilgisi yok" olarak gösterilir.
-  Future<Timetable> forLine(String lineCode) async {
+  /// [lineCode] için takvim.
+  ///
+  /// İKİ KAYNAK VAR:
+  ///  - İstanbul: İETT'nin canlı servisi (veri çok, pakete sığmaz).
+  ///  - Kocaeli: kalkış saatleri PAKETE GÖMÜLÜ (belediyenin hat sayfasından
+  ///    derleme sırasında çıkarılıyor; eşdeğer bir servis yok).
+  ///
+  /// Ağ/veri yoksa BOŞ takvim döner — çağıran "saat bilgisi yok" gösterir.
+  Future<Timetable> forLine(String lineCode, {TransitCity? city}) async {
     final code = lineCode.trim();
     if (code.isEmpty) return Timetable(lineCode: code, departures: const []);
-    final hit = _cache[code];
+    final cacheKey = '${city?.id ?? ''}|$code';
+    final hit = _cache[cacheKey];
     if (hit != null) return hit;
+
+    // İETT servisi yalnızca İstanbul için. Ötekiler pakete bakar.
+    if (city != null && city.id != TransitCities.istanbul.id) {
+      final packaged = await _fromPackage(code, city);
+      _cache[cacheKey] = packaged;
+      return packaged;
+    }
 
     final body = '<GetPlanlananSeferSaati_json xmlns="http://tempuri.org/">'
         '<HatKodu>${_xmlEscape(code)}</HatKodu>'
@@ -65,11 +81,29 @@ class TimetableService {
         lineCode: code,
         departures: parseRows(list.cast<Map<String, dynamic>>()),
       );
-      _cache[code] = table;
+      _cache[cacheKey] = table;
       return table;
     } catch (_) {
       return Timetable(lineCode: code, departures: const []);
     }
+  }
+
+  /// İndirilen paketteki `departures` tablosundan takvim kurar.
+  static Future<Timetable> _fromPackage(String code, TransitCity city) async {
+    final rows =
+        await TransitDb.instance.departuresForCode(code, cityId: city.id);
+    final out = <Departure>[];
+    for (final (lineId, day, time) in rows) {
+      final d = DayType.fromCode(day);
+      if (d == null || !_timePattern.hasMatch(time)) continue;
+      out.add(Departure(
+        time: time,
+        dayType: d,
+        // Yön varyantı kimliğinde kodlu: "10_G" gidiş, "10_D" dönüş.
+        outbound: lineId.contains('_G'),
+      ));
+    }
+    return Timetable(lineCode: code, departures: out);
   }
 
   /// Servis satırlarını modele çevirir. Ayrı ve görünür: ayrıştırma

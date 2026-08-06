@@ -173,6 +173,39 @@ class TransitDb {
     return [for (final r in rows) _brief(r)];
   }
 
+  /// Bir hattın PAKETTE GÖMÜLÜ sefer saatleri: (yön varyantı id'si, gün, saat).
+  ///
+  /// Kocaeli'de kalkış saatleri belediyenin hat sayfasından derleme sırasında
+  /// çıkarılıp pakete yazılıyor (bkz. tools/kocaeli/build_kocaeli.py); İETT
+  /// gibi çalışan bir servis yok. Tablo bulunmayan (eski) paketlerde boş
+  /// döner — çağıran "saat bilgisi yok" gösterir.
+  Future<List<(String lineId, String day, String time)>> departuresForCode(
+    String code, {
+    String? cityId,
+  }) async {
+    final db = cityId == null ? _db : _aux[cityId];
+    if (db == null) return const [];
+    try {
+      final rows = await db.rawQuery(
+        'SELECT d.line_id AS line_id, d.day AS day, d.time AS time '
+        'FROM departures d JOIN lines l ON l.id = d.line_id '
+        'WHERE l.code = ? ORDER BY d.time',
+        [code],
+      );
+      return [
+        for (final r in rows)
+          (
+            kBusPrefix + (r['line_id'] as String),
+            r['day'] as String? ?? '',
+            r['time'] as String? ?? '',
+          ),
+      ];
+    } catch (_) {
+      // `departures` tablosu yok: paket bu özellikten önce indirilmiş.
+      return const [];
+    }
+  }
+
   /// Bir hat NO'suna (ör. "MK13") ait tüm varyantlar — hat detay sayfası
   /// gidiş/dönüş ayrımını buradan kurar. Durak sayısına göre azalan.
   Future<List<LineVariant>> directionsForCode(String code,
