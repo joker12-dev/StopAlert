@@ -26,8 +26,13 @@ class CloudLearningService {
   CollectionReference<Map<String, dynamic>> get _col =>
       _db.collection('segment_stats');
 
-  static String _docId(String lineId, String fromId, String toId) =>
-      SegmentLearner.keyFor(lineId, fromId, toId).replaceAll('/', '_');
+  /// Belge kimliği segment + ZAMAN KOVASI. Kova ayrı belge olmalı: akşam
+  /// zirvesindeki bir ölçüyü gece ölçüsüyle aynı ortalamaya katmak, ikisini
+  /// de yanlış yapar (bkz. TimeBucket).
+  static String _docId(
+          String lineId, String fromId, String toId, String bucket) =>
+      '${SegmentLearner.keyFor(lineId, fromId, toId).replaceAll('/', '_')}'
+      '|$bucket';
 
   /// Rıza varsa kuyruğu gönderir; rıza yoksa kuyruğu sessizce temizler.
   Future<void> flushQueue({required bool consent}) async {
@@ -39,18 +44,26 @@ class CloudLearningService {
       if (_auth.currentUser == null) return; // anonim oturum henüz yok — sonra
       final obs = await SegmentLearningStore.drainCloudQueue();
       if (obs.isEmpty) return;
-      // Aynı segmenti tek yazımda topla.
+      // Aynı segment + aynı kovayı tek yazımda topla.
       final grouped = <String,
-          ({String lineId, String fromId, String toId, double sum, int n})>{};
+          ({
+        String lineId,
+        String fromId,
+        String toId,
+        String bucket,
+        double sum,
+        int n
+      })>{};
       for (final o in obs) {
         if (o.fromId.isEmpty || o.toId.isEmpty) continue;
-        final id = _docId(o.lineId, o.fromId, o.toId);
+        final id = _docId(o.lineId, o.fromId, o.toId, o.bucketCode);
         final g = grouped[id];
         grouped[id] = g == null
             ? (
                 lineId: o.lineId,
                 fromId: o.fromId,
                 toId: o.toId,
+                bucket: o.bucketCode,
                 sum: o.seconds,
                 n: 1
               )
@@ -58,6 +71,7 @@ class CloudLearningService {
                 lineId: g.lineId,
                 fromId: g.fromId,
                 toId: g.toId,
+                bucket: g.bucket,
                 sum: g.sum + o.seconds,
                 n: g.n + 1
               );
@@ -71,6 +85,7 @@ class CloudLearningService {
             'lineId': g.lineId,
             'fromId': g.fromId,
             'toId': g.toId,
+            'bucket': g.bucket,
             'sumSeconds': FieldValue.increment(g.sum),
             'count': FieldValue.increment(g.n),
             'updatedAt': FieldValue.serverTimestamp(),
@@ -99,10 +114,14 @@ class CloudLearningService {
         final to = d['toId'] as String? ?? '';
         final count = (d['count'] as num?)?.toInt() ?? 0;
         final sum = (d['sumSeconds'] as num?)?.toDouble() ?? 0;
+        // Kovasız belge = şema yükseltmesinden önceki kayıt; atılmaz,
+        // "zamanı bilinmiyor" kovasına tohumlanır.
+        final bucket = (d['bucket'] as String?) ?? kUnknownBucket;
         if (from.isEmpty || to.isEmpty || count <= 0) continue;
-        final before = learner.learnedSegmentCount;
-        learner.seedIfAbsent(line.id, from, to, sum / count, count);
-        if (learner.learnedSegmentCount != before) changed = true;
+        final before = learner.learnedBucketCount;
+        learner.seedIfAbsent(line.id, from, to, sum / count, count,
+            bucketCode: bucket);
+        if (learner.learnedBucketCount != before) changed = true;
       }
       if (changed) await SegmentLearningStore.save(learner);
     } catch (e) {

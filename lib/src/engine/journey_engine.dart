@@ -1,6 +1,7 @@
 import '../data/models.dart';
 import 'geo.dart';
 import 'segment_learner.dart';
+import 'time_bucket.dart';
 
 /// Yolculuğun anlık durumu (PLAN.md durum makinesi).
 enum JourneyState {
@@ -65,7 +66,9 @@ class JourneyEngine {
     this.arriveRadiusMeters = 120,
     this.armRadiusMeters = 250,
     SegmentLearner? learner,
+    DateTime? startedAt,
   }) {
+    _startedAt = startedAt ?? DateTime.now();
     _lineId = line.id;
     final a = line.indexOfStop(boardingStopId);
     final b = line.indexOfStop(targetStopId);
@@ -94,7 +97,10 @@ class JourneyEngine {
     }
     _segmentSeconds = [
       for (var i = 0; i < base.length; i++)
-        learner?.learnedSeconds(_lineId, _stopIds[i], _stopIds[i + 1]) ??
+        // Süreler ZAMANA KOŞULLU okunur: aynı segment akşam zirvesinde
+        // gecenin iki katı sürüyor (bkz. TimeBucket).
+        learner?.learnedSeconds(_lineId, _stopIds[i], _stopIds[i + 1],
+                bucket: TimeBucket.of(_startedAt)) ??
             base[i],
     ];
 
@@ -113,6 +119,10 @@ class JourneyEngine {
 
   final int alarmStopsThreshold;
   final double alarmDistanceMeters;
+
+  /// Yolculuğun BAŞLADIĞI an — segment sürelerinin hangi zaman kovasından
+  /// okunacağını ve gözlemlerin hangi kovaya yazılacağını belirler.
+  late final DateTime _startedAt;
   final double arriveRadiusMeters;
 
   /// Hatta "binmiş" sayılmak için gereken azami hattan sapma (metre).
@@ -170,6 +180,11 @@ class JourneyEngine {
         fromId: _stopIds[i],
         toId: _stopIds[i + 1],
         seconds: seconds,
+        // Segmentin GEÇİLDİĞİ an: yolculuk başlangıcı + o ana kadar
+        // geçen süre. Uzun bir yolculuk bant sınırını aşabildiği için
+        // başlangıç kovası değil, segmentin kendi anı kullanılır.
+        bucketCode:
+            TimeBucket.of(_startedAt.add(Duration(seconds: from))).code,
       ));
     }
     return out;

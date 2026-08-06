@@ -5,6 +5,7 @@ import '../data/transit_city.dart';
 import '../services/account_service.dart';
 import '../services/auth_service.dart';
 import '../services/bus_data_service.dart';
+import '../services/prediction_log.dart';
 import '../services/segment_learning_store.dart';
 import '../state/city_provider.dart';
 import '../state/journey_provider.dart';
@@ -688,6 +689,8 @@ class _LearningSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final text = Theme.of(context).textTheme;
     final count = ref.watch(learnedSegmentCountProvider).valueOrNull ?? 0;
+    final accuracy = ref.watch(predictionAccuracyProvider).valueOrNull ??
+        PredictionAccuracy.empty;
     final settings =
         ref.watch(settingsProvider).valueOrNull ?? const AppSettings();
     return Padding(
@@ -744,6 +747,57 @@ class _LearningSection extends ConsumerWidget {
                               'Her yolculukta gerçek durak süreleri öğrenilir; '
                               'yeraltında (sinyal yok) tahmin böylece iyileşir. '
                               'Veriler cihazında kalır.',
+                              style: text.labelMedium?.copyWith(
+                                color: VigilantColors.onSurfaceVariant,
+                                height: 1.35,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Divider(height: 1, color: Colors.white.withValues(alpha: 0.05)),
+                // TAHMİN DOĞRULUĞU: kendi hatamızı ölçmeden "iyileşiyor"
+                // demek boş bir iddia olurdu. Sayı kullanıcının kendi
+                // yolculuklarından çıkar ve cihazında kalır.
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: VigilantColors.tertiaryContainer
+                              .withValues(alpha: 0.15),
+                        ),
+                        child: const Icon(Icons.rule_rounded,
+                            color: VigilantColors.tertiaryContainer),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              accuracy.samples == 0
+                                  ? 'Tahmin doğruluğu ölçülmedi'
+                                  : 'Tahmin sapması ortalama '
+                                      '${(accuracy.meanAbsErrorSeconds / 60).toStringAsFixed(1)} dk',
+                              style: text.bodyMedium
+                                  ?.copyWith(fontWeight: FontWeight.w600),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              accuracy.samples == 0
+                                  ? 'Birkaç yolculuk tamamlayınca tahminlerin '
+                                      'ne kadar tuttuğu burada görünecek.'
+                                  : '${accuracy.samples} yolculuk ölçüldü · '
+                                      '${accuracy.meanBiasSeconds >= 0 ? "tahminler kısa kalıyor" : "tahminler uzun kalıyor"} '
+                                      '(${(accuracy.meanBiasSeconds.abs() / 60).toStringAsFixed(1)} dk)',
                               style: text.labelMedium?.copyWith(
                                 color: VigilantColors.onSurfaceVariant,
                                 height: 1.35,

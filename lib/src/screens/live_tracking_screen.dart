@@ -11,9 +11,11 @@ import '../data/journey_record.dart';
 import '../data/models.dart';
 import '../engine/geo.dart' as geo;
 import '../engine/journey_engine.dart';
+import '../engine/time_bucket.dart';
 import '../services/alarm_notifications.dart';
 import '../services/live_activity_service.dart';
 import '../services/location_service.dart';
+import '../services/prediction_log.dart';
 import '../services/segment_learning_store.dart';
 import '../services/telemetry.dart';
 import '../services/tracking_service.dart';
@@ -88,6 +90,12 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
 
   /// Varış İndin sayfasına yalnızca bir kez geçilir.
   bool _arrivedHandled = false;
+
+  /// Yolculuk BAŞLARKEN motorun verdiği kalan süre (saniye).
+  ///
+  /// Varışta gerçekleşen süreyle karşılaştırılıp deftere yazılır
+  /// ([PredictionLog]): doğruluk ölçülmeden iyileştirilemez.
+  int? _firstEtaSeconds;
 
   /// "Yaklaşma" alarmı durduruldu ama daha varılmadı: takip sürüyor.
   bool _alarmAcknowledged = false;
@@ -197,7 +205,10 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
       );
     });
     final s = _status;
-    if (s != null) _syncLiveActivity(s);
+    if (s != null) {
+      _captureFirstEta(s);
+      _syncLiveActivity(s);
+    }
     if (update.alarmActive && !_alarmed) {
       _alarmed = true;
       _openAlarmScreen();
@@ -298,12 +309,43 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
       }
       // Öğrenilen sayı rozetini tazele (Ayarlar → Öğrenme).
       ref.invalidate(learnedSegmentCountProvider);
+      _logPredictionAccuracy();
       _stopTracking();
       if (_serviceMode) unawaited(TrackingController.stop());
     } catch (_) {
       // Yut: aşağıdaki geçiş her hâlükârda yapılmalı.
     }
     _goToArrival();
+  }
+
+  /// İlk ANLAMLI tahmini bir kez sakla.
+  ///
+  /// BEKLEMEDE durumu sayılmaz: kullanıcı henüz hatta binmemiştir, o
+  /// andaki süre yolculuğun değil binişe yürümenin tahminidir.
+  void _captureFirstEta(JourneyStatus s) {
+    if (_firstEtaSeconds != null) return;
+    if (s.state == JourneyState.waiting || s.state == JourneyState.idle) {
+      return;
+    }
+    if (s.etaSeconds <= 0) return;
+    _firstEtaSeconds = s.etaSeconds;
+  }
+
+  /// Tahmin ↔ gerçek karşılaştırmasını deftere yaz.
+  ///
+  /// Simülasyonda YAZILMAZ: sanal saatle koşan bir yolculuk gerçek
+  /// doğruluk hakkında hiçbir şey söylemez, defteri kirletir.
+  void _logPredictionAccuracy() {
+    if (_simulating) return;
+    final predicted = _firstEtaSeconds;
+    if (predicted == null) return;
+    unawaited(PredictionLog.record(PredictionRecord(
+      lineCode: _lineLabel,
+      bucketCode: TimeBucket.of(_start).code,
+      predictedSeconds: predicted,
+      actualSeconds: _elapsedSec,
+      at: DateTime.now(),
+    )));
   }
 
   /// Yeraltı (sinyal yok) testi: GPS'i keser, zaman sayacıyla hızlandırılmış
@@ -331,6 +373,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
         return;
       }
       setState(() => _status = status);
+      _captureFirstEta(status);
       if (!_alarmed && status.state == JourneyState.approaching) {
         _alarmed = true;
         _fireAlarmInApp();

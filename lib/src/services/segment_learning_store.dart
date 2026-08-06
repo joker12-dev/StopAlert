@@ -40,7 +40,8 @@ abstract final class SegmentLearningStore {
     if (list.isEmpty) return;
     final learner = await load();
     for (final o in list) {
-      learner.observe(o.lineId, o.fromId, o.toId, o.seconds);
+      learner.observe(o.lineId, o.fromId, o.toId, o.seconds,
+          bucketCode: o.bucketCode);
     }
     await save(learner);
     await _enqueueForCloud(list);
@@ -63,6 +64,7 @@ abstract final class SegmentLearningStore {
         'fromId': o.fromId,
         'toId': o.toId,
         's': o.seconds,
+        'b': o.bucketCode,
       });
     }
     // Kuyruğu makul bir sınırda tut (en yeni 500 gözlem).
@@ -85,6 +87,8 @@ abstract final class SegmentLearningStore {
             fromId: e['fromId'] as String,
             toId: e['toId'] as String,
             seconds: (e['s'] as num).toDouble(),
+            // Eski kuyruk girdilerinde kova yok: bilinmiyor sayılır.
+            bucketCode: (e['b'] as String?) ?? kUnknownBucket,
           ),
       ];
     } catch (_) {
