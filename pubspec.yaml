@@ -31,6 +31,7 @@ dependencies:
   sqflite: ^2.4.1
   speech_to_text: ^7.4.0
   home_widget: ^0.9.3
+  in_app_review: ^2.0.12
 
 dev_dependencies:
   flutter_test:

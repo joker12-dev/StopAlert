@@ -36,6 +36,8 @@ void main() {
     batch.insert('line_stops', {'line_id': 'L1', 'seq': 0, 'stop_id': 1, 'seconds': 0});
     batch.insert('line_stops', {'line_id': 'L1', 'seq': 1, 'stop_id': 3, 'seconds': 120});
     batch.insert('line_stops', {'line_id': 'L1', 'seq': 2, 'stop_id': 2, 'seconds': 150});
+    // Özel halk otobüsü: kodu TİRELİ yazılıyor (gerçek İETT verisindeki gibi).
+    batch.insert('lines', {'id': 'L3', 'code': 'E-58', 'name': 'MECİDİYEKÖY METROBÜS - ESENKENT', 'name_norm': transitNorm('MECİDİYEKÖY METROBÜS - ESENKENT'), 'dir': 'G', 'depar': 0, 'type': 'bus'});
     batch.insert('meta', {'key': 'version', 'value': '20260728'});
     await batch.commit(noResult: true);
     await db.close();
@@ -73,6 +75,21 @@ void main() {
     expect(r, hasLength(1));
     expect(r.first.name, 'KADIKÖY');
     expect(r.first.direction, 'ÜSKÜDAR');
+  });
+
+  test('searchLines tireli kodu tiresiz aramayla bulur (E58 -> E-58)', () async {
+    // Özel halk otobüslerinin kodu tireli ("E-58") ama kullanıcı tireyi
+    // yazmıyor; eskiden hiçbir sonuç dönmüyordu ve bu hatlar yok sanılıyordu.
+    final tiresiz = await TransitDb.instance.searchLines('E58');
+    expect(tiresiz.map((l) => l.code), contains('E-58'));
+
+    // Tireli yazım da çalışmaya devam etmeli.
+    final tireli = await TransitDb.instance.searchLines('E-58');
+    expect(tireli.map((l) => l.code), contains('E-58'));
+
+    // Boşluklu yazım da aynı hatta düşer.
+    final bosluklu = await TransitDb.instance.searchLines('e 58');
+    expect(bosluklu.map((l) => l.code), contains('E-58'));
   });
 
   test('searchLines kod başına TEK sonuç döner (İETT gibi)', () async {

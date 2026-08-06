@@ -24,6 +24,14 @@ String transitNorm(String s) {
   return b.toString().toLowerCase();
 }
 
+/// Hat kodunu ayraçlardan arındırır: "E-58" ve "E 58" → "e58".
+///
+/// Kod yazımı kaynağa göre değişiyor (İETT özel halk otobüsleri tireli),
+/// kullanıcı ise tireyi yazmıyor. Arama iki tarafı da buradan geçirir.
+String compactLineCode(String s) => _compactCode(transitNorm(s));
+
+String _compactCode(String norm) => norm.replaceAll(RegExp(r'[\s\-_.]'), '');
+
 /// İndirilen İETT SQLite veritabanına salt-okunur erişim (yakın durak, arama,
 /// rota). DB yoksa/açık değilse tüm sorgular boş döner (ray/vapur ile devam).
 ///
@@ -145,15 +153,22 @@ class TransitDb {
     final q = query.trim();
     if (db == null || q.isEmpty) return const [];
     final n = transitNorm(q);
+    // TİRE/BOŞLUK YOK SAYILIR. İETT özel halk otobüslerinin kodu tireli
+    // yazılıyor ("E-58", "E-59"); kullanıcı doğal olarak "E58" arıyor ve
+    // hiçbir sonuç göremiyordu. Karşılaştırma iki tarafta da sadeleştirilmiş
+    // kod üzerinden yapılır. (`lines` yalnızca birkaç bin satır; indekssiz
+    // REPLACE taraması ölçülebilir bir gecikme yaratmıyor.)
+    final compact = _compactCode(n);
     // Hat NO başına TEK sonuç (İETT gibi: "MK13" tek çıkar; gidiş/dönüş
     // varyantları hat detay sayfasında). Temsili: kodun bir varyantı.
     final rows = await db.rawQuery(
       // `*`: eski sürüm bir DB'de `color`/`operator` sütunları bulunmayabilir;
       // tek tek saymak o durumda SQL hatası verirdi.
       'SELECT * FROM lines '
-      'WHERE code LIKE ? OR name_norm LIKE ? '
+      "WHERE REPLACE(REPLACE(code, '-', ''), ' ', '') LIKE ? "
+      'OR code LIKE ? OR name_norm LIKE ? '
       'GROUP BY code ORDER BY LENGTH(code), code LIMIT ?',
-      ['$n%', '%$n%', limit],
+      ['$compact%', '$n%', '%$n%', limit],
     );
     return [for (final r in rows) _brief(r)];
   }

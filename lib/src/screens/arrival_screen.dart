@@ -1,14 +1,18 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/favorite_route.dart';
 import '../data/journey_record.dart';
 import '../services/ad_service.dart';
+import '../services/app_review_service.dart';
 import '../state/journey_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/confetti_overlay.dart';
 import '../widgets/glass_panel.dart';
 import '../widgets/mascot.dart';
+import '../widgets/review_prompt.dart';
 
 /// "İndin" ekranı — varış özeti + yolculuğu Firestore'a kaydeder.
 ///
@@ -39,6 +43,9 @@ class _ArrivalScreenState extends ConsumerState<ArrivalScreen> {
       await ref.read(journeyRepositoryProvider).save(widget.record);
       if (mounted) setState(() => _saved = true);
     });
+    // Puan istemini SIRAYA AL — burada göstermeyiz. Kullanıcı henüz varış
+    // özetine bakıyor; istem ana sayfaya döndüğünde çıkar.
+    unawaited(AppReviewService.onJourneyCompleted());
   }
 
   String get _durationText {
@@ -249,7 +256,19 @@ class _ArrivalScreenState extends ConsumerState<ArrivalScreen> {
                     // TAMAMEN dışında, ana sayfaya dönerken.
                     final navigator = Navigator.of(context);
                     await AdService.instance.maybeShowInterstitial();
-                    if (mounted) navigator.popUntil((r) => r.isFirst);
+                    if (!mounted) return;
+                    navigator.popUntil((r) => r.isFirst);
+                    // Ana sayfaya DÖNDÜKTEN sonra puan istemi (ilk yolculuk).
+                    // Sıra önemli: varış ekranının üstünde sorulursa kullanıcı
+                    // özetini göremeden diyalogla karşılaşır.
+                    if (!await AppReviewService.consumePending()) return;
+                    if (!navigator.mounted) return;
+                    // Ana sayfa bir kare çizilsin, istem üstüne binmesin.
+                    await Future<void>.delayed(
+                        const Duration(milliseconds: 450));
+                    if (navigator.mounted) {
+                      await showReviewPrompt(navigator.context);
+                    }
                   },
                   child: Text(_saved ? 'Ana Sayfaya Dön' : 'Kaydediliyor…'),
                 ),

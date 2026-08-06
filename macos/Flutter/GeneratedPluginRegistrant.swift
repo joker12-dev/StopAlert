@@ -13,10 +13,12 @@ import firebase_crashlytics
 import flutter_app_group_directory
 import flutter_local_notifications
 import geolocator_apple
+import in_app_review
 import package_info_plus
 import shared_preferences_foundation
 import speech_to_text
 import sqflite_darwin
+import url_launcher_macos
 import webview_flutter_wkwebview
 
 func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {
@@ -28,9 +30,11 @@ func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {
   FlutterAppGroupDirectoryPlugin.register(with: registry.registrar(forPlugin: "FlutterAppGroupDirectoryPlugin"))
   FlutterLocalNotificationsPlugin.register(with: registry.registrar(forPlugin: "FlutterLocalNotificationsPlugin"))
   GeolocatorPlugin.register(with: registry.registrar(forPlugin: "GeolocatorPlugin"))
+  InAppReviewPlugin.register(with: registry.registrar(forPlugin: "InAppReviewPlugin"))
   FPPPackageInfoPlusPlugin.register(with: registry.registrar(forPlugin: "FPPPackageInfoPlusPlugin"))
   SharedPreferencesPlugin.register(with: registry.registrar(forPlugin: "SharedPreferencesPlugin"))
   SpeechToTextPlugin.register(with: registry.registrar(forPlugin: "SpeechToTextPlugin"))
   SqflitePlugin.register(with: registry.registrar(forPlugin: "SqflitePlugin"))
+  UrlLauncherPlugin.register(with: registry.registrar(forPlugin: "UrlLauncherPlugin"))
   WebViewFlutterPlugin.register(with: registry.registrar(forPlugin: "WebViewFlutterPlugin"))
 }

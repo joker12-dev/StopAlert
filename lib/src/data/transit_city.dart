@@ -22,6 +22,7 @@ class TransitCity {
     this.hasLiveBus = false,
     this.hasTraffic = false,
     this.hasAnnouncements = false,
+    this.hasTimetable = false,
   });
 
   /// Dosya/kayıt anahtarı (`bus_istanbul.sqlite`, manifest yolu…).
@@ -56,6 +57,13 @@ class TransitCity {
 
   /// Hat duyurusu beslemesi var mı (İETT sefer iptali/duyuru servisi).
   final bool hasAnnouncements;
+
+  /// Planlanan sefer saati (kalkış takvimi) servisi var mı.
+  ///
+  /// İETT "PlanlananSeferSaati" servisini açık veriyor. Kocaeli'nin GTFS
+  /// paketinde `stop_times` yok ve portalda eşdeğer bir uç bulunmuyor —
+  /// olmayan veriyi düğme yapmak ölü dokunuş olurdu.
+  final bool hasTimetable;
 
   bool contains(double lat, double lon) =>
       lat >= minLat && lat <= maxLat && lon >= minLon && lon <= maxLon;
@@ -92,6 +100,7 @@ abstract final class TransitCities {
     hasLiveBus: true,
     hasTraffic: true,
     hasAnnouncements: true,
+    hasTimetable: true,
   );
 
   static const kocaeli = TransitCity(

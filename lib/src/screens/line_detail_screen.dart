@@ -16,6 +16,7 @@ import '../widgets/skeleton.dart';
 import 'alarm_setup_screen.dart';
 import 'live_bus_screen.dart';
 import 'route_map_screen.dart';
+import 'timetable_screen.dart';
 
 /// Tek otobüs hattı sayfası (İETT tarzı): "MK13" → NORMAL gidiş/dönüş +
 /// ayrı DEPAR güzergâhları. Kullanıcı güzergâhı/yönü seçer, ineceği durağa
@@ -193,6 +194,7 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
           children: [
             _header(text),
             _actions(text),
+            _timetableAction(text),
             const SizedBox(height: 12),
             // Kaydırılabilir üst alan (yön seçimi + depar); durak listesi ayrı.
             Flexible(
@@ -413,6 +415,46 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
         ],
       ),
     );
+  }
+
+  /// Sefer saatleri kısayolu — yalnızca kalkış takvimi servisi olan şehirde
+  /// ve yalnızca lastikli hatlarda (İETT bu servisi metro/vapur için vermiyor).
+  Widget _timetableAction(TextTheme text) {
+    final line = _line;
+    if (line == null) return const SizedBox.shrink();
+    final TransitCity lineCity = widget.city ?? ref.watch(activeCityProvider);
+    final show = lineCity.hasTimetable &&
+        (line.type == LineType.bus || line.type == LineType.metrobus);
+    if (!show) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+      child: _ActionButton(
+        icon: Icons.schedule_rounded,
+        label: 'Sefer saatleri',
+        filled: false,
+        onTap: () {
+          Haptics.light();
+          Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => TimetableScreen(
+              lineCode: line.code,
+              lineName: line.name,
+              outboundLabel: _terminalLabel(_gidis?.name) ?? 'Gidiş',
+              inboundLabel: _terminalLabel(_donus?.name) ?? 'Dönüş',
+            ),
+          ));
+        },
+      ),
+    );
+  }
+
+  /// "A - B" biçimindeki varyant adından VARIŞ ucunu alır: sekme etiketine
+  /// tam ad sığmıyor, kullanıcıya asıl gereken nereye gittiği.
+  static String? _terminalLabel(String? variantName) {
+    final n = variantName?.trim();
+    if (n == null || n.isEmpty) return null;
+    final i = n.lastIndexOf(' - ');
+    final label = i < 0 ? n : n.substring(i + 3).trim();
+    return label.isEmpty ? null : label;
   }
 
   Widget _deparSection(TextTheme text) {

@@ -16,6 +16,7 @@ import '../widgets/mascot.dart';
 import '../widgets/skeleton.dart';
 import '../widgets/voice_search_sheet.dart';
 import 'alarm_setup_screen.dart';
+import 'recent_searches_screen.dart';
 import 'line_detail_screen.dart';
 import 'stop_lines_screen.dart';
 
@@ -420,6 +421,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   }
 }
 
+/// Arama girişinde gösterilen son arama sayısı.
+const _recentPreviewCount = 3;
+
 class _SuggestionsView extends ConsumerWidget {
   const _SuggestionsView({required this.onStopTap, required this.onRecentTap});
 
@@ -441,7 +445,33 @@ class _SuggestionsView extends ConsumerWidget {
     return ListView(
       padding: EdgeInsets.fromLTRB(20, 0, 20, AppInsets.listBottom(context)),
       children: [
-        const _SectionLabel(icon: Icons.history, label: 'SON ARAMALAR'),
+        // Listede yalnızca EN SON 3 kayıt durur: bu bölüm arama ekranının
+        // girişi, arşivi değil. Tamamı "Tümünü gör" ile ayrı sayfada.
+        _SectionLabel(
+          icon: Icons.history,
+          label: 'SON ARAMALAR',
+          trailing: recents.length > _recentPreviewCount
+              ? TextButton(
+                  onPressed: () {
+                    Haptics.light();
+                    Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) =>
+                          RecentSearchesScreen(onOpen: onRecentTap),
+                    ));
+                  },
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    minimumSize: const Size(0, 32),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: Text(
+                    'Tümünü gör',
+                    style: text.labelMedium
+                        ?.copyWith(color: VigilantColors.primary),
+                  ),
+                )
+              : null,
+        ),
         const SizedBox(height: 12),
         if (recents.isEmpty)
           Text(
@@ -450,7 +480,9 @@ class _SuggestionsView extends ConsumerWidget {
                 ?.copyWith(color: VigilantColors.onSurfaceVariant),
           )
         else
-          for (var i = 0; i < recents.length; i++) ...[
+          for (var i = 0;
+              i < recents.length && i < _recentPreviewCount;
+              i++) ...[
             if (i > 0) const SizedBox(height: 12),
             _RecentTile(
               name: recents[i].stopName,
@@ -877,10 +909,13 @@ class _BusStopTile extends StatelessWidget {
 }
 
 class _SectionLabel extends StatelessWidget {
-  const _SectionLabel({required this.icon, required this.label});
+  const _SectionLabel({required this.icon, required this.label, this.trailing});
 
   final IconData icon;
   final String label;
+
+  /// Başlığın sağındaki eylem (ör. "Tümünü gör").
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -895,6 +930,7 @@ class _SectionLabel extends StatelessWidget {
                 letterSpacing: 1.2,
               ),
         ),
+        if (trailing != null) ...[const Spacer(), trailing!],
       ],
     );
   }

@@ -19,6 +19,7 @@ import '../services/telemetry.dart';
 import '../services/tracking_service.dart';
 import '../state/journey_provider.dart';
 import '../theme/app_theme.dart';
+import '../util/haptics.dart';
 import '../util/platform_check.dart';
 import '../widgets/glass_panel.dart';
 import '../widgets/mascot.dart';
@@ -575,197 +576,330 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
     return seg.clamp(0, _route.length - 1);
   }
 
+  // ---- Alt panel (sürüklenebilir) ----
+  //
+  // Harita TAM EKRAN: yolculuk sırasında kullanıcının asıl baktığı şey nerede
+  // olduğu. Sayısal bilgiler haritanın üstünde yüzen bir panelde durur ve
+  // istenirse aşağı çekilip harita büyütülebilir.
+  static const _minPanelFraction = 0.30;
+  static const _maxPanelFraction = 0.82;
+  double _panelFraction = 0.46;
+  double _availableHeight = 0;
+
   @override
   Widget build(BuildContext context) {
-    final text = Theme.of(context).textTheme;
     final status = _status;
 
     return Scaffold(
-      body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Başlık
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text('Canlı Takip', style: text.headlineMedium),
-                  ),
-                  if (kShowSimulateButton && !_simulating) ...[
-                    IconButton(
-                      tooltip: 'Simüle et (test)',
-                      onPressed: _toggleSimulation,
-                      icon: const Icon(Icons.play_circle_outline,
-                          color: VigilantColors.onSurfaceVariant),
-                    ),
-                    IconButton(
-                      tooltip: 'Yeraltı (sinyal yok) simüle et',
-                      onPressed: _toggleUndergroundSimulation,
-                      icon: const Icon(Icons.subway_outlined,
-                          color: VigilantColors.onSurfaceVariant),
-                    ),
-                  ],
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: VigilantColors.primary.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(
-                        color: VigilantColors.primary.withValues(alpha: 0.2),
-                      ),
-                    ),
-                    child: Text(
-                      _simulating ? '$_lineLabel · SİM' : _lineLabel,
-                      style: text.labelMedium
-                          ?.copyWith(color: VigilantColors.primary),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Text(
-                _statusLine(status),
-                style: text.bodyMedium?.copyWith(
-                  color: (_permissionDenied && !_simulating) ||
-                          status?.state == JourneyState.signalLost
-                      ? VigilantColors.tertiaryContainer
-                      : VigilantColors.onSurfaceVariant,
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          _availableHeight = constraints.maxHeight;
+          return Stack(
+            children: [
+              // TAM EKRAN canlı harita.
+              Positioned.fill(
+                child: RouteMap(
+                  line: _line,
+                  boardingStopId: widget.payload?.boardingStopId,
+                  targetStopId: widget.payload?.targetStopId,
+                  currentLocation: _pos,
+                  autoFit: false,
+                  initialZoom: 15,
+                  // Geçilen kısım soluk, kalan kısım parlak çizilir.
+                  showProgress: true,
+                  // Ortala butonu: konumu izle; elle kaydırınca izleme durur.
+                  followButton: true,
+                  initialFollow: true,
                 ),
               ),
-            ),
-            if (status?.state == JourneyState.signalLost)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 6, 20, 0),
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: VigilantColors.tertiaryContainer
-                        .withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: VigilantColors.tertiaryContainer
-                          .withValues(alpha: 0.35),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.wifi_off_rounded,
-                          size: 15, color: VigilantColors.tertiaryContainer),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Yeraltı modu — öğrenilmiş sürelerle tahmini takip. '
-                          'Sinyal gelince otomatik düzeltilir.',
-                          style: text.labelMedium?.copyWith(
-                              color: VigilantColors.tertiaryContainer),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+              // ÜST katman: başlık, hat rozeti, durum satırı, uyarı çipleri.
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: SafeArea(bottom: false, child: _topOverlay(status)),
               ),
-            if (_serviceMode)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
-                child: Row(
-                  children: [
-                    const Icon(Icons.shield_outlined,
-                        size: 14, color: VigilantColors.secondary),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        'Arka plan takibi aktif — uygulamadan çıksan bile sürer.',
-                        style: text.labelMedium
-                            ?.copyWith(color: VigilantColors.secondary),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            const SizedBox(height: 12),
-            // Canlı harita
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(24),
-                child: SizedBox(
-                  height: 180,
-                  child: RouteMap(
-                    line: _line,
-                    boardingStopId: widget.payload?.boardingStopId,
-                    targetStopId: widget.payload?.targetStopId,
-                    currentLocation: _pos,
-                    autoFit: false,
-                    initialZoom: 12,
-                    // Geçilen kısım soluk, kalan kısım parlak çizilir.
-                    showProgress: true,
-                    // Ortala butonu: konumu izle; elle kaydırınca izleme durur.
-                    followButton: true,
-                    initialFollow: true,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            // Kalan durak halkası + ETA/mesafe (durum yüklenene dek iskelet).
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: status == null
-                  ? const _ProgressHeroSkeleton()
-                  : _ProgressHero(
-                      status: status,
-                      totalStops:
-                          _route.isNotEmpty ? _route.length - 1 : 0,
-                      distanceText:
-                          _formatDistance(status.distanceToTargetMeters) ?? '—',
-                    ),
-            ),
-            if (_snoozeCountdown case final countdown?) ...[
-              const SizedBox(height: 12),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: _SnoozeChip(countdown: countdown),
+              // ALT katman: kalan durak halkası, ETA/mesafe, duraklar, kaydır.
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                height: (_availableHeight * _panelFraction)
+                    .clamp(0.0, _availableHeight),
+                child: _bottomPanel(status),
               ),
             ],
-            const SizedBox(height: 20),
-            // Dikey zaman çizelgesi
-            Expanded(
-              child: _route.isEmpty
-                  ? _EmptyTimeline(targetName: _targetStopName)
-                  : ListView(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      children: _buildTimeline(),
+          );
+        },
+      ),
+    );
+  }
+
+  /// "Sorun bildir" — yolculuk sırasında görülen veri hatasını bildirme.
+  ///
+  /// ŞİMDİLİK YALNIZCA TASARIM: seçim hiçbir yere gönderilmiyor, yalnızca
+  /// telemetriye düşüyor. Gönderim ucu (Firestore koleksiyonu + moderasyon)
+  /// sonra bağlanacak; o zamana kadar kullanıcıya "kaydedildi" demiyoruz,
+  /// "aldık" bile demiyoruz — yalnızca teşekkür ediyoruz ki yanlış bir söz
+  /// vermiş olmayalım.
+  Future<void> _reportIssue() async {
+    Haptics.light();
+    final kind = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: VigilantColors.surfaceContainer,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        final text = Theme.of(context).textTheme;
+        const options = <(String, IconData, String)>[
+          ('wrong_stop', Icons.wrong_location_outlined,
+              'Durak konumu yanlış'),
+          ('missing_stop', Icons.add_location_alt_outlined,
+              'Güzergâhta eksik durak var'),
+          ('wrong_route', Icons.alt_route_outlined, 'Güzergâh yanlış çizilmiş'),
+          ('bad_eta', Icons.schedule_outlined, 'Tahmini süre çok tutarsız'),
+          ('alarm_late', Icons.notifications_off_outlined,
+              'Alarm geç/erken çaldı'),
+          ('other', Icons.more_horiz, 'Başka bir sorun'),
+        ];
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 12),
+              Container(
+                width: 44,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: VigilantColors.surfaceVariant,
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 4),
+                child: Row(
+                  children: [
+                    const Icon(Icons.flag_outlined,
+                        size: 18, color: VigilantColors.primary),
+                    const SizedBox(width: 10),
+                    Text('Sorun bildir', style: text.titleMedium),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '$_lineLabel · $_targetStopName',
+                    style: text.labelMedium
+                        ?.copyWith(color: VigilantColors.onSurfaceVariant),
+                  ),
+                ),
+              ),
+              for (final (id, icon, label) in options)
+                ListTile(
+                  leading:
+                      Icon(icon, color: VigilantColors.onSurfaceVariant),
+                  title: Text(label, style: text.bodyMedium),
+                  onTap: () => Navigator.pop(context, id),
+                ),
+              const SizedBox(height: 12),
+            ],
+          ),
+        );
+      },
+    );
+    if (kind == null || !mounted) return;
+    Telemetry.log('issue_reported', {'kind': kind, 'line': _lineLabel});
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(const SnackBar(
+        content: Text('Teşekkürler — bildirimin bize ulaşacak.'),
+      ));
+  }
+
+  /// Haritanın üstünde yüzen başlık bloğu.
+  Widget _topOverlay(JourneyStatus? status) {
+    final text = Theme.of(context).textTheme;
+    final warn = (_permissionDenied && !_simulating) ||
+        status?.state == JourneyState.signalLost;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+      child: GlassPanel(
+        borderRadius: 22,
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text('Canlı Takip', style: text.titleLarge),
+                ),
+                if (kShowSimulateButton && !_simulating) ...[
+                  _IconAction(
+                    tooltip: 'Simüle et (test)',
+                    icon: Icons.play_circle_outline,
+                    onTap: _toggleSimulation,
+                  ),
+                  _IconAction(
+                    tooltip: 'Yeraltı (sinyal yok) simüle et',
+                    icon: Icons.subway_outlined,
+                    onTap: _toggleUndergroundSimulation,
+                  ),
+                ],
+                // Sorun bildir — şimdilik yalnızca tasarım (bkz. _reportIssue).
+                _IconAction(
+                  tooltip: 'Sorun bildir',
+                  icon: Icons.flag_outlined,
+                  onTap: _reportIssue,
+                ),
+                const SizedBox(width: 4),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: VigilantColors.primary.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: VigilantColors.primary.withValues(alpha: 0.25),
                     ),
+                  ),
+                  child: Text(
+                    _simulating ? '$_lineLabel · SİM' : _lineLabel,
+                    style: text.labelMedium
+                        ?.copyWith(color: VigilantColors.primary),
+                  ),
+                ),
+              ],
             ),
-            // Kaydırarak durdur (kaza ile iptali önler). Alarm zaten
-            // durdurulduysa bu "İndim" olur ve yolculuğu tamamlanmış kaydeder;
-            // aksi halde yolculuğu iptal eder.
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-              child: _alarmAcknowledged
-                  ? SlideToAction(
-                      key: const ValueKey('slide-arrived'),
-                      label: 'İndim — bitirmek için kaydır',
-                      icon: Icons.check_circle_outline,
-                      fillColor: VigilantColors.secondary,
-                      onConfirmed: _completeJourney,
-                    )
-                  : SlideToAction(
-                      key: const ValueKey('slide-cancel'),
-                      label: 'Durdurmak için kaydır',
-                      icon: Icons.notifications_off_outlined,
-                      fillColor: VigilantColors.accentBlue,
-                      onConfirmed: _cancelJourney,
-                    ),
+            const SizedBox(height: 4),
+            Text(
+              _statusLine(status),
+              style: text.bodySmall?.copyWith(
+                color: warn
+                    ? VigilantColors.tertiaryContainer
+                    : VigilantColors.onSurfaceVariant,
+              ),
             ),
+            if (status?.state == JourneyState.signalLost) ...[
+              const SizedBox(height: 8),
+              const _NoticeChip(
+                icon: Icons.wifi_off_rounded,
+                color: VigilantColors.tertiaryContainer,
+                text: 'Yeraltı modu — öğrenilmiş sürelerle tahmini takip. '
+                    'Sinyal gelince otomatik düzeltilir.',
+              ),
+            ],
+            if (_serviceMode) ...[
+              const SizedBox(height: 6),
+              const _NoticeChip(
+                icon: Icons.shield_outlined,
+                color: VigilantColors.secondary,
+                text: 'Arka plan takibi aktif — uygulamadan çıksan bile sürer.',
+              ),
+            ],
           ],
         ),
+      ),
+    );
+  }
+
+  /// Sürüklenebilir alt panel.
+  Widget _bottomPanel(JourneyStatus? status) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: VigilantColors.surfaceContainer,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        boxShadow: [
+          BoxShadow(color: Color(0x66000000), blurRadius: 24, spreadRadius: 2),
+        ],
+      ),
+      child: Column(
+        children: [
+          // Tutamaç — paneli büyütüp küçültmek için.
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onVerticalDragUpdate: (d) {
+              if (_availableHeight == 0) return;
+              setState(() {
+                _panelFraction =
+                    (_panelFraction - d.delta.dy / _availableHeight)
+                        .clamp(_minPanelFraction, _maxPanelFraction);
+              });
+            },
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Center(
+                child: Container(
+                  width: 44,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: VigilantColors.surfaceVariant,
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          // Kalan durak halkası + ETA/mesafe.
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: status == null
+                ? const _ProgressHeroSkeleton()
+                : _ProgressHero(
+                    status: status,
+                    totalStops: _route.isNotEmpty ? _route.length - 1 : 0,
+                    distanceText:
+                        _formatDistance(status.distanceToTargetMeters) ?? '—',
+                  ),
+          ),
+          if (_snoozeCountdown case final countdown?) ...[
+            const SizedBox(height: 10),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: _SnoozeChip(countdown: countdown),
+            ),
+          ],
+          const SizedBox(height: 14),
+          // Şu anki konum + gelecek duraklar. Panel küçükken kaydırılır,
+          // büyütülünce hepsi görünür.
+          Expanded(
+            child: _route.isEmpty
+                ? _EmptyTimeline(targetName: _targetStopName)
+                : ListView(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    children: _buildTimeline(),
+                  ),
+          ),
+          // Kaydırarak durdur (kaza ile iptali önler). Alarm zaten
+          // durdurulduysa bu "İndim" olur ve yolculuğu tamamlanmış kaydeder;
+          // aksi halde yolculuğu iptal eder.
+          Padding(
+            padding: EdgeInsets.fromLTRB(
+                20, 8, 20, 12 + MediaQuery.viewPaddingOf(context).bottom),
+            child: _alarmAcknowledged
+                ? SlideToAction(
+                    key: const ValueKey('slide-arrived'),
+                    label: 'İndim — bitirmek için kaydır',
+                    icon: Icons.check_circle_outline,
+                    fillColor: VigilantColors.secondary,
+                    onConfirmed: _completeJourney,
+                  )
+                : SlideToAction(
+                    key: const ValueKey('slide-cancel'),
+                    label: 'Durdurmak için kaydır',
+                    icon: Icons.notifications_off_outlined,
+                    fillColor: VigilantColors.accentBlue,
+                    onConfirmed: _cancelJourney,
+                  ),
+          ),
+        ],
       ),
     );
   }
@@ -833,6 +967,79 @@ class _EmptyTimeline extends StatelessWidget {
 }
 
 /// Kalan durak halkası (sol) + ETA/mesafe kartları (sağ).
+/// Üst paneldeki küçük ikon butonu (simülasyon, sorun bildir).
+///
+/// `IconButton` yerine var: varsayılan 48 px dokunma alanı üç butonu yan yana
+/// koyunca başlık satırını taşırıyordu.
+class _IconAction extends StatelessWidget {
+  const _IconAction({
+    required this.tooltip,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: InkResponse(
+        onTap: onTap,
+        radius: 22,
+        child: Padding(
+          padding: const EdgeInsets.all(6),
+          child: Icon(icon, size: 20, color: VigilantColors.onSurfaceVariant),
+        ),
+      ),
+    );
+  }
+}
+
+/// Üst paneldeki tek satırlık uyarı şeridi (sinyal yok / arka plan takibi).
+class _NoticeChip extends StatelessWidget {
+  const _NoticeChip({
+    required this.icon,
+    required this.color,
+    required this.text,
+  });
+
+  final IconData icon;
+  final Color color;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.32)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: Theme.of(context)
+                  .textTheme
+                  .labelSmall
+                  ?.copyWith(color: color, height: 1.3),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ProgressHero extends StatelessWidget {
   const _ProgressHero({
     required this.status,

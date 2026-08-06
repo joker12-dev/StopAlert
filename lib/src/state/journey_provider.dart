@@ -344,6 +344,13 @@ class RecentSearchesNotifier extends AsyncNotifier<List<RecentSearch>> {
       jsonEncode([for (final e in next) e.toMap()]),
     );
   }
+
+  /// Geçmişi tamamen sil (son aramalar sayfasındaki "Temizle").
+  Future<void> clear() async {
+    state = const AsyncData([]);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_prefsKey);
+  }
 }
 
 /// Kurulmakta olan yolculuk taslağı.
