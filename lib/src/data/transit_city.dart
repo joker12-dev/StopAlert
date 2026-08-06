@@ -17,6 +17,8 @@ class TransitCity {
     required this.maxLat,
     required this.minLon,
     required this.maxLon,
+    required this.centerLat,
+    required this.centerLon,
     this.hasLiveBus = false,
     this.hasTraffic = false,
     this.hasAnnouncements = false,
@@ -36,6 +38,15 @@ class TransitCity {
   final double maxLat;
   final double minLon;
   final double maxLon;
+
+  /// Haritaların KONUM YOKKEN açılacağı yer.
+  ///
+  /// Kutunun geometrik merkezi işe yaramıyor: İstanbul kutusunun merkezi
+  /// (41,20 / 28,93) Karadeniz kıyısına düşüyor. Bunlar şehrin gerçek
+  /// merkezleri. Sabit bir İstanbul koordinatı gömmek ise Kocaeli'ndeki
+  /// kullanıcıya haritayı Beyoğlu'nda açıyordu.
+  final double centerLat;
+  final double centerLon;
 
   /// Canlı otobüs konumu var mı (İETT açık servis veriyor, Kocaeli vermiyor).
   final bool hasLiveBus;
@@ -76,6 +87,8 @@ abstract final class TransitCities {
     maxLat: 41.65,
     minLon: 27.90,
     maxLon: 29.95,
+    centerLat: 41.0082,        // Sultanahmet
+    centerLon: 28.9784,
     hasLiveBus: true,
     hasTraffic: true,
     hasAnnouncements: true,
@@ -94,6 +107,8 @@ abstract final class TransitCities {
     // Batı sınır Dilovası; Gebze (29,43) dahil kalır.
     minLon: 29.30,
     maxLon: 30.40,
+    centerLat: 40.7654,        // İzmit
+    centerLon: 29.9408,
     // Akıllı Şehir Kocaeli anlık yoğunluk servisi veriyor.
     hasTraffic: true,
   );

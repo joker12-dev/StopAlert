@@ -9,6 +9,7 @@ import 'package:latlong2/latlong.dart';
 import '../data/models.dart';
 import '../data/transit_db.dart';
 import '../services/routing_service.dart';
+import '../state/city_provider.dart';
 import '../state/journey_provider.dart';
 import '../state/live_location_provider.dart';
 import '../state/settings_provider.dart';
@@ -78,6 +79,12 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
 
   /// Harita hareket ederken durak işaretleri çizilmez (bkz. [MapSettle]).
   final _settle = MapSettle();
+
+  /// İlk gerçek konuma bir kez ortalandı mı?
+  bool _centeredOnUser = false;
+
+  /// Kullanıcı haritayı elle oynattı mı? Oynattıysa kamera altından çekilmez.
+  bool _userMovedMap = false;
 
   /// Arama yarıçapı (metre) — kullanıcı çipten değiştirir.
   double _radius = 500;
@@ -573,10 +580,24 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
     // Yakın duraklar yalnızca "en yakına git" kısayolu için okunur.
     final nearest = ref.watch(nearbyMapProvider).valueOrNull ?? const <MapStop>[];
     final user = _userLoc;
+    // Konum HENÜZ gelmediyse AKTİF ŞEHRİN merkezi. Sabit İstanbul koordinatı
+    // gömülüydü: Kocaeli'ndeki kullanıcıya harita Beyoğlu'nda açılıyordu.
+    final city = ref.watch(activeCityProvider);
     final center = user ??
         (nearest.isNotEmpty
             ? LatLng(nearest.first.stop.lat, nearest.first.stop.lon)
-            : const LatLng(41.0082, 28.9784));
+            : LatLng(city.centerLat, city.centerLon));
+
+    // `initialCenter` yalnızca harita KURULURKEN okunur. Konum akışı birkaç
+    // saniye sonra geldiğinde kamera şehir merkezinde kalıyordu; ilk gerçek
+    // konumda bir kez kullanıcıya taşınır (kullanıcı haritayı kendisi
+    // oynattıysa dokunulmaz).
+    if (!_centeredOnUser && user != null && _mapReady && !_userMovedMap) {
+      _centeredOnUser = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _centerOnVisible(user, 16);
+      });
+    }
 
     return Scaffold(
       body: LayoutBuilder(
@@ -596,6 +617,9 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
                     minZoom: AppMapStyle.minZoomLocal,
                     maxZoom: AppMapStyle.maxZoom,
                     backgroundColor: VigilantColors.surfaceContainerLowest,
+                    // Yakınlaşma jestleri yumuşatılmış (bkz. AppMapStyle).
+                    interactionOptions:
+                        AppMapStyle.interaction(flags: InteractiveFlag.all),
                     onMapReady: () {
                       _mapReady = true;
                       final focus = widget.focusStop;
@@ -615,9 +639,10 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
                     },
                     // Kaydırma SIRASINDA turuncu nokta anında taşınır; ağır
                     // durak sorgusu ise hareket durunca (debounce) yapılır.
-                    onPositionChanged: (cam, __) {
+                    onPositionChanged: (cam, hasGesture) {
                       // Jest sürerken durak işaretleri çizilmesin.
                       _settle.touch();
+                      if (hasGesture) _userMovedMap = true;
                       _updateProbeLive();
                       _scheduleReload();
                       // Etiket eşiği geçildiyse yeniden çiz (her karede değil).

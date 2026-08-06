@@ -9,6 +9,7 @@ import '../data/models.dart';
 import '../data/transit_city.dart';
 import '../data/transit_db.dart';
 import '../services/routing_service.dart';
+import '../state/city_provider.dart';
 import '../state/journey_provider.dart';
 import '../state/live_location_provider.dart';
 import '../theme/app_theme.dart';
@@ -39,6 +40,11 @@ class RouteMapScreen extends ConsumerStatefulWidget {
 
 class _RouteMapScreenState extends ConsumerState<RouteMapScreen> {
   final _map = MapController();
+
+  /// Hattın kendi şehri (yoksa aktif şehir) — duraksız/koordinatsız durumda
+  /// haritanın açılacağı yer. Sabit İstanbul koordinatı gömülüydü.
+  TransitCity get _fallbackCity =>
+      widget.city ?? ref.read(activeCityProvider);
   bool _mapReady = false;
 
   /// Harita hareket ederken yoğun katmanlar çizilmez (bkz. [MapSettle]).
@@ -297,11 +303,14 @@ class _RouteMapScreenState extends ConsumerState<RouteMapScreen> {
               options: MapOptions(
                 initialCenter: stops.isNotEmpty
                     ? LatLng(stops.first.lat, stops.first.lon)
-                    : const LatLng(41.0082, 28.9784),
+                    : LatLng(_fallbackCity.centerLat, _fallbackCity.centerLon),
                 initialZoom: _zoom,
                 minZoom: AppMapStyle.minZoom,
                 maxZoom: AppMapStyle.maxZoom,
                 backgroundColor: VigilantColors.surfaceContainerLowest,
+                    // Yakınlaşma jestleri yumuşatılmış (bkz. AppMapStyle).
+                    interactionOptions:
+                        AppMapStyle.interaction(flags: InteractiveFlag.all),
                 onMapReady: () {
                   _mapReady = true;
                   _fit();

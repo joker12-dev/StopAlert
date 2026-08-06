@@ -24,6 +24,7 @@ TransitLine _testLine() {
 }
 
 void main() {
+  _tolerance();
   group('geo', () {
     test('haversine ~1 km segmenti doğru ölçer', () {
       final d = haversineMeters(
@@ -269,6 +270,64 @@ void main() {
         elapsed: Duration.zero,
       ));
       expect(st.state, JourneyState.active);
+    });
+  });
+}
+
+/// Durağın 15 m öncesinde durmuş bir otobüsün konumu.
+///
+/// Boylamda 0,012 derece ≈ 1000 m olduğuna göre 15 m ≈ 0,00018 derece.
+void _tolerance() {
+  group('Durak varış toleransı', () {
+    test('durağın 15 m öncesinde duran otobüste durak GEÇİLMİŞ sayılır', () {
+      final line = _testLine();
+      final engine = JourneyEngine(
+        line: line,
+        boardingStopId: 's0',
+        targetStopId: 's4',
+        alarmStopsThreshold: 1,
+      );
+      engine.update(const GpsSample(
+        point: LatLng(41.0, 29.000),
+        accuracyMeters: 10,
+        elapsed: Duration.zero,
+      ));
+
+      // Durak 2'ye 15 m kala: otobüs yolcuyu burada bırakıyor.
+      final st = engine.update(const GpsSample(
+        point: LatLng(41.0, 29.02382),
+        accuracyMeters: 10,
+        elapsed: Duration(minutes: 4),
+      ));
+
+      // Durak 2 geçilmiş sayılmalı: sıradaki durak 3, kalan 2.
+      // Oransal eşikle (t >= 0.999) burada hâlâ "sıradaki Durak 2, kalan 3"
+      // görünüyordu — kullanıcı durağını geçmeden sayaç düşmüyordu.
+      expect(st.nextStopName, 'Durak 3');
+      expect(st.stopsRemaining, 2);
+    });
+
+    test('durağa 100 m kala HENÜZ geçilmiş sayılmaz', () {
+      final line = _testLine();
+      final engine = JourneyEngine(
+        line: line,
+        boardingStopId: 's0',
+        targetStopId: 's4',
+      );
+      engine.update(const GpsSample(
+        point: LatLng(41.0, 29.000),
+        accuracyMeters: 10,
+        elapsed: Duration.zero,
+      ));
+
+      // Durak 2'ye ~100 m kala (0,0012 derece).
+      final st = engine.update(const GpsSample(
+        point: LatLng(41.0, 29.0228),
+        accuracyMeters: 10,
+        elapsed: Duration(minutes: 4),
+      ));
+      expect(st.nextStopName, 'Durak 2');
+      expect(st.stopsRemaining, 3);
     });
   });
 }

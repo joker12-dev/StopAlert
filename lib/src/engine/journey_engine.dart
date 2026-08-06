@@ -193,10 +193,20 @@ class JourneyEngine {
       }
     }
 
-    // Bir durağın tam üstündeysek (t≈1) bir sonraki segmentin başına normalize.
+    // Durağa YETERİNCE yaklaştıysak o durağı geçilmiş say ve bir sonraki
+    // segmentin başına normalize et.
+    //
+    // Eskiden oransal bir eşik vardı (t >= 0.999) ve gerçek hayatta tutmuyordu:
+    // otobüs yolcuyu durak direğinin tam üstünde değil, 10–20 m önünde
+    // bırakıyor. 600 m'lik bir segmentte 20 m eksik kalmak t = 0,967 eder;
+    // durak "geçilmemiş" sayılır, kalan durak sayısı bir fazla görünür ve
+    // yaklaşma alarmı geç çalardı. Ölçü artık METRE — segment uzunluğundan
+    // bağımsız olarak aynı fiziksel tolerans.
     var segIndex = proj.segmentIndex;
     var t = proj.t;
-    if (t >= 0.999 && segIndex < _segmentMeters.length - 1) {
+    final metersToSegmentEnd = _segmentMeters[segIndex] * (1 - t);
+    if (metersToSegmentEnd <= stopReachToleranceMeters &&
+        segIndex < _segmentMeters.length - 1) {
       segIndex += 1;
       t = 0.0;
     }
@@ -324,6 +334,15 @@ class JourneyEngine {
 
   /// Sinyal beklemesi eşiği: segmentin bu oranı geçilmeden gelen durma sayılmaz.
   static const double minSegmentFractionForStop = 0.45;
+
+  /// Bir durağa bu kadar kala durak GEÇİLMİŞ sayılır (metre).
+  ///
+  /// Otobüs yolcuyu durak direğinin tam üstünde bırakmıyor; 10–20 m öncesinde
+  /// ya da sonrasında duruyor, üstelik şehir içi GPS'in kendi hatası da bu
+  /// mertebede. 25 m, gerçek durma noktalarını kapsayacak kadar geniş ama
+  /// duraklar arası en kısa mesafeden (şehir içinde ~200 m) belirgin küçük —
+  /// yani bir sonraki durağı erken saymaz.
+  static const double stopReachToleranceMeters = 25;
 
   JourneyStatus _statusFromProgress({required bool fromSignalLoss}) {
     final seg = _segmentForProgress(_progressSeconds);

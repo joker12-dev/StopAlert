@@ -282,7 +282,11 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     );
   }
 
-  void _openAlarmSetup(String stopName, {TransitLine? line, Stop? stop}) {
+  /// [cityId] verilmezse aktif şehir damgalanır. Son arama kaydından gelen
+  /// çağrılarda kaydın KENDİ şehri geçilir; aksi halde başka şehirden açılan
+  /// bir hat, tekrar yazılırken aktif şehre kaymış oluyordu.
+  void _openAlarmSetup(String stopName,
+      {TransitLine? line, Stop? stop, String? cityId}) {
     if (line != null && stop != null) {
       final notifier = ref.read(journeyDraftProvider.notifier)
         ..reset()
@@ -295,6 +299,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             lineId: line.id,
             lineCode: line.code,
             lineTypeName: line.type.name,
+            cityId: cityId ?? ref.read(activeCityProvider).id,
           ));
     }
     Navigator.of(context).push(
@@ -313,23 +318,35 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   /// ve DURAKSIZ (yalnızca hat → hat sayfası). Duraksız kayıt `stopId` boş
   /// olanıdır; kullanıcı aramada "147"ye dokunduğunda böyle yazılır.
   Future<void> _openRecent(RecentSearch entry) async {
+    // Kayıt HANGİ ŞEHİRDEN geldiyse oradan çözülür. Aktif şehirden çözmek,
+    // aynı kodun iki şehirde bulunduğu durumda (147) yanlış hattı açıyor,
+    // bulunamadığında da sayfayı boş bırakıyordu.
+    final active = ref.read(activeCityProvider);
+    final entryCity = entry.cityId.isEmpty ? active : TransitCities.byId(entry.cityId);
+    final other = entryCity.id == active.id ? null : entryCity;
+
     if (entry.stopId.isEmpty) {
       Haptics.light();
       Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => LineDetailScreen(code: entry.lineCode)),
+        MaterialPageRoute(
+          builder: (_) =>
+              LineDetailScreen(code: entry.lineCode, city: other),
+        ),
       );
       return;
     }
     // Otobüs hatları gömülü listede değil, indirilen DB'de.
     if (isBusId(entry.lineId)) {
-      final line = await TransitDb.instance.buildLine(entry.lineId);
+      final line =
+          await TransitDb.instance.buildLine(entry.lineId, cityId: other?.id);
       if (!mounted) return;
       final i = line?.indexOfStop(entry.stopId) ?? -1;
       if (line != null && i != -1) {
-        _openAlarmSetup(line.stops[i].name, line: line, stop: line.stops[i]);
+        _openAlarmSetup(line.stops[i].name,
+            line: line, stop: line.stops[i], cityId: entryCity.id);
         return;
       }
-      _openAlarmSetup(entry.stopName);
+      _openAlarmSetup(entry.stopName, cityId: entryCity.id);
       return;
     }
     final lines = ref.read(linesProvider).valueOrNull ?? const <TransitLine>[];
@@ -344,7 +361,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     }
     // Hat artık yoksa ada göre çözüm alarm kurulum ekranına kalır.
     if (stop == null) line = null;
-    _openAlarmSetup(stop?.name ?? entry.stopName, line: line, stop: stop);
+    _openAlarmSetup(stop?.name ?? entry.stopName,
+        line: line, stop: stop, cityId: entryCity.id);
   }
 
   /// Otobüs hattı seçildi: tek hat sayfasını aç (gidiş/dönüş + duraklar).
@@ -362,6 +380,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           lineId: brief.id,
           lineCode: brief.code,
           lineTypeName: brief.type.name,
+          // ŞEHRİ YAZ: aynı kod iki şehirde olabiliyor (147). Yazılmazsa
+          // kayıt tekrar açılırken yanlış şehrin hattına gidiyordu.
+          cityId: city.id,
         ));
     Navigator.of(context).push(
       MaterialPageRoute(

@@ -78,8 +78,10 @@ class _DataBootstrapScreenState extends ConsumerState<DataBootstrapScreen> {
     );
     if (!mounted) return;
     setState(() => _busyCity = null);
-    // İndirilen şehir aktif olur: kullanıcı onu bilinçli seçmiş sayılır.
-    await ref.read(cityProvider.notifier).select(city);
+    // İndirilen şehir aktif olur — ama KALICI olarak sabitlenmez: paket
+    // indirmek "hep bu şehirdeyim" demek değil. Sabitleme, konuma göre
+    // otomatik şehir belirlemeyi susturuyor (bkz. CityNotifier.setActive).
+    await ref.read(cityProvider.notifier).setActive(city);
     ref.invalidate(installedCitiesProvider);
     await _refresh();
   }

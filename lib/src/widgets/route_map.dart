@@ -66,6 +66,10 @@ class _RouteMapState extends State<RouteMap> {
   bool _ready = false;
   late bool _follow = widget.initialFollow;
 
+  /// Kullanıcı haritayı elle oynattı mı? Oynattıysa otomatik çerçeveleme
+  /// susar — kendi baktığı yeri altından çekmemek için.
+  bool _userAdjusted = false;
+
   /// Hattı YOLLARA oturtan OSRM polyline'ı (boşsa düz çizgiye düşülür).
   List<LatLng> _road = const [];
 
@@ -155,7 +159,12 @@ class _RouteMapState extends State<RouteMap> {
       _rebuildLinePoints();
       _loadRoad();
     }
-    if (lineChanged || (widget.autoFit && locChanged)) {
+    // Otomatik çerçeveleme KULLANICI HARİTAYA DOKUNANA KADAR. Aksi halde
+    // konum her güncellendiğinde (5 m'de bir) kamera tüm rotaya geri
+    // oturuyordu: kullanıcı bir yere yakınlaşıyor, birkaç saniye sonra harita
+    // kendiliğinden geri açılıyordu. Hat değişimi ayrı: o yeni bir güzergâh
+    // demek, çerçeve yenilenmeli.
+    if (lineChanged || (widget.autoFit && locChanged && !_userAdjusted)) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _fit());
       return;
     }
@@ -276,7 +285,7 @@ class _RouteMapState extends State<RouteMap> {
             minZoom: AppMapStyle.minZoom,
             maxZoom: AppMapStyle.maxZoom,
             backgroundColor: VigilantColors.surfaceContainerLowest,
-            interactionOptions: InteractionOptions(
+            interactionOptions: AppMapStyle.interaction(
               flags: widget.interactive
                   ? InteractiveFlag.drag |
                       InteractiveFlag.pinchZoom |
@@ -292,11 +301,15 @@ class _RouteMapState extends State<RouteMap> {
             onPositionChanged: (camera, hasGesture) {
               // Jest sürerken yoğun katmanlar çizilmesin.
               _settle.touch();
-              // Kullanıcı haritayı ELLE oynattıysa takip kilidini bırak.
-              if (hasGesture && _follow) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (mounted) setState(() => _follow = false);
-                });
+              // Kullanıcı haritayı ELLE oynattıysa takip kilidini ve otomatik
+              // çerçevelemeyi bırak.
+              if (hasGesture) {
+                _userAdjusted = true;
+                if (_follow) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted) setState(() => _follow = false);
+                  });
+                }
               }
               final show = camera.zoom >= _labelZoomThreshold;
               // Ok sıklığı eşiği de zoom'a bağlı; ikisi birlikte tazelenir.

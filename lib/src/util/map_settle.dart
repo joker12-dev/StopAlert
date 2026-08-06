@@ -30,6 +30,10 @@ class MapSettle extends ValueNotifier<bool> {
 
   /// Kamera kıpırdadı. Jest bitene kadar işaretler beklesin.
   void touch() {
+    // Atılmış bir ValueNotifier'a değer yazmak fırlatır. `onPositionChanged`
+    // ekran kapanırken de tetiklenebiliyor (fling animasyonu sürerken geri
+    // tuşu) — o yol çökmeye açıktı.
+    if (_disposed) return;
     _timer?.cancel();
     _timer = Timer(delay, _settle);
     if (!value) return;                       // zaten gizli

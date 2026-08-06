@@ -6,6 +6,9 @@
 /// - Esri World Imagery — uydu görüntüsü
 library;
 
+import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+
 enum MapTileStyle {
   /// Renkli, POI ve arazi detaylı — VARSAYILAN (harita sade durmasın).
   canli('Canlı'),
@@ -60,6 +63,32 @@ abstract final class AppMapStyle {
   static const minZoomLocal = 10.0;
 
   static const maxZoom = 18.0;
+
+  /// Yakınlaşma jestlerinin YUMUŞATILMASI.
+  ///
+  /// ÖNEMLİ SINIR: parmakla sıkıştırma (pinch) flutter_map'te birebir
+  /// fizikseldir — `zoom = başlangıç + log2(ölçek)` — ve paket bunun için bir
+  /// hız çarpanı sunmuyor. Yani "pinch'i yavaşlat" ayarı YOK; buradakiler
+  /// gerçekten ayarlanabilen öteki yakınlaşma yolları.
+  ///
+  /// [flags] çağırana bırakılır: takip haritası salt-okunur modda hiçbir
+  /// etkileşime izin vermiyor.
+  static InteractionOptions interaction({required int flags}) =>
+      InteractionOptions(
+        flags: flags,
+        // Çift dokun + yukarı/aşağı sürükle: varsayılanın YARISI. İstenen
+        // kademeye isabet etmek kolaylaşıyor.
+        doubleTapDragZoomChangeCalculator: (offset, camera) =>
+            (1 / 720) * camera.zoom * offset,
+        // 200 ms'de bir kademe atlamak "zıplama" gibi duruyordu.
+        doubleTapZoomDuration: const Duration(milliseconds: 350),
+        doubleTapZoomCurve: Curves.easeOutCubic,
+        // Fare tekerleği (masaüstü / emülatör) de yarı hız.
+        scrollWheelVelocity: 0.0025,
+        // Savurma daha çabuk dursun: uzun kayışlar boyunca harita sürekli
+        // yeniden çiziliyor.
+        flingAnimationDampingRatio: 8.0,
+      );
 
   /// Eski API — true = açık tema. Ayarlardaki 'light'/'dark' ile uyum için.
   static bool get light => style == MapTileStyle.sade;
