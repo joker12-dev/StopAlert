@@ -98,22 +98,17 @@ void main() {
   });
 
   group('Bayat konum düzeltmesi', () {
-    test('yayından bu yana geçen süre DÜŞÜLÜR', () {
-      final taze = ArrivalEstimator.forStop(
+    test('tek araçlık fotoğrafta düzeltme yapılmaz (referans kendisi)', () {
+      // Tek araç varsa "en yeni damga" onun kendisidir; yaş sıfırdır.
+      // Bu bilinçli: cihaz saatine güvenip yanlış düzeltme yapmaktansa
+      // hiç düzeltmemek yeğdir.
+      final r = ArrivalEstimator.forStop(
         line: line(),
         targetStopId: 'bus:103',
-        vehicles: [bus('A', '101', seen: '2026-08-10 13:00:00')],
-        now: now,
-      ).single;
-      final bayat = ArrivalEstimator.forStop(
-        line: line(),
-        targetStopId: 'bus:103',
-        // 90 saniye önce yayınlanmış: otobüs o sırada yol almaya devam etti.
         vehicles: [bus('A', '101', seen: '2026-08-10 12:58:30')],
         now: now,
       ).single;
-      expect(bayat.seconds, lessThan(taze.seconds));
-      expect(taze.seconds - bayat.seconds, closeTo(90, 2));
+      expect(r.seconds, closeTo(240, 10));
     });
 
     test('çözülemeyen zaman damgası düzeltme YAPMAZ', () {
@@ -126,16 +121,77 @@ void main() {
       expect(r.seconds, closeTo(240, 10));
     });
 
-    test('saat dilimi kayması tahmini uçurmaz (üst sınır)', () {
-      // Cihaz başka saat diliminde: damga 5 saat eski görünüyor.
+    test('cihaz saati kaymışsa bile liste boşalmaz', () {
+      // Damgalar İstanbul yerel saatinde; cihaz saati 5 saat geride olsun.
+      // Tazelik cihaz saatinden değil, aynı fotoğraftaki EN YENİ damgadan
+      // ölçüldüğü için araçlar elenmemeli ve düzeltme sıfır olmalı.
       final r = ArrivalEstimator.forStop(
         line: line(),
         targetStopId: 'bus:103',
-        vehicles: [bus('A', '101', seen: '2026-08-10 08:00:00')],
+        vehicles: [bus('A', '101', seen: '2026-08-10 18:00:00')],
         now: now,
-      ).single;
-      // 240 - 300 = negatif; 0'a kırpılır, saçma bir değer üretilmez.
-      expect(r.seconds, 0);
+      );
+      expect(r.length, 1);
+      expect(r.single.seconds, closeTo(240, 10));
+    });
+
+    test('göreli yaş: aynı fotoğrafta geri kalan araç düzeltilir', () {
+      // İki araç aynı yayında: biri 90 sn daha eski. Referans en yeni damga.
+      final r = ArrivalEstimator.forStop(
+        line: line(),
+        targetStopId: 'bus:103',
+        vehicles: [
+          bus('yeni', '101', seen: '2026-08-10 13:00:00'),
+          bus('eski', '101', seen: '2026-08-10 12:58:30'),
+        ],
+        now: now,
+      );
+      expect(r.length, 2);
+      final yeni = r.firstWhere((e) => e.vehicle.plate == 'yeni');
+      final eski = r.firstWhere((e) => e.vehicle.plate == 'eski');
+      expect(yeni.seconds - eski.seconds, closeTo(90, 2));
+    });
+  });
+
+  group('Aktif olmayan araçlar', () {
+    test('fotoğraftaki taze araçlardan çok geride kalan LİSTELENMEZ', () {
+      // Servis, seferi bitmiş aracı listede bırakabiliyor; onu "yaklaşıyor"
+      // diye göstermek gelmeyecek bir otobüsü beklettirmek olur.
+      final r = ArrivalEstimator.forStop(
+        line: line(),
+        targetStopId: 'bus:103',
+        vehicles: [
+          bus('taze', '101', seen: '2026-08-10 13:00:00'),
+          bus('eski', '101', seen: '2026-08-10 12:50:00'), // 10 dk geride
+        ],
+        now: now,
+      );
+      expect(r.map((e) => e.vehicle.plate), ['taze']);
+    });
+
+    test('sınırın içindeki araç listelenir', () {
+      final r = ArrivalEstimator.forStop(
+        line: line(),
+        targetStopId: 'bus:103',
+        vehicles: [
+          bus('taze', '101', seen: '2026-08-10 13:00:00'),
+          bus('biraz', '101', seen: '2026-08-10 12:58:00'), // 2 dk geride
+        ],
+        now: now,
+      );
+      expect(r.length, 2);
+    });
+
+    test('zaman damgası okunamıyorsa araç ELENMEZ', () {
+      // Okuyamadığımız bir alan yüzünden gerçekten yolda olan otobüsü
+      // gizlemektense göstermek yeğdir.
+      final r = ArrivalEstimator.forStop(
+        line: line(),
+        targetStopId: 'bus:103',
+        vehicles: [bus('A', '101', seen: 'bilinmiyor'), bus('B', '101')],
+        now: now,
+      );
+      expect(r.length, 2);
     });
   });
 

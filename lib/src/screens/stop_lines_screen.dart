@@ -15,7 +15,9 @@ import '../state/journey_provider.dart';
 import '../theme/app_theme.dart';
 import '../util/insets.dart';
 import '../util/haptics.dart';
+import '../util/turkish.dart';
 import 'alarm_setup_screen.dart';
+import 'live_bus_screen.dart';
 import 'nearby_map_screen.dart';
 
 /// Bir otobüs durağından geçen hatları TEMİZ, tam ekran olarak sunar. Kullanıcı
@@ -149,6 +151,18 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
     ));
   }
 
+  /// Bu otobüsü haritada TEK BAŞINA göster.
+  void _openBusOnMap(_Arrival a) {
+    Haptics.light();
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => LiveBusScreen(
+        line: a.line,
+        city: city,
+        focusPlate: a.estimate.vehicle.plate,
+      ),
+    ));
+  }
+
   /// "Yaklaşan otobüsler" bloğu — hiç canlı veri yoksa hiç çizilmez.
   List<Widget> _arrivalsSection(TextTheme text) {
     final TransitCity lineCity = city ?? ref.read(activeCityProvider);
@@ -201,7 +215,11 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
         for (final a in _arrivals.take(6)) ...[
           _ArrivalRow(
             arrival: a,
-            onTap: () => _pick(context, ref, a.brief),
+            // Karta dokunmak O OTOBÜSÜ haritada açar; alarm kurmak için
+            // aşağıdaki hat listesi var. Yaklaşan bir otobüse bakan kişi
+            // önce "nerede kalmış" diye merak ediyor.
+            onTap: () => _openBusOnMap(a),
+            onAlarm: () => _pick(context, ref, a.brief),
           ),
           const SizedBox(height: 8),
         ],
@@ -272,7 +290,7 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            stop.name.toUpperCase(),
+                            trUpper(stop.name),
                             style: text.titleLarge?.copyWith(
                               fontWeight: FontWeight.w800,
                               height: 1.15,
@@ -281,7 +299,7 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
                           if (stop.contextLabel.isNotEmpty) ...[
                             const SizedBox(height: 4),
                             Text(
-                              stop.contextLabel.toUpperCase(),
+                              trUpper(stop.contextLabel),
                               style: text.labelMedium?.copyWith(
                                   color: VigilantColors.onSurfaceVariant),
                             ),
@@ -475,10 +493,19 @@ class _LineChip extends StatelessWidget {
 
 /// Yaklaşan tek otobüs kartı.
 class _ArrivalRow extends StatelessWidget {
-  const _ArrivalRow({required this.arrival, required this.onTap});
+  const _ArrivalRow({
+    required this.arrival,
+    required this.onTap,
+    required this.onAlarm,
+  });
 
   final _Arrival arrival;
+
+  /// Kart gövdesi: otobüsü haritada göster.
   final VoidCallback onTap;
+
+  /// Sağdaki düğme: bu hatla bu durağa alarm kur.
+  final VoidCallback onAlarm;
 
   /// Orta tahmini dakikaya çevirir.
   String get _minutes {
@@ -563,9 +590,22 @@ class _ArrivalRow extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              // Otobüsün hattaki ilerleyişi: kaç durak kaldığını tek bakışta
-              // veren dikey gösterge.
-              _StopsAwayGauge(stopsAway: e.stopsAway, accent: accent),
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Otobüsün hattaki ilerleyişi: kaç durak kaldığını tek
+                  // bakışta veren dikey gösterge.
+                  _StopsAwayGauge(stopsAway: e.stopsAway, accent: accent),
+                  const SizedBox(height: 6),
+                  IconButton(
+                    onPressed: onAlarm,
+                    visualDensity: VisualDensity.compact,
+                    tooltip: 'Bu hatla alarm kur',
+                    icon: const Icon(Icons.alarm_add_rounded,
+                        size: 20, color: VigilantColors.primary),
+                  ),
+                ],
+              ),
             ],
           ),
         ),

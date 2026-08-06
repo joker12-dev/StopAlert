@@ -16,6 +16,7 @@ import '../widgets/skeleton.dart';
 import 'alarm_setup_screen.dart';
 import 'live_bus_screen.dart';
 import 'route_map_screen.dart';
+import 'stop_lines_screen.dart';
 import 'timetable_screen.dart';
 
 /// Tek otobüs hattı sayfası (İETT tarzı): "MK13" → NORMAL gidiş/dönüş +
@@ -152,6 +153,18 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
   /// bakan kullanıcıdan canlı takibi saklamak yanlıştı (İETT servisi hattın
   /// şehrine bağlı, kullanıcının bulunduğu şehre değil).
   TransitCity get _lineCity => widget.city ?? ref.read(activeCityProvider);
+
+  /// Durak künyesi sayfasını aç (yaklaşan otobüsler + geçen hatlar).
+  Future<void> _openStopInfo(Stop stop) async {
+    Haptics.light();
+    final lines =
+        await TransitDb.instance.linesForStop(stop.id, cityId: widget.city?.id);
+    if (!mounted) return;
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) =>
+          StopLinesScreen(stop: stop, lines: lines, city: widget.city),
+    ));
+  }
 
   void _pickTarget(Stop stop) {
     final line = _line;
@@ -292,6 +305,7 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
                               line?.color ?? '', line?.type ?? LineType.bus),
                           busCount: _busesAtStop[raw] ?? 0,
                           onTap: () => _pickTarget(stop),
+                          onInfo: () => _openStopInfo(stop),
                         );
                       },
                     ),
@@ -725,6 +739,7 @@ class _StopRow extends StatelessWidget {
     required this.color,
     required this.busCount,
     required this.onTap,
+    required this.onInfo,
   });
 
   final String name;
@@ -736,6 +751,9 @@ class _StopRow extends StatelessWidget {
   /// Bu durakta bulunan CANLI araç sayısı (0 = bilgi yok/araç yok).
   final int busCount;
   final VoidCallback onTap;
+
+  /// Durak künyesine git (yaklaşan otobüsler, geçen hatlar).
+  final VoidCallback onInfo;
 
   @override
   Widget build(BuildContext context) {
@@ -838,9 +856,21 @@ class _StopRow extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(width: 8),
-            Icon(Icons.alarm_add_rounded,
-                size: 20, color: VigilantColors.onSurfaceVariant),
+            const SizedBox(width: 4),
+            // Durak künyesi: yaklaşan otobüsler ve duraktan geçen
+            // öteki hatlar. Alarm kurmadan ÖNCE bakmak isteyen için.
+            IconButton(
+              onPressed: onInfo,
+              visualDensity: VisualDensity.compact,
+              tooltip: 'Durak bilgisi',
+              icon: const Icon(Icons.info_outline_rounded,
+                  size: 20, color: VigilantColors.onSurfaceVariant),
+            ),
+            const Padding(
+              padding: EdgeInsets.only(right: 4),
+              child: Icon(Icons.alarm_add_rounded,
+                  size: 20, color: VigilantColors.onSurfaceVariant),
+            ),
           ],
         ),
       ),

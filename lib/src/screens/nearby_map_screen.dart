@@ -531,7 +531,14 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
     // saniye sonra geldiğinde kamera şehir merkezinde kalıyordu; ilk gerçek
     // konumda bir kez kullanıcıya taşınır (kullanıcı haritayı kendisi
     // oynattıysa dokunulmaz).
-    if (!_centeredOnUser && user != null && _mapReady && !_userMovedMap) {
+    // BELİRLİ BİR DURAĞA odaklanarak açıldıysak kamerayı kullanıcının
+    // konumuna taşıma: "Konuma git" ile gelen kişi o durağı görmek
+    // istiyor, kendi mahallesini değil.
+    if (widget.focusStop == null &&
+        !_centeredOnUser &&
+        user != null &&
+        _mapReady &&
+        !_userMovedMap) {
       _centeredOnUser = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _centerOnVisible(user, 16);

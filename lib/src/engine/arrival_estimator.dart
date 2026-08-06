@@ -85,11 +85,14 @@ abstract final class ArrivalEstimator {
   /// Ölçüm yerine tarifeye dayanan tahmine eklenen belirsizlik (saniye).
   static const _scheduleExtraSpread = 45;
 
-  /// Bayat konum düzeltmesinin üst sınırı (saniye).
+  /// Bir aracın "aktif" sayılması için son konum yayınının azami yaşı.
   ///
-  /// Zaman damgası İstanbul yerel saati; cihaz başka saat diliminde olursa
-  /// fark saatlerce çıkabilir. Sınır, böyle bir durumda tahminin saçmalamasını
-  /// engeller.
+  /// Servis, seferi bitmiş ya da garaja çekilmiş araçları listede
+  /// bırakabiliyor. Üç dakikadır konum bildirmeyen otobüsü "yaklaşıyor"
+  /// diye göstermek, gelmeyecek bir otobüsü beklettirmek olur.
+  static const activeWithinSeconds = 180;
+
+  /// Bayat konum düzeltmesinin üst sınırı (saniye).
   static const _maxStalenessSeconds = 300;
 
   /// [line] yönündeki [vehicles] için [targetStopId] durağına varış tahminleri.
@@ -105,10 +108,23 @@ abstract final class ArrivalEstimator {
     final targetIndex = line.indexOfStop(targetStopId);
     if (targetIndex <= 0) return const [];
 
+    // Tazelik ÖLÇÜSÜ cihaz saati DEĞİL, aynı fotoğraftaki en yeni damga.
+    //
+    // Zaman damgaları İstanbul yerel saatinde geliyor; cihaz başka bir saat
+    // diliminde ya da saati kaymışsa TÜM araçlar bayat görünür ve liste
+    // bomboş kalırdı. Araçların hepsi aynı yayından geldiği için göreli
+    // karşılaştırma saat diliminden bağımsızdır.
+    final reference = _referenceTime(vehicles) ?? clock;
+
     final seconds = segmentSecondsFor(line);
     final out = <ArrivalEstimate>[];
 
     for (final v in vehicles) {
+      final age = _ageSeconds(v, reference);
+      // Uzun süredir konum bildirmeyen araç seferde değildir (garaja
+      // çekilmiş, seferi bitmiş). Onu "yaklaşıyor" diye göstermek
+      // gelmeyecek bir otobüsü beklettirmek olur.
+      if (age != null && age > activeWithinSeconds) continue;
       final idx = _vehicleIndex(line, v);
       // Durağı geçmiş ya da yeri belirlenemeyen araç gösterilmez: "geçti"
       // bilgisini varış gibi sunmak kullanıcıyı boşuna bekletir.
@@ -131,7 +147,9 @@ abstract final class ArrivalEstimator {
         }
       }
 
-      eta -= _stalenessSeconds(v, clock);
+      // Yayından bu yana geçen sürede otobüs yol almaya devam etti.
+      final staleness = (age ?? 0).clamp(0, _maxStalenessSeconds);
+      eta -= staleness;
       if (eta < 0) eta = 0;
 
       final quality = learnedSegments == total
@@ -156,6 +174,34 @@ abstract final class ArrivalEstimator {
     return out;
   }
 
+  /// Yayındaki EN YENİ zaman damgası — "şimdi"nin yerine geçer.
+  /// Hiçbiri çözülemezse null.
+  static DateTime? _referenceTime(List<BusVehicle> vehicles) {
+    DateTime? newest;
+    for (final v in vehicles) {
+      final t = _parseSeen(v);
+      if (t == null) continue;
+      if (newest == null || t.isAfter(newest)) newest = t;
+    }
+    return newest;
+  }
+
+  /// Aracın konumunun [reference] anına göre yaşı (saniye).
+  /// Damga okunamıyorsa null — o araç ne elenir ne düzeltilir.
+  static int? _ageSeconds(BusVehicle v, DateTime reference) {
+    final t = _parseSeen(v);
+    if (t == null) return null;
+    final d = reference.difference(t).inSeconds;
+    return d < 0 ? 0 : d;
+  }
+
+  /// Biçim: "2026-08-06 22:38:57".
+  static DateTime? _parseSeen(BusVehicle v) {
+    final raw = v.lastSeen.trim();
+    if (raw.isEmpty) return null;
+    return DateTime.tryParse(raw.replaceFirst(' ', 'T'));
+  }
+
   /// Aracın hattaki durak sırası.
   ///
   /// Önce servisin verdiği en yakın durak kodu kullanılır — İETT bunu zaten
@@ -175,20 +221,6 @@ abstract final class ArrivalEstimator {
     // Hattan çok uzaktaki araç bu güzergâhta değildir (garaj seferi vb.).
     if (proj.offsetMeters > 400) return null;
     return proj.t >= 0.5 ? proj.segmentIndex + 1 : proj.segmentIndex;
-  }
-
-  /// Son konum yayınından bu yana geçen süre (saniye).
-  ///
-  /// Biçim: "2026-08-06 22:38:57" (İstanbul yerel saati). Çözülemezse 0
-  /// döner — yanlış bir düzeltme yapmaktansa hiç yapmamak yeğdir.
-  static double _stalenessSeconds(BusVehicle v, DateTime now) {
-    final raw = v.lastSeen.trim();
-    if (raw.isEmpty) return 0;
-    final t = DateTime.tryParse(raw.replaceFirst(' ', 'T'));
-    if (t == null) return 0;
-    final d = now.difference(t).inSeconds;
-    if (d <= 0) return 0;
-    return d > _maxStalenessSeconds ? _maxStalenessSeconds.toDouble() : d.toDouble();
   }
 
   /// Hattın segment süreleri — MESAFEYE göre dağıtılmış.

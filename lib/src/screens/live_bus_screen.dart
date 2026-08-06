@@ -28,7 +28,19 @@ import 'alarm_setup_screen.dart';
 /// yoklamak ne veriyi tazeler ne pili korur. Kullanıcı ne zaman baktığını
 /// kendi bilir.
 class LiveBusScreen extends ConsumerStatefulWidget {
-  const LiveBusScreen({super.key, required this.line, this.city});
+  const LiveBusScreen({
+    super.key,
+    required this.line,
+    this.city,
+    this.focusPlate,
+  });
+
+  /// Verilirse haritada YALNIZCA bu kapı numaralı araç gösterilir.
+  ///
+  /// Durak sayfasındaki "yaklaşan otobüsler" listesinden gelindiğinde
+  /// kullanıcı belirli bir otobüsü merak ediyor; hattın tüm araçlarını
+  /// göstermek onu kalabalıkta kaybettirirdi.
+  final String? focusPlate;
 
   /// Konumları gösterilecek hat (güzergâh çizgisi + duraklar buradan).
   final TransitLine line;
@@ -195,13 +207,24 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen> {
   ///
   /// Yön anlaşılamayan araç (depar/garaj seferi, boş güzergâh kodu) GİZLENMEZ:
   /// otobüsün orada olduğu gerçek, yönünü bilmemek onu yok saymayı gerektirmez.
-  List<BusVehicle> get _shown => [
+  List<BusVehicle> get _shown {
+    final focus = widget.focusPlate?.trim();
+    if (focus != null && focus.isNotEmpty) {
+      // Tek araç odağı: yön süzgeci uygulanmaz — kullanıcı zaten
+      // belirli bir otobüsü seçti.
+      return [
         for (final v in _vehicles)
-          if (v.routeCode.isEmpty ||
-              (!v.routeCode.contains('_G_') && !v.routeCode.contains('_D_')) ||
-              v.isGidis == _isGidisLine)
-            v,
+          if (v.plate.trim() == focus) v,
       ];
+    }
+    return [
+      for (final v in _vehicles)
+        if (v.routeCode.isEmpty ||
+            (!v.routeCode.contains('_G_') && !v.routeCode.contains('_D_')) ||
+            v.isGidis == _isGidisLine)
+          v,
+    ];
+  }
 
   /// Gösterilen varyant gidiş mi — hat id'si `bus:147_G` biçiminde.
   bool get _isGidisLine => _line.id.endsWith('_G');
