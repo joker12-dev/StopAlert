@@ -44,6 +44,10 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
   List<TransitLineBrief> get lines => widget.lines;
   TransitCity? get city => widget.city;
 
+  /// Durak kodu (İETT'nin kullandığı ham numara).
+  String get _stopCode =>
+      stop.id.startsWith(kBusPrefix) ? stop.id.substring(kBusPrefix.length) : '';
+
   /// Bu durağa yaklaşan otobüsler — en yakın varıştan uzağa sıralı.
   List<_Arrival> _arrivals = const [];
   bool _loadingArrivals = false;
@@ -250,63 +254,100 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
                 ],
               ),
             ),
+            // Durak künyesi: ad, yön, durak kodu + "Konuma git".
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.location_on,
-                          size: 16, color: VigilantColors.primary),
-                      const SizedBox(width: 6),
-                      Text('İNECEĞİN DURAK',
-                          style: text.labelSmall?.copyWith(
-                              color: VigilantColors.onSurfaceVariant,
-                              letterSpacing: 1.2)),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Text(stop.name, style: text.headlineSmall),
-                  if (stop.contextLabel.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: Text(stop.contextLabel,
-                          style: text.labelMedium
-                              ?.copyWith(color: VigilantColors.secondary)),
-                    ),
-                  const SizedBox(height: 10),
-                  Text('Hangi otobüse bineceksin? Seçince o hatta bu durağa '
-                      'yaklaşınca seni uyarırım.',
-                      style: text.bodyMedium
-                          ?.copyWith(color: VigilantColors.onSurfaceVariant)),
-                  const SizedBox(height: 12),
-                  // Durağı haritada göster (konumdan yürüme rotasıyla).
-                  SizedBox(
-                    height: 44,
-                    child: OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: VigilantColors.onSurface,
-                        side: BorderSide(
-                            color: VigilantColors.surfaceVariant
-                                .withValues(alpha: 0.6)),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
+                decoration: BoxDecoration(
+                  color: VigilantColors.surfaceContainer,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            stop.name.toUpperCase(),
+                            style: text.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w800,
+                              height: 1.15,
+                            ),
+                          ),
+                          if (stop.contextLabel.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              stop.contextLabel.toUpperCase(),
+                              style: text.labelMedium?.copyWith(
+                                  color: VigilantColors.onSurfaceVariant),
+                            ),
+                          ],
+                          if (_stopCode.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              'Durak Kodu: $_stopCode',
+                              style: text.labelMedium?.copyWith(
+                                  color: VigilantColors.onSurfaceVariant),
+                            ),
+                          ],
+                        ],
                       ),
-                      onPressed: () {
+                    ),
+                    const SizedBox(width: 12),
+                    // "Konuma git" — durağı haritada, yürüme rotasıyla açar.
+                    InkWell(
+                      onTap: () {
                         Haptics.light();
                         Navigator.of(context).push(MaterialPageRoute(
                           builder: (_) => NearbyMapScreen(focusStop: stop),
                         ));
                       },
-                      icon: const Icon(Icons.map_rounded,
-                          size: 18, color: VigilantColors.primary),
-                      label: const Text('Haritada görüntüle'),
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        width: 74,
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        decoration: BoxDecoration(
+                          color: VigilantColors.primary,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.route_rounded,
+                                color: VigilantColors.onPrimary, size: 22),
+                            const SizedBox(height: 4),
+                            Text('Konuma git',
+                                textAlign: TextAlign.center,
+                                style: text.labelSmall?.copyWith(
+                                    color: VigilantColors.onPrimary,
+                                    fontSize: 10)),
+                          ],
+                        ),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
+            // Bu duraktan geçen hatların kodları — dokununca o hatla alarm.
+            if (lines.isNotEmpty)
+              SizedBox(
+                height: 54,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                  itemCount: lines.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemBuilder: (context, i) => _LineChip(
+                    code: lines[i].code,
+                    onTap: () => _pick(context, ref, lines[i]),
+                  ),
+                ),
+              ),
             const SizedBox(height: 16),
             Expanded(
               child: ListView(
@@ -397,12 +438,54 @@ class _Arrival {
   final ArrivalEstimate estimate;
 }
 
-/// Yaklaşan tek otobüs satırı.
+/// Bu duraktan geçen bir hattın kod çipi.
+class _LineChip extends StatelessWidget {
+  const _LineChip({required this.code, required this.onTap});
+
+  final String code;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return Material(
+      color: VigilantColors.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          constraints: const BoxConstraints(minWidth: 76),
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+                color: VigilantColors.surfaceVariant.withValues(alpha: 0.5)),
+          ),
+          child: Text(
+            code,
+            style: text.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Yaklaşan tek otobüs kartı.
 class _ArrivalRow extends StatelessWidget {
   const _ArrivalRow({required this.arrival, required this.onTap});
 
   final _Arrival arrival;
   final VoidCallback onTap;
+
+  /// Orta tahmini dakikaya çevirir.
+  String get _minutes {
+    final m = (arrival.estimate.seconds / 60).round();
+    if (arrival.estimate.maxSeconds <= 90) return 'şimdi';
+    return '$m dk';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -411,48 +494,67 @@ class _ArrivalRow extends StatelessWidget {
     final imminent = e.maxSeconds <= 120;
     final accent =
         imminent ? VigilantColors.secondary : VigilantColors.onSurface;
+    final plate = e.vehicle.plate.trim();
 
     return Material(
       color: VigilantColors.surfaceContainer,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(18),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+          padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                constraints: const BoxConstraints(minWidth: 48),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: VigilantColors.primary.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(arrival.brief.code,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: text.titleSmall?.copyWith(
-                        color: VigilantColors.primary,
-                        fontWeight: FontWeight.w800)),
-              ),
-              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      arrival.line.stops.last.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: text.bodyMedium,
+                      arrival.brief.code,
+                      style: text.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w800),
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 3),
                     Text(
-                      '${e.stopsAway} durak uzakta'
+                      arrival.line.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: text.labelLarge?.copyWith(
+                          color: VigilantColors.onSurfaceVariant, height: 1.3),
+                    ),
+                    if (plate.isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        'Kapı No: $plate',
+                        style: text.labelMedium?.copyWith(
+                            color: VigilantColors.onSurfaceVariant),
+                      ),
+                    ],
+                    const SizedBox(height: 8),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      children: [
+                        Text(
+                          'Geliş Süresi: ',
+                          style: text.bodyMedium?.copyWith(
+                              color: VigilantColors.onSurfaceVariant),
+                        ),
+                        Text(
+                          _minutes,
+                          style: text.titleLarge?.copyWith(
+                              color: accent, fontWeight: FontWeight.w800),
+                        ),
+                      ],
+                    ),
+                    // Belirsizliği SAKLAMA: konum ~60 sn'de bir geliyor,
+                    // tek dakikalık kesinlik iddia edemeyiz. Ana sayı
+                    // okunaklı kalsın diye ikincil satırda duruyor.
+                    Text(
+                      '${e.rangeLabel} aralığında · ${e.stopsAway} durak'
                       '${e.quality == ArrivalQuality.schedule ? " · tarifeye göre" : ""}',
                       style: text.labelSmall
                           ?.copyWith(color: VigilantColors.onSurfaceVariant),
@@ -461,16 +563,54 @@ class _ArrivalRow extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              Text(
-                e.rangeLabel,
-                style: text.titleMedium?.copyWith(
-                  color: accent,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
+              // Otobüsün hattaki ilerleyişi: kaç durak kaldığını tek bakışta
+              // veren dikey gösterge.
+              _StopsAwayGauge(stopsAway: e.stopsAway, accent: accent),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// "Kaç durak kaldı" göstergesi — durak sayısı kadar nokta, hedef en altta.
+class _StopsAwayGauge extends StatelessWidget {
+  const _StopsAwayGauge({required this.stopsAway, required this.accent});
+
+  final int stopsAway;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    // En çok 4 nokta çizilir; fazlası okunmuyor ve kartı uzatıyor.
+    final dots = stopsAway.clamp(1, 4);
+    return Container(
+      width: 46,
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      decoration: BoxDecoration(
+        color: VigilantColors.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.directions_bus_rounded, size: 18, color: accent),
+          for (var i = 0; i < dots; i++) ...[
+            const SizedBox(height: 4),
+            Container(
+              width: 4,
+              height: 4,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: VigilantColors.onSurfaceVariant.withValues(alpha: 0.5),
+              ),
+            ),
+          ],
+          const SizedBox(height: 5),
+          const Icon(Icons.person_pin_circle_rounded,
+              size: 18, color: VigilantColors.primary),
+        ],
       ),
     );
   }
