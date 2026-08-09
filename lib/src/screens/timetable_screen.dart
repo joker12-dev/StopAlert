@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../data/models.dart';
 import '../data/timetable.dart';
 import '../data/transit_city.dart';
 import '../services/timetable_service.dart';
@@ -19,6 +20,7 @@ class TimetableScreen extends StatefulWidget {
     required this.lineCode,
     required this.lineName,
     this.city,
+    this.type,
     this.outboundLabel = 'Gidiş',
     this.inboundLabel = 'Dönüş',
   });
@@ -29,6 +31,10 @@ class TimetableScreen extends StatefulWidget {
   /// Hattın şehri — saatlerin nereden okunacağını belirler (İETT servisi mi,
   /// indirilen paket mi).
   final TransitCity? city;
+
+  /// Hattın TÜRÜ — kaynağı belirler: otobüs saatleri İETT servisinden,
+  /// metro/Marmaray/tramvay/vapur saatleri indirilen paketten gelir.
+  final LineType? type;
   final String outboundLabel;
   final String inboundLabel;
 
@@ -50,7 +56,7 @@ class _TimetableScreenState extends State<TimetableScreen> {
 
   Future<void> _load() async {
     final t = await TimetableService.instance
-        .forLine(widget.lineCode, city: widget.city);
+        .forLine(widget.lineCode, city: widget.city, type: widget.type);
     if (!mounted) return;
     setState(() {
       _table = t;

@@ -81,20 +81,29 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
     _loadArrivals();
   }
 
-  /// Şehrin canlı filo servisi varsa yaklaşan otobüsleri hesapla.
+  /// Yaklaşan araçlar — HAT TÜRÜNE GÖRE İKİ AYRI KAYNAK.
+  ///
+  /// Canlı araç konumu yalnızca LASTİKLİ hatlar için var (İETT filo servisi).
+  /// Metro, Marmaray, tramvay ve vapurun canlı konumu hiçbir yerde yayınlanmıyor;
+  /// onlar TARİFEDEN hesaplanır. Şehir bazlı ayırmak yetmiyordu: İstanbul'da
+  /// canlı otobüs var diye metro durakları bomboş kalıyordu.
   Future<void> _loadArrivals() async {
     final TransitCity lineCity = city ?? ref.read(activeCityProvider);
-    // Canlı araç konumu yoksa tarifeye düş (Kocaeli).
-    if (!lineCity.hasLiveBus) {
-      if (lineCity.hasTimetable) await _loadScheduled(lineCity);
-      return;
+    final live = [for (final b in lines) if (_isRubberTyred(b.type)) b];
+    final rail = [for (final b in lines) if (!_isRubberTyred(b.type)) b];
+
+    // Tarifeli hatlar: metro/Marmaray/tramvay/vapur (+ canlısı olmayan şehir).
+    final scheduled = lineCity.hasLiveBus ? rail : lines.toList();
+    if (scheduled.isNotEmpty && lineCity.hasTimetable) {
+      await _loadScheduled(lineCity, scheduled);
     }
+    if (!lineCity.hasLiveBus || live.isEmpty) return;
     setState(() => _loadingArrivals = true);
 
     final learner = await SegmentLearningStore.load();
     final found = <_Arrival>[];
 
-    for (final brief in lines.take(_maxLinesQueried)) {
+    for (final brief in live.take(_maxLinesQueried)) {
       try {
         final line =
             await TransitDb.instance.buildLine(brief.id, cityId: city?.id);
@@ -138,19 +147,20 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
   ///
   /// Hesap: seferin İLK DURAKTAN kalkış saati + ilk duraktan bu durağa
   /// kadarki yol süresi. Plan; trafiği ve gecikmeyi bilmez.
-  Future<void> _loadScheduled(TransitCity lineCity) async {
+  Future<void> _loadScheduled(
+      TransitCity lineCity, List<TransitLineBrief> targets) async {
     setState(() => _loadingArrivals = true);
     final learner = await SegmentLearningStore.load();
     final today = DayType.forDate(DateTime.now());
     final found = <_Scheduled>[];
 
-    for (final brief in lines.take(_maxLinesQueried)) {
+    for (final brief in targets.take(_maxLinesQueried)) {
       try {
         final line =
             await TransitDb.instance.buildLine(brief.id, cityId: city?.id);
         if (line == null || line.indexOfStop(stop.id) < 0) continue;
-        final table =
-            await TimetableService.instance.forLine(brief.code, city: lineCity);
+        final table = await TimetableService.instance
+            .forLine(brief.code, city: lineCity, type: brief.type);
         if (table.isEmpty) continue;
         // Bu varyant hangi yön: kimlikte kodlu ("10_G" gidiş).
         final rows =
@@ -180,6 +190,10 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
       _arrivalsAt = DateTime.now();
     });
   }
+
+  /// Canlı konumu YAYINLANAN türler. Ötekiler tarifeden hesaplanır.
+  static bool _isRubberTyred(LineType t) =>
+      t == LineType.bus || t == LineType.metrobus;
 
   Future<void> _pick(
       BuildContext context, WidgetRef ref, TransitLineBrief brief) async {

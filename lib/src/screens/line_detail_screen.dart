@@ -23,9 +23,21 @@ import 'timetable_screen.dart';
 /// ayrı DEPAR güzergâhları. Kullanıcı güzergâhı/yönü seçer, ineceği durağa
 /// dokununca alarm kurulur. Depar (garaj/özel sefer) normalle karışmaz.
 class LineDetailScreen extends ConsumerStatefulWidget {
-  const LineDetailScreen({super.key, required this.code, this.city});
+  const LineDetailScreen({
+    super.key,
+    required this.code,
+    this.city,
+    this.type,
+  });
 
   final String code;
+
+  /// Hattın TÜRÜ biliniyorsa geçilir.
+  ///
+  /// Aynı kod iki türde olabiliyor: İETT'de M5/M7/F2 kodlu OTOBÜS hatları
+  /// var, aynı kodlu metro hatları da aynı pakette. Tür verilmezse sayfa
+  /// ikisini karıştırırdı.
+  final LineType? type;
 
   /// Hat BAŞKA şehrin paketindeyse o şehir. Null = aktif şehir.
   ///
@@ -76,8 +88,8 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
   bool _railReversed = false;
 
   Future<void> _load() async {
-    final v = await TransitDb.instance
-        .directionsForCode(widget.code, cityId: widget.city?.id);
+    final v = await TransitDb.instance.directionsForCode(widget.code,
+        cityId: widget.city?.id, type: widget.type?.name);
     if (!mounted) return;
 
     if (v.isEmpty) {
@@ -470,8 +482,13 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
     // Hattın şehri canlı filo servisi veriyorsa göster — kullanıcının hangi
     // şehirde olduğu belirleyici değil.
     final TransitCity lineCity = widget.city ?? ref.watch(activeCityProvider);
-    final hasLive = lineCity.hasLiveBus &&
-        (line.type == LineType.bus || line.type == LineType.metrobus);
+    // RAY HATLARINDA DA AÇILIR: konum canlı değil, tarifeden üretiliyor
+    // (bkz. `ScheduledVehicles`). Ekran bunu açıkça yazıyor. Ölçüt, hattın
+    // gösterilecek bir konumu olup olmadığı — canlı yayın olup olmadığı değil.
+    final rubber =
+        line.type == LineType.bus || line.type == LineType.metrobus;
+    final hasLive =
+        rubber ? lineCity.hasLiveBus : lineCity.hasTimetable;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
       child: Row(
@@ -494,7 +511,7 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
             Expanded(
               child: _ActionButton(
                 icon: Icons.my_location_rounded,
-                label: 'Canlı konum',
+                label: rubber ? 'Canlı konum' : 'Nerede?',
                 filled: false,
                 onTap: () {
                   Haptics.light();
@@ -533,6 +550,7 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
               lineCode: line.code,
               lineName: line.name,
               city: lineCity,
+              type: line.type,
               outboundLabel: _terminalLabel(_gidis?.name) ?? 'Gidiş',
               inboundLabel: _terminalLabel(_donus?.name) ?? 'Dönüş',
             ),

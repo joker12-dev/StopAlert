@@ -326,7 +326,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           cityId: ref.read(activeCityProvider).id,
         ));
     Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => LineDetailScreen(code: line.code),
+      builder: (_) => LineDetailScreen(code: line.code, type: line.type),
     ));
   }
 
@@ -399,8 +399,11 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       Haptics.light();
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) =>
-              LineDetailScreen(code: entry.lineCode, city: other),
+          builder: (_) => LineDetailScreen(
+            code: entry.lineCode,
+            city: other,
+            type: entry.lineType,
+          ),
         ),
       );
       return;
@@ -459,6 +462,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         builder: (_) => LineDetailScreen(
           code: brief.code,
           city: city.id == ref.read(activeCityProvider).id ? null : city,
+          type: brief.type,
         ),
       ),
     );

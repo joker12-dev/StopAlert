@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../data/models.dart';
 import '../data/timetable.dart';
 import '../data/transit_city.dart';
 import '../data/transit_db.dart';
@@ -34,16 +35,23 @@ class TimetableService {
   ///    derleme sırasında çıkarılıyor; eşdeğer bir servis yok).
   ///
   /// Ağ/veri yoksa BOŞ takvim döner — çağıran "saat bilgisi yok" gösterir.
-  Future<Timetable> forLine(String lineCode, {TransitCity? city}) async {
+  Future<Timetable> forLine(String lineCode,
+      {TransitCity? city, LineType? type}) async {
     final code = lineCode.trim();
     if (code.isEmpty) return Timetable(lineCode: code, departures: const []);
-    final cacheKey = '${city?.id ?? ''}|$code';
+    final cacheKey = '${city?.id ?? ''}|${type?.name ?? ''}|$code';
     final hit = _cache[cacheKey];
     if (hit != null) return hit;
 
-    // İETT servisi yalnızca İstanbul için. Ötekiler pakete bakar.
-    if (city != null && city.id != TransitCities.istanbul.id) {
-      final packaged = await _fromPackage(code, city);
+    final target = city ?? TransitCities.istanbul;
+    // RAY/DENİZ hatları İETT servisinde YOK — metro, Marmaray, tramvay ve
+    // vapur saatleri İBB'nin GTFS setinden derlenip PAKETE gömülü. Otobüs
+    // dışındaki her tür doğrudan pakete sorulur.
+    final rail = type != null && type != LineType.bus &&
+        type != LineType.metrobus;
+    // İETT servisi yalnızca İstanbul otobüsleri için. Ötekiler pakete bakar.
+    if (rail || target.id != TransitCities.istanbul.id) {
+      final packaged = await _fromPackage(code, target, type: type);
       _cache[cacheKey] = packaged;
       return packaged;
     }
@@ -89,9 +97,10 @@ class TimetableService {
   }
 
   /// İndirilen paketteki `departures` tablosundan takvim kurar.
-  static Future<Timetable> _fromPackage(String code, TransitCity city) async {
-    final rows =
-        await TransitDb.instance.departuresForCode(code, cityId: city.id);
+  static Future<Timetable> _fromPackage(String code, TransitCity city,
+      {LineType? type}) async {
+    final rows = await TransitDb.instance
+        .departuresForCode(code, cityId: city.id, type: type?.name);
     final out = <Departure>[];
     for (final (lineId, day, time) in rows) {
       final d = DayType.fromCode(day);

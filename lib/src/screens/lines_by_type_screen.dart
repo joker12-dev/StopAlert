@@ -281,7 +281,8 @@ class _LinesByTypeScreenState extends ConsumerState<LinesByTypeScreen> {
         onTap: () {
           Haptics.light();
           Navigator.of(context).push(MaterialPageRoute(
-            builder: (_) => LineDetailScreen(code: shown[i].code),
+            builder: (_) =>
+                LineDetailScreen(code: shown[i].code, type: shown[i].type),
           ));
         },
       ),

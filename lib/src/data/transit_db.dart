@@ -237,6 +237,24 @@ class TransitDb {
     return [for (final r in rows) _brief(r)];
   }
 
+  /// Paket RAY/DENİZ hatlarını da taşıyor mu?
+  ///
+  /// İstanbul paketi v20260809'dan itibaren metro/Marmaray/tramvay/vapur
+  /// hatlarını da içeriyor. İçeriyorsa ayrı `rail_*.json` OKUNMAZ — aksi
+  /// halde aynı hat iki kaynaktan gelip listelerde çift görünürdü.
+  Future<bool> hasRailLines({String? cityId}) async {
+    final db = _dbFor(cityId);
+    if (db == null) return false;
+    try {
+      final r = await db.rawQuery(
+        "SELECT 1 FROM lines WHERE type NOT IN ('bus','metrobus') LIMIT 1",
+      );
+      return r.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Verilen durakların BASKIN hat türü: durak kimliği -> tür adı.
   ///
   /// Durak kaydının kendi türü yok; anlamını ondan geçen hatlar veriyor.
@@ -296,6 +314,7 @@ class TransitDb {
   Future<List<(String lineId, String day, String time)>> departuresForCode(
     String code, {
     String? cityId,
+    String? type,
   }) async {
     final db = _dbFor(cityId);
     if (db == null) return const [];
@@ -303,8 +322,9 @@ class TransitDb {
       final rows = await db.rawQuery(
         'SELECT d.line_id AS line_id, d.day AS day, d.time AS time '
         'FROM departures d JOIN lines l ON l.id = d.line_id '
-        'WHERE l.code = ? ORDER BY d.time',
-        [code],
+        'WHERE l.code = ?${type == null ? '' : ' AND l.type = ?'} '
+        'ORDER BY d.time',
+        [code, if (type != null) type],
       );
       return [
         for (final r in rows)
@@ -323,14 +343,18 @@ class TransitDb {
   /// Bir hat NO'suna (ör. "MK13") ait tüm varyantlar — hat detay sayfası
   /// gidiş/dönüş ayrımını buradan kurar. Durak sayısına göre azalan.
   Future<List<LineVariant>> directionsForCode(String code,
-      {String? cityId}) async {
+      {String? cityId, String? type}) async {
     final db = _dbFor(cityId);
     if (db == null) return const [];
+    // TÜR SÜZGECİ ŞART: İETT'de M5, M7, F2 KODLU OTOBÜS hatları var ve artık
+    // aynı kodlu METRO hatları da aynı pakette. Tür verilmezse hat sayfası
+    // ikisini tek listede karıştırırdı.
     final rows = await db.rawQuery(
       'SELECT id, name, dir, depar, '
       '(SELECT COUNT(*) FROM line_stops WHERE line_id = lines.id) AS n '
-      'FROM lines WHERE code = ? ORDER BY depar, n DESC',
-      [code],
+      'FROM lines WHERE code = ?${type == null ? '' : ' AND type = ?'} '
+      'ORDER BY depar, n DESC',
+      [code, if (type != null) type],
     );
     return [
       for (final r in rows)

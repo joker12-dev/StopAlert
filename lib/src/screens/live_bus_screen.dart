@@ -6,11 +6,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../data/models.dart';
+import '../data/timetable.dart';
 import '../data/transit_city.dart';
 import '../data/transit_db.dart';
+import '../engine/scheduled_vehicles.dart';
 import '../services/iett_service.dart';
 import '../services/live_bus_service.dart';
 import '../services/routing_service.dart';
+import '../services/timetable_service.dart';
 import '../state/city_provider.dart';
 import '../state/journey_provider.dart';
 import '../state/live_location_provider.dart';
@@ -131,16 +134,41 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen> {
     }
   }
 
+  /// Bu hattın konumu CANLI mı, tarifeden mi üretiliyor.
+  ///
+  /// Canlı filo yayını yalnızca lastikli hatlar için var; metro, Marmaray,
+  /// tramvay ve vapurun anlık konumu hiçbir açık kaynakta yok.
+  bool get _scheduledOnly =>
+      _line.type != LineType.bus && _line.type != LineType.metrobus;
+
   Future<void> _load() async {
     if (!mounted) return;
     setState(() => _loading = true);
-    final list = await LiveBusService.instance.vehicles(_code);
+    final list = _scheduledOnly
+        ? await _fromTimetable()
+        : await LiveBusService.instance.vehicles(_code);
     if (!mounted) return;
     setState(() {
       _vehicles = list;
       _loading = false;
       _updatedAt = DateTime.now();
     });
+  }
+
+  /// Tarifeden ŞU AN yolda olması gereken seferleri konumlandır.
+  Future<List<BusVehicle>> _fromTimetable() async {
+    try {
+      final city = widget.city ?? ref.read(activeCityProvider);
+      final table = await TimetableService.instance
+          .forLine(_code, city: city, type: _line.type);
+      if (table.isEmpty) return const [];
+      final rows = table.forDay(DayType.forDate(DateTime.now()),
+          outbound: _line.id.contains('_G'));
+      if (rows.isEmpty) return const [];
+      return ScheduledVehicles.forLine(line: _line, departures: rows);
+    } catch (_) {
+      return const [];
+    }
   }
 
   /// Gidiş ↔ dönüş. Öteki varyantın DURAKLARI ve güzergâhı da değişir, yalnızca
@@ -467,7 +495,10 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen> {
                           });
                         },
                         child: _BusMarker(
-                            vehicle: v, selected: _selected?.plate == v.plate),
+                          vehicle: v,
+                          selected: _selected?.plate == v.plate,
+                          type: _line.type,
+                        ),
                       ),
                     ),
                 ]),
@@ -496,6 +527,7 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen> {
               loading: _loading,
               switchingDirection: _switchingDirection,
               updatedAt: _updatedAt,
+              scheduled: _scheduledOnly,
               selected: _selected,
               selectedStop: _selectedStop,
               directionLabel: _line.stops.isEmpty ? '' : _line.stops.last.name,
@@ -742,10 +774,18 @@ class _StopDot extends StatelessWidget {
 }
 
 class _BusMarker extends StatelessWidget {
-  const _BusMarker({required this.vehicle, this.selected = false});
+  const _BusMarker({
+    required this.vehicle,
+    this.selected = false,
+    this.type = LineType.bus,
+  });
 
   final BusVehicle vehicle;
   final bool selected;
+
+  /// Hattın türü — işaretin simgesini belirler. Metro konumuna otobüs
+  /// simgesi koymak, konumun nereden geldiği konusunda da yanıltıcıydı.
+  final LineType type;
 
   @override
   Widget build(BuildContext context) {
@@ -753,7 +793,12 @@ class _BusMarker extends StatelessWidget {
       duration: const Duration(milliseconds: 160),
       margin: EdgeInsets.all(selected ? 0 : 4),
       decoration: BoxDecoration(
-        color: selected ? Colors.white : VigilantColors.primary,
+        // Tarifeden üretilen konum daha SOLUK: haritada canlı bir araçla
+        // aynı kesinlikte görünmemeli.
+        color: selected
+            ? Colors.white
+            : VigilantColors.primary
+                .withValues(alpha: vehicle.scheduled ? 0.72 : 1),
         shape: BoxShape.circle,
         border: Border.all(
             color: selected ? VigilantColors.primary : Colors.white,
@@ -769,7 +814,7 @@ class _BusMarker extends StatelessWidget {
               offset: const Offset(0, 2)),
         ],
       ),
-      child: Icon(Icons.directions_bus_filled_rounded,
+      child: Icon(lineTypeIcon(type),
           color: selected ? VigilantColors.primary : Colors.white,
           size: selected ? 22 : 20),
     );
@@ -782,6 +827,7 @@ class _InfoCard extends StatelessWidget {
     required this.loading,
     required this.switchingDirection,
     required this.updatedAt,
+    required this.scheduled,
     required this.directionLabel,
     required this.onSwitchDirection,
     required this.onRefresh,
@@ -795,6 +841,10 @@ class _InfoCard extends StatelessWidget {
   final bool loading;
   final bool switchingDirection;
   final DateTime? updatedAt;
+
+  /// Konumlar tarifeden üretildiyse ARAYÜZ BUNU SÖYLER
+  /// (bkz. `ScheduledVehicles`).
+  final bool scheduled;
 
   /// Hattın gittiği son durak — "→ Kadıköy" biçiminde yön göstergesi.
   final String directionLabel;
@@ -910,7 +960,7 @@ class _InfoCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   count > 0
-                      ? 'Hatta $count otobüs'
+                      ? (scheduled ? 'Yolda $count sefer' : 'Hatta $count otobüs')
                       : (loading ? 'Yükleniyor…' : 'Şu an sefer görünmüyor'),
                   style: text.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
                 ),
@@ -929,9 +979,13 @@ class _InfoCard extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(top: 2),
             child: Text(
-              updatedAt == null
-                  ? 'İETT canlı filo verisi'
-                  : 'Güncellendi: $_ago',
+              scheduled
+                  // AÇIKÇA SÖYLE: kullanıcı canlı konum sanıp kapıda
+                  // beklememeli — bu, tarifenin okunmuş hâli.
+                  ? 'Tarifeye göre tahmini konum'
+                  : updatedAt == null
+                      ? 'İETT canlı filo verisi'
+                      : 'Güncellendi: $_ago',
               style: text.labelSmall
                   ?.copyWith(color: VigilantColors.onSurfaceVariant),
             ),

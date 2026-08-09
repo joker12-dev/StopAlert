@@ -199,6 +199,7 @@ class BusVehicle {
     required this.routeCode,
     required this.lastSeen,
     required this.nearestStopCode,
+    this.scheduled = false,
   });
 
   /// Araç kapı numarası (ör. "T1019").
@@ -214,6 +215,13 @@ class BusVehicle {
   final String lastSeen;
   final String nearestStopCode;
 
+  /// Konum CANLI DEĞİL, tarifeden üretildi (metro/Marmaray/tramvay/vapur).
+  ///
+  /// Arayüz bunu görünür kılmak zorunda: kullanıcı canlı konuma güvenip
+  /// kapıda beklerken aslında bir plana baktığını bilmeli.
+  /// Bkz. `ScheduledVehicles`.
+  final bool scheduled;
+
   Map<String, dynamic> toMap() => {
         'plate': plate,
         'lat': lat,
@@ -222,6 +230,7 @@ class BusVehicle {
         'routeCode': routeCode,
         'lastSeen': lastSeen,
         'nearestStopCode': nearestStopCode,
+        'scheduled': scheduled,
       };
 
   factory BusVehicle.fromMap(Map<String, dynamic> m) => BusVehicle(
@@ -232,6 +241,7 @@ class BusVehicle {
         routeCode: m['routeCode'] as String? ?? '',
         lastSeen: m['lastSeen'] as String? ?? '',
         nearestStopCode: m['nearestStopCode'] as String? ?? '',
+        scheduled: m['scheduled'] as bool? ?? false,
       );
 
   /// Gidiş yönü mü (güzergâh kodundaki `_G_` / `_D_` işaretinden).

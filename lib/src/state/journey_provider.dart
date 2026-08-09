@@ -30,8 +30,14 @@ final linesProvider = FutureProvider<List<TransitLine>>((ref) async {
     // ÖNCE indirilen paket: metro/tramvay hatları uzadıkça mağaza güncellemesi
     // beklemeden tazelenebilsin. Yoksa APK'daki gömülü kopyaya düşülür — ilk
     // açılışta ağ olmasa da uygulama ray/vapurla çalışmak zorunda.
-    String? raw;
     final city = ref.watch(activeCityProvider);
+    // PAKET RAY HATLARINI TAŞIYORSA ayrı dosya hiç okunmaz: aynı hat iki
+    // kaynaktan gelince arama, hat listesi ve yakın duraklar ÇİFT gösteriyordu.
+    // (İstanbul paketi v20260809'dan itibaren metro/Marmaray/tramvay/vapur
+    // hatlarını, duraklarını ve SEFER SAATLERİNİ de içeriyor.)
+    if (await TransitDb.instance.hasRailLines()) return const <TransitLine>[];
+
+    String? raw;
     final path = await BusDataService.instance.railPath(city);
     if (path != null) {
       try {
