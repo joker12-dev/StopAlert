@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../util/haptics.dart';
+import '../data/search_filter.dart';
 import '../util/map_style.dart';
 
 /// Kalıcı kullanıcı ayarları (cihazda SharedPreferences).
@@ -21,6 +22,7 @@ class AppSettings {
     this.defaultStopsIndex = 1, // 2 durak
     this.contributeToCloud = false, // KVKK: anonim kalabalık öğrenmeye katkı
     this.mapStyle = 'canli', // MapTileStyle adi (varsayilan: Canli)
+    this.searchFilter = 'tumu', // SearchFilter.id (varsayilan: Tumu)
   });
 
   /// Kullanıcının takma adı (Profil + ana sayfa selamlaması).
@@ -44,6 +46,14 @@ class AppSettings {
 
   /// Kullanıcı-dostu harita stili etiketi.
   String get mapStyleLabel => mapTileStyle.label;
+
+  /// Arama ekranındaki tür süzgeci ([SearchFilter.id]).
+  ///
+  /// KALICI: kullanıcı "Otobüs"ü seçtiyse uygulamayı kapatıp açtığında
+  /// yine otobüste kalır — her açılışta seçimini tekrarlatmak sinir bozucu.
+  final String searchFilter;
+
+  SearchFilter get searchFilterValue => SearchFilter.fromId(searchFilter);
   final String alarmSound;
   final int snoozeMinutes;
   final int defaultTriggerMode;
@@ -82,6 +92,7 @@ class AppSettings {
     int? defaultStopsIndex,
     bool? contributeToCloud,
     String? mapStyle,
+    String? searchFilter,
   }) =>
       AppSettings(
         nickname: nickname ?? this.nickname,
@@ -93,6 +104,7 @@ class AppSettings {
         defaultStopsIndex: defaultStopsIndex ?? this.defaultStopsIndex,
         contributeToCloud: contributeToCloud ?? this.contributeToCloud,
         mapStyle: mapStyle ?? this.mapStyle,
+        searchFilter: searchFilter ?? this.searchFilter,
       );
 
   Map<String, dynamic> toMap() => {
@@ -105,6 +117,7 @@ class AppSettings {
         'defaultStopsIndex': defaultStopsIndex,
         'contributeToCloud': contributeToCloud,
         'mapStyle': mapStyle,
+        'searchFilter': searchFilter,
       };
 
   factory AppSettings.fromMap(Map<String, dynamic> m) => AppSettings(
@@ -119,6 +132,7 @@ class AppSettings {
         defaultStopsIndex: (m['defaultStopsIndex'] as num?)?.toInt() ?? 1,
         contributeToCloud: m['contributeToCloud'] as bool? ?? false,
         mapStyle: m['mapStyle'] as String? ?? 'canli',
+        searchFilter: m['searchFilter'] as String? ?? 'tumu',
       );
 }
 
@@ -189,4 +203,7 @@ class SettingsNotifier extends AsyncNotifier<AppSettings> {
 
   Future<void> setMapStyle(String value) =>
       _persist(_current.copyWith(mapStyle: value));
+
+  Future<void> setSearchFilter(SearchFilter value) =>
+      _persist(_current.copyWith(searchFilter: value.id));
 }

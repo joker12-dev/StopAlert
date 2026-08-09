@@ -58,9 +58,26 @@ class TransitDb {
   /// Aramaya açık ek şehirler.
   Iterable<String> get auxCities => _aux.keys;
 
-  Future<void> open(String path) async {
+  /// AKTİF paketin şehri. Sorgular `cityId` ile çağrıldığında bu değere
+  /// bakılır: aktif şehrin veritabanı `_db`'dedir, `_aux`'ta DEĞİL.
+  ///
+  /// Bilinmiyorsa (eski çağrı) `cityId` verilen sorgular yalnızca `_aux`'a
+  /// bakar — Kocaeli aktifken sefer saatleri boş dönüyordu, sebebi buydu.
+  String? _activeCityId;
+
+  Future<void> open(String path, {String? cityId}) async {
     if (_db != null) return;
     _db = await openDatabase(path, readOnly: true);
+    _activeCityId = cityId;
+  }
+
+  /// [cityId] için doğru bağlantı: aktif şehir `_db`, ötekiler `_aux`.
+  /// null = aktif şehir. Kapalı bir şehir istenirse null döner (yanlış
+  /// şehrin verisini döndürmektense boş dönmek doğru).
+  Database? _dbFor(String? cityId) {
+    if (cityId == null) return _db;
+    if (_activeCityId != null && cityId == _activeCityId) return _db;
+    return _aux[cityId];
   }
 
   /// Ek şehir veritabanını arama için aç (zaten açıksa dokunmaz).
@@ -86,6 +103,7 @@ class TransitDb {
   Future<void> close() async {
     final d = _db;
     _db = null;
+    _activeCityId = null;
     await d?.close();
     await closeAux();
   }
@@ -135,7 +153,7 @@ class TransitDb {
   /// [cityId] verilirse o şehrin ek veritabanında arar (bkz. [openAux]).
   Future<List<Stop>> searchStops(String query,
       {int limit = 20, String? cityId}) async {
-    final db = cityId == null ? _db : _aux[cityId];
+    final db = _dbFor(cityId);
     final q = query.trim();
     if (db == null || q.isEmpty) return const [];
     final rows = await db.query('stops',
@@ -149,7 +167,7 @@ class TransitDb {
   /// yalnızca hat seçilince [buildLine] ile yüklenir.
   Future<List<TransitLineBrief>> searchLines(String query,
       {int limit = 20, String? cityId}) async {
-    final db = cityId == null ? _db : _aux[cityId];
+    final db = _dbFor(cityId);
     final q = query.trim();
     if (db == null || q.isEmpty) return const [];
     final n = transitNorm(q);
@@ -183,7 +201,7 @@ class TransitDb {
     String code, {
     String? cityId,
   }) async {
-    final db = cityId == null ? _db : _aux[cityId];
+    final db = _dbFor(cityId);
     if (db == null) return const [];
     try {
       final rows = await db.rawQuery(
@@ -210,7 +228,7 @@ class TransitDb {
   /// gidiş/dönüş ayrımını buradan kurar. Durak sayısına göre azalan.
   Future<List<LineVariant>> directionsForCode(String code,
       {String? cityId}) async {
-    final db = cityId == null ? _db : _aux[cityId];
+    final db = _dbFor(cityId);
     if (db == null) return const [];
     final rows = await db.rawQuery(
       'SELECT id, name, dir, depar, '
@@ -235,7 +253,7 @@ class TransitDb {
   /// ve en çok duraklı varyant. İETT'deki gibi durakta her numara bir kez çıkar.
   Future<List<TransitLineBrief>> linesForStop(String externalStopId,
       {int limit = 40, String? cityId}) async {
-    final db = cityId == null ? _db : _aux[cityId];
+    final db = _dbFor(cityId);
     if (db == null) return const [];
     final raw = _stripId(externalStopId);
     if (raw == null) return const [];
@@ -256,7 +274,7 @@ class TransitDb {
   /// şehirdeki bir hatta bakarken AKTİF şehri değiştirmek zorunda kalmasın.
   Future<TransitLine?> buildLine(String externalLineId,
       {String? cityId}) async {
-    final db = cityId == null ? _db : _aux[cityId];
+    final db = _dbFor(cityId);
     if (db == null) return null;
     final raw = _stripId(externalLineId);
     if (raw == null) return null;

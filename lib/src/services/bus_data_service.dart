@@ -249,7 +249,7 @@ class BusDataService {
       try {
         // Şehir değiştiyse önceki veritabanı kapatılır: aynı anda tek paket.
         await TransitDb.instance.close();
-        await TransitDb.instance.open(path);
+        await TransitDb.instance.open(path, cityId: target.id);
         _openCityId = target.id;
         onProgress?.call(BusDataPhase.ready, 1);
         return;

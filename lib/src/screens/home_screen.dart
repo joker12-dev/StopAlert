@@ -494,7 +494,7 @@ class _HeroBackground extends StatelessWidget {
   }
 }
 
-/// Üst çubuk: maskot avatar + selam + tarih + hava durumu + zil.
+/// Üst çubuk: profil avatarı + selam + tarih + hava durumu + zil.
 class _TopBar extends ConsumerWidget {
   const _TopBar({required this.nickname, required this.dateText});
 
@@ -507,20 +507,26 @@ class _TopBar extends ConsumerWidget {
     final weather = ref.watch(weatherProvider).valueOrNull;
     return Row(
       children: [
+        // PROFİL avatarı — maskot değil.
+        //
+        // Buradaki yuvarlak kullanıcıyı temsil ediyor (adının yanında duruyor),
+        // uygulamayı değil; profil sayfasındaki avatarla aynı simge olması
+        // ikisinin aynı şey olduğunu anlatıyor. Maskot ana sayfanın başka
+        // yerlerinde duruyor.
         Container(
           width: 48,
           height: 48,
+          padding: const EdgeInsets.all(2),
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: VigilantColors.surfaceContainer,
             border: Border.all(
-                color: VigilantColors.surfaceContainerHigh, width: 2),
+                color: VigilantColors.primaryContainer, width: 2),
           ),
-          clipBehavior: Clip.antiAlias,
-          child: const Padding(
-            padding: EdgeInsets.all(3),
-            child: AnimatedMascot(MascotAssets.iyiYolculuklar,
-                height: 42, amplitude: 3),
+          child: const CircleAvatar(
+            backgroundColor: VigilantColors.surfaceContainerHigh,
+            child: Icon(Icons.person_outline,
+                size: 22, color: VigilantColors.onSurfaceVariant),
           ),
         ),
         const SizedBox(width: 12),

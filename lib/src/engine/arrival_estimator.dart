@@ -1,4 +1,5 @@
 import '../data/models.dart';
+import '../data/timetable.dart';
 import '../data/transit_db.dart';
 import '../services/iett_service.dart';
 import 'geo.dart';
@@ -263,5 +264,98 @@ abstract final class ArrivalEstimator {
             // uzun sürmez.
             .clamp(15, 600),
     ];
+  }
+}
+
+/// TARİFEYE dayalı varış — canlı araç konumu OLMAYAN şehirler için.
+///
+/// Kocaeli canlı araç konumu yayınlamıyor; elimizde yalnızca ilk duraktan
+/// kalkış saatleri (pakete gömülü) ve duraklar arası süre var. Bir seferin
+/// bu durağa ne zaman uğrayacağı = kalkış saati + ilk duraktan bu durağa
+/// kadarki yol süresi.
+///
+/// Bu bir TAHMİN DEĞİL, PLANDIR: trafiği, gecikmeyi, seferin iptal edilip
+/// edilmediğini bilmez. Kullanıcıya da böyle sunulmalı.
+class ScheduledArrival {
+  const ScheduledArrival({
+    required this.at,
+    required this.secondsAway,
+    required this.departureTime,
+  });
+
+  /// Bu durağa planlanan varış anı.
+  final DateTime at;
+
+  /// Şu andan itibaren kaç saniye.
+  final int secondsAway;
+
+  /// Seferin ilk duraktan kalkış saati ("06:15") — kullanıcı tarifeyle
+  /// eşleştirebilsin.
+  final String departureTime;
+
+  String get clockLabel {
+    final h = at.hour.toString().padLeft(2, '0');
+    final m = at.minute.toString().padLeft(2, '0');
+    return '$h:$m';
+  }
+
+  String get awayLabel {
+    final m = (secondsAway / 60).round();
+    if (m <= 0) return 'şimdi';
+    if (m < 60) return '$m dk';
+    return '${m ~/ 60} sa ${m % 60} dk';
+  }
+}
+
+extension ScheduledArrivals on ArrivalEstimator {
+  /// Bir yön varyantının [departures] kalkışlarından, [targetStopId] durağına
+  /// planlanan varışlar. [now]'dan sonrakiler, en yakından uzağa.
+  static List<ScheduledArrival> fromSchedule({
+    required TransitLine line,
+    required String targetStopId,
+    required List<Departure> departures,
+    SegmentLearner? learner,
+    DateTime? now,
+    int limit = 3,
+  }) {
+    final clock = now ?? DateTime.now();
+    final targetIndex = line.indexOfStop(targetStopId);
+    // 0 = ilk durak: kalkış saatinin kendisi zaten varış saatidir, yol
+    // süresi eklenmez. -1 = durak bu varyantta yok.
+    if (targetIndex < 0) return const [];
+
+    final seconds = ArrivalEstimator.segmentSecondsFor(line);
+    final out = <ScheduledArrival>[];
+
+    for (final d in departures) {
+      final parts = d.time.split(':');
+      if (parts.length < 2) continue;
+      final h = int.tryParse(parts[0]);
+      final m = int.tryParse(parts[1]);
+      if (h == null || m == null) continue;
+      final departAt = DateTime(clock.year, clock.month, clock.day, h, m);
+
+      // İlk duraktan hedefe yol süresi — öğrenilmiş süre varsa o kullanılır.
+      var travel = 0.0;
+      for (var i = 0; i < targetIndex; i++) {
+        final at = departAt.add(Duration(seconds: travel.round()));
+        final hit = learner?.lookup(
+            line.id, line.stops[i].id, line.stops[i + 1].id, TimeBucket.of(at));
+        travel += hit?.seconds ?? seconds[i];
+      }
+
+      final arriveAt = departAt.add(Duration(seconds: travel.round()));
+      final away = arriveAt.difference(clock).inSeconds;
+      // Geçmiş seferler atlanır; "kaçırdın" bilgisi burada işe yaramıyor.
+      if (away < 0) continue;
+      out.add(ScheduledArrival(
+        at: arriveAt,
+        secondsAway: away,
+        departureTime: d.time,
+      ));
+    }
+
+    out.sort((a, b) => a.secondsAway.compareTo(b.secondsAway));
+    return out.take(limit).toList();
   }
 }

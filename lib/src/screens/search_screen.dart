@@ -4,10 +4,12 @@ import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 import '../data/models.dart';
 import '../data/recent_search.dart';
+import '../data/search_filter.dart';
 import '../data/transit_city.dart';
 import '../data/transit_db.dart';
 import '../state/city_provider.dart';
 import '../state/journey_provider.dart';
+import '../state/settings_provider.dart';
 import '../theme/app_theme.dart';
 import '../util/insets.dart';
 import '../util/haptics.dart';
@@ -167,6 +169,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final text = Theme.of(context).textTheme;
     final lines = ref.watch(linesProvider).valueOrNull ?? const <TransitLine>[];
     final q = _query.trim().toLowerCase();
+    // Süzgeç AYARLARDAN gelir: uygulama kapanıp açılınca seçim korunur.
+    final filter = (ref.watch(settingsProvider).valueOrNull ??
+            const AppSettings())
+        .searchFilterValue;
 
     final results = <(TransitLine, Stop)>[];
     if (q.isNotEmpty) {
@@ -260,6 +266,18 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 ),
               ),
             ),
+            // TÜR ÇİPLERİ — yalnızca yazmaya başlayınca. Boş ekranda yer
+            // kaplamalarının anlamı yok; süzgeç sonuç varken işe yarar.
+            if (q.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              _FilterChips(
+                selected: filter,
+                onSelected: (f) {
+                  Haptics.selection();
+                  ref.read(settingsProvider.notifier).setSearchFilter(f);
+                },
+              ),
+            ],
             const SizedBox(height: 24),
             Expanded(
               child: q.isEmpty
@@ -271,6 +289,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                       transitResults: results,
                       busAsync: ref.watch(busSearchProvider(_query.trim())),
                       activeCity: ref.watch(activeCityProvider),
+                      filter: filter,
                       onTransitStop: (line, stop) =>
                           _openAlarmSetup(stop.name, line: line, stop: stop),
                       onBusLine: _openBusLine,
@@ -549,6 +568,7 @@ class _ResultsView extends StatelessWidget {
     required this.transitResults,
     required this.busAsync,
     required this.activeCity,
+    required this.filter,
     required this.onTransitStop,
     required this.onBusLine,
     required this.onBusStop,
@@ -559,6 +579,9 @@ class _ResultsView extends StatelessWidget {
 
   /// Bulunulan şehir — sonuç başka şehirdense rozeti gösterilir.
   final TransitCity activeCity;
+
+  /// Tür süzgeci (çip şeridi).
+  final SearchFilter filter;
   final void Function(TransitLine line, Stop stop) onTransitStop;
   final void Function(TransitLineBrief brief, TransitCity city) onBusLine;
   final void Function(Stop stop, TransitCity city) onBusStop;
@@ -568,7 +591,29 @@ class _ResultsView extends StatelessWidget {
     final text = Theme.of(context).textTheme;
     final bus = busAsync.valueOrNull ?? const BusSearchResults();
     final busLoading = busAsync.isLoading;
-    final nothing = transitResults.isEmpty && bus.isEmpty && !busLoading;
+
+    // SÜZGEÇ burada uygulanır (sorguda değil): kaynaklar farklı sağlayıcılardan
+    // geliyor ve her birine ayrı süzgeç geçirmek dört yerde aynı kuralı
+    // tekrarlamak olurdu.
+    final metrobus = [
+      for (final b in bus.lines)
+        if (b.line.isMetrobus && filter.accepts(LineType.metrobus)) b,
+    ];
+    final busOnly = [
+      for (final b in bus.lines)
+        if (!b.line.isMetrobus && filter.accepts(LineType.bus)) b,
+    ];
+    final rail = [
+      for (final r in transitResults)
+        if (filter.accepts(r.$1.type)) r,
+    ];
+    final busStops = filter.showsBusStops ? bus.stops : const [];
+
+    final nothing = rail.isEmpty &&
+        metrobus.isEmpty &&
+        busOnly.isEmpty &&
+        busStops.isEmpty &&
+        !busLoading;
 
     if (nothing) {
       return Center(
@@ -579,7 +624,10 @@ class _ResultsView extends StatelessWidget {
             const Mascot(MascotAssets.dikkat, height: 110),
             const SizedBox(height: 12),
             Text(
-              'Sonuç bulunamadı.',
+              filter == SearchFilter.tumu
+                  ? 'Sonuç bulunamadı.'
+                  : '${filter.label} sonucu yok — "Tümü"ne bakabilirsin.',
+              textAlign: TextAlign.center,
               style: text.bodyMedium
                   ?.copyWith(color: VigilantColors.onSurfaceVariant),
             ),
@@ -589,10 +637,6 @@ class _ResultsView extends StatelessWidget {
     }
 
     final children = <Widget>[];
-
-    // METROBÜS ayrı bölüm — otobüsle karışmasın (34, 34A, 34AS…).
-    final metrobus = [for (final b in bus.lines) if (b.line.isMetrobus) b];
-    final busOnly = [for (final b in bus.lines) if (!b.line.isMetrobus) b];
 
     if (metrobus.isNotEmpty) {
       children.add(const _SectionLabel(
@@ -626,11 +670,11 @@ class _ResultsView extends StatelessWidget {
     }
 
     // Ray & vapur durakları (mevcut davranış — durak = hedef).
-    if (transitResults.isNotEmpty) {
+    if (rail.isNotEmpty) {
       children.add(const _SectionLabel(
           icon: Icons.directions_transit_rounded, label: 'RAY & VAPUR'));
       children.add(const SizedBox(height: 12));
-      for (final (line, stop) in transitResults) {
+      for (final (line, stop) in rail) {
         children.add(_TransitResultTile(
             line: line, stop: stop, onTap: () => onTransitStop(line, stop)));
         children.add(const SizedBox(height: 12));
@@ -639,11 +683,11 @@ class _ResultsView extends StatelessWidget {
     }
 
     // Otobüs durakları — durak = hedef; hangi hatla gidileceği seçilir.
-    if (bus.stops.isNotEmpty) {
+    if (busStops.isNotEmpty) {
       children.add(const _SectionLabel(
           icon: Icons.location_on_outlined, label: 'OTOBÜS DURAKLARI'));
       children.add(const SizedBox(height: 12));
-      for (final s in bus.stops) {
+      for (final s in busStops) {
         children.add(_BusStopTile(
             stop: s.stop,
             city: s.city,
@@ -653,7 +697,7 @@ class _ResultsView extends StatelessWidget {
       }
     }
 
-    if (busLoading && transitResults.isEmpty && bus.isEmpty) {
+    if (busLoading && children.isEmpty) {
       children.addAll(const [
         SkeletonTile(),
         SizedBox(height: 12),
@@ -1065,6 +1109,63 @@ class _NearbyTile extends StatelessWidget {
           const Icon(Icons.arrow_forward,
               color: VigilantColors.primary, size: 20),
         ],
+      ),
+    );
+  }
+}
+
+/// Arama sonucu tür süzgeci — yatay kaydırılabilir çip şeridi.
+class _FilterChips extends StatelessWidget {
+  const _FilterChips({required this.selected, required this.onSelected});
+
+  final SearchFilter selected;
+  final ValueChanged<SearchFilter> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return SizedBox(
+      height: 38,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        itemCount: SearchFilter.values.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, i) {
+          final f = SearchFilter.values[i];
+          final on = f == selected;
+          return Material(
+            color: on
+                ? VigilantColors.primary.withValues(alpha: 0.16)
+                : VigilantColors.surfaceContainer,
+            borderRadius: BorderRadius.circular(999),
+            child: InkWell(
+              onTap: () => onSelected(f),
+              borderRadius: BorderRadius.circular(999),
+              child: Container(
+                alignment: Alignment.center,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(
+                    color: on
+                        ? VigilantColors.primary.withValues(alpha: 0.55)
+                        : VigilantColors.surfaceVariant.withValues(alpha: 0.5),
+                  ),
+                ),
+                child: Text(
+                  f.label,
+                  style: text.labelLarge?.copyWith(
+                    color: on
+                        ? VigilantColors.primary
+                        : VigilantColors.onSurfaceVariant,
+                    fontWeight: on ? FontWeight.w700 : FontWeight.w500,
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
