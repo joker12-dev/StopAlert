@@ -12,7 +12,20 @@
           "package_name": "com.originstudios.stopalert"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "781116536900-f40ajr3t7klvbe57jl1aruqsu4mjotm8.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.originstudios.stopalert",
+            "certificate_hash": "30a9798c12758ff4fe72409420d3fb59f7051547"
+          }
+        },
+        {
+          "client_id": "781116536900-ll7hop274oujgnmk8a3c0n4k2r2c5n34.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyAYxFNAHOsRR4vqZkTrSmZhjburZjWV890"
@@ -20,26 +33,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
-        }
-      }
-    },
-    {
-      "client_info": {
-        "mobilesdk_app_id": "1:781116536900:android:fb2171c5f6d944cf386411",
-        "android_client_info": {
-          "package_name": "com.stopalert.stopalert"
-        }
-      },
-      "oauth_client": [],
-      "api_key": [
-        {
-          "current_key": "AIzaSyAYxFNAHOsRR4vqZkTrSmZhjburZjWV890"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "781116536900-ll7hop274oujgnmk8a3c0n4k2r2c5n34.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "781116536900-17ujl65bvd67i8vjve401l0tqcn6gbdu.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.originstudios.stopalert"
+              }
+            }
+          ]
         }
       }
     }
