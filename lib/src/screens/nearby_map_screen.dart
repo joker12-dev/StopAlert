@@ -14,13 +14,10 @@ import '../state/journey_provider.dart';
 import '../state/live_location_provider.dart';
 import '../theme/app_theme.dart';
 import '../util/haptics.dart';
-import '../util/insets.dart';
 import '../util/latlng_guard.dart';
 import '../util/map_settle.dart';
 import '../util/map_style.dart';
 import '../widgets/map_style_sheet.dart';
-import 'alarm_setup_screen.dart';
-import 'line_detail_screen.dart';
 import 'stop_lines_screen.dart';
 
 /// Yakındaki Duraklar HARİTASI: üstte harita (yakın duraklar işaretli),
@@ -54,11 +51,8 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
 
   MapStop? _selected;
   List<LatLng> _walk = const [];
-  bool _walkLoading = false;
 
   /// Seçili otobüs durağından geçen hatlar (panelde rozet olarak listelenir).
-  List<TransitLineBrief> _stopLines = const [];
-  bool _linesLoading = false;
 
   /// Arama noktası çevresindeki duraklar + yükleme durumu.
   List<MapStop> _visible = const [];
@@ -362,6 +356,22 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
   }
 
   /// Kullanıcının konumu kapsam dışındaysa (ör. Kocaeli) en yakın durağa git.
+  /// Kamerayı kullanıcının konumuna götür.
+  void _centerOnMe() {
+    final user = _userLoc;
+    if (user == null || !user.isUsable) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(
+            content: Text('Konum alınamadı — konum iznini kontrol et.')));
+      return;
+    }
+    Haptics.light();
+    // Elle konuma dönmek "haritayı ben yönetiyorum" demek değil: sonraki
+    // otomatik ortalama yine susmalı, o yüzden bayrağa dokunulmuyor.
+    _centerOnVisible(user, 16);
+  }
+
   Future<void> _goToNearest() async {
     final nearest = ref.read(nearbyMapProvider).valueOrNull;
     if (nearest == null || nearest.isEmpty || !_mapReady) return;
@@ -381,10 +391,9 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
     setState(() {
       _selected = m;
       _walk = const [];
-      _walkLoading = false;
-      _stopLines = const [];
-      _linesLoading = m.isBus;
+      _selectedLines = const [];
     });
+    unawaited(_loadSelectedLines(m.stop));
     if (_mapReady) {
       try {
         _centerOnVisible(LatLng(m.stop.lat, m.stop.lon), 16.5);
@@ -392,15 +401,9 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
         // Kamera hesabı başarısızsa haritayı bozma; seçim yine de geçerli.
       }
     }
-    // Otobüs durağıysa geçen hatları getir (panelde rozet olarak listelenir).
-    if (m.isBus) {
-      final lines = await TransitDb.instance.linesForStop(m.stop.id);
-      if (!mounted) return;
-      setState(() {
-        _stopLines = lines;
-        _linesLoading = false;
-      });
-    }
+    // YÜRÜME ROTASI kendiliğinden çizilir. Eskiden paneldeki bir düğmeye
+    // bağlıydı; panel artık durak sayfasını gösteriyor ve o düğme yok.
+    unawaited(_drawWalk(m));
   }
 
   /// Seçimi temizle: harita işaretleri ve panel eski hâline döner.
@@ -409,31 +412,21 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
     setState(() {
       _selected = null;
       _walk = const [];
-      _walkLoading = false;
-      _stopLines = const [];
-      _linesLoading = false;
+      _selectedLines = const [];
     });
   }
 
-  /// Kullanıcının konumundan seçili durağa YÜRÜME rotası (istek üzerine).
+  /// Kullanıcının konumundan seçili durağa YÜRÜME rotası.
+  ///
+  /// Durak seçilince kendiliğinden çizilir. Konum yoksa SESSİZCE geçer:
+  /// kullanıcı rota istemedi, durağa dokundu — uyarı gürültü olurdu.
   Future<void> _drawWalk(MapStop m) async {
     final user = _userLoc;
-    if (user == null) {
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(const SnackBar(
-            content: Text('Yol tarifi için konum izni gerekiyor.')));
-      return;
-    }
-    Haptics.light();
-    setState(() => _walkLoading = true);
+    if (user == null) return;
     final target = LatLng(m.stop.lat, m.stop.lon);
     final walk = await RoutingService.instance.walk(user, target);
-    if (!mounted) return;
-    setState(() {
-      _walk = walk;
-      _walkLoading = false;
-    });
+    if (!mounted || _selected?.stop.id != m.stop.id) return;
+    setState(() => _walk = walk);
     // Rota çizildiyse ikisini birlikte sığdır (çok yakınsa zoom bozulmasın).
     const d = Distance();
     if (_mapReady && d.as(LengthUnit.Meter, user, target) > 60) {
@@ -446,42 +439,6 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
     }
   }
 
-  void _startAlarm(MapStop m) {
-    Haptics.light();
-    final line = m.line;
-    if (line != null) {
-      // Ray/vapur: hat belli → doğrudan Alarm Kur (durak = hedef).
-      ref.read(journeyDraftProvider.notifier)
-        ..reset()
-        ..selectLine(line)
-        ..selectTargetStop(m.stop.id);
-      Navigator.of(context).push(MaterialPageRoute(
-        builder: (_) =>
-            AlarmSetupScreen(stopName: m.stop.name, lineLabel: line.code),
-      ));
-    } else {
-      // Otobüs: bu duraktan geçen hatları seçtir.
-      _openBusStop(m.stop);
-    }
-  }
-
-  Future<void> _openBusStop(Stop stop) async {
-    final lines = await TransitDb.instance.linesForStop(stop.id);
-    if (!mounted) return;
-    if (lines.isEmpty) {
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-            const SnackBar(content: Text('Bu duraktan geçen hat bulunamadı.')));
-      return;
-    }
-    Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => StopLinesScreen(stop: stop, lines: lines),
-    ));
-  }
-
-  /// Yürüme süresi — 80 m/dk (≈4,8 km/s, şehir içi yaya ortalaması).
-  /// Sıfıra yuvarlanmasın diye en az 1 dk.
   String _walkMinutes(double meters) {
     final dk = (meters / 80).ceil();
     return '~${dk < 1 ? 1 : dk} dk yürüme';
@@ -492,6 +449,32 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
       : '${m.round()} m';
 
   bool _isSelected(MapStop m) => _selected?.stop.id == m.stop.id;
+
+  /// Seçili duraktan geçen hatlar — panele gömülü durak sayfasına verilir.
+  List<TransitLineBrief> _selectedLines = const [];
+
+  /// Otobüs durakları indirilen pakette, ray/vapur ayrı listede — ikisine de
+  /// bakılır, yoksa metro duraklarında liste boş kalırdı.
+  Future<void> _loadSelectedLines(Stop stop) async {
+    List<TransitLineBrief> found = const [];
+    if (isBusId(stop.id)) {
+      try {
+        found = await TransitDb.instance.linesForStop(stop.id);
+      } catch (_) {
+        found = const [];
+      }
+    } else {
+      final rail = ref.read(linesProvider).valueOrNull ?? const <TransitLine>[];
+      found = [
+        for (final l in rail)
+          if (l.stops.any((x) => x.id == stop.id))
+            TransitLineBrief(
+                id: l.id, code: l.code, name: l.name, type: l.type),
+      ];
+    }
+    if (!mounted || _selected?.stop.id != stop.id) return;
+    setState(() => _selectedLines = found);
+  }
 
   /// Çizilecek işaretler: görünen alandakiler + (listede yoksa) seçili durak.
   List<MapStop> _markerStops(List<MapStop> visible) {
@@ -703,6 +686,28 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
                   ],
                 ),
               ),
+              // Harita eylemleri — SAĞ KENARDA, her iki modda.
+              //
+              // Gömülü modda üst çubuk çizilmediği için katman düğmesi
+              // kaybolmuştu; konuma dönme düğmesi ise hiç yoktu.
+              Positioned(
+                right: 12,
+                top: 0,
+                bottom: 0,
+                child: SafeArea(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _RoundBtn(
+                          icon: Icons.layers_rounded, onTap: _pickMapStyle),
+                      const SizedBox(height: 10),
+                      _RoundBtn(
+                          icon: Icons.my_location_rounded,
+                          onTap: _centerOnMe),
+                    ],
+                  ),
+                ),
+              ),
               // Üst çubuk — Positioned (Stack'in tüm çocukları konumlanmalı ki
               // Stack tüm ekranı doldursun; aksi halde SafeArea'ya küçülür).
               if (!widget.embedded)
@@ -733,11 +738,6 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
                                   ?.copyWith(fontWeight: FontWeight.w700)),
                         ),
                         const Spacer(),
-                        // Harita görünümü: Gece / Canlı / Uydu / Sade
-                        _RoundBtn(
-                          icon: Icons.layers_rounded,
-                          onTap: _pickMapStyle,
-                        ),
                       ],
                     ),
                   ),
@@ -798,10 +798,38 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
               ),
             ),
           ),
-          // Bir durak seçiliyse panel TAMAMEN durak detayına döner; geri
-          // butonuyla listeye dönülür.
+          // Bir durak seçiliyse panel TAMAMEN durak sayfasına döner.
+          //
+          // Ayrı bir "mini detay" tasarımı sürdürmek yerine GERÇEK durak
+          // sayfası gömülüyor: yaklaşan otobüsler, sefer saatleri, geçen
+          // hatlar — kullanıcı iki farklı durak görünümü öğrenmek zorunda
+          // kalmıyor.
           if (_selected case final sel?) ...[
-            Expanded(child: _stopDetail(text, sel)),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(6, 0, 16, 0),
+              child: Row(
+                children: [
+                  IconButton(
+                    onPressed: _clearSelection,
+                    icon: const Icon(Icons.arrow_back,
+                        color: VigilantColors.onSurfaceVariant),
+                  ),
+                  Expanded(
+                    child: Text('Yakındaki duraklara dön',
+                        style: text.labelMedium?.copyWith(
+                            color: VigilantColors.onSurfaceVariant)),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: StopLinesScreen(
+                key: ValueKey(sel.stop.id),
+                stop: sel.stop,
+                lines: _selectedLines,
+                embedded: true,
+              ),
+            ),
           ] else ...[
           // Arama noktası özeti + yarıçap seçimi
           Padding(
@@ -897,187 +925,6 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
 
   /// Seçili durağın detay paneli: geri butonu, durak bilgileri, o duraktan
   /// geçen hatlar ve eylemler (alarm kur / yol tarifi).
-  Widget _stopDetail(TextTheme text, MapStop sel) {
-    final s = sel.stop;
-    return ListView(
-      padding: EdgeInsets.fromLTRB(16, 0, 16, AppInsets.pageBottom(context)),
-      children: [
-        // Başlık: geri + durak adı
-        Row(
-          children: [
-            GestureDetector(
-              onTap: _clearSelection,
-              behavior: HitTestBehavior.opaque,
-              child: Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: VigilantColors.surfaceContainer,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.arrow_back,
-                    size: 20, color: VigilantColors.onSurface),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(s.name,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: text.bodyLarge
-                          ?.copyWith(fontWeight: FontWeight.w700)),
-                  if (s.contextLabel.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: Text(s.contextLabel,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: text.labelMedium?.copyWith(
-                              color: VigilantColors.onSurfaceVariant)),
-                    ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        // Mesafe + tür
-        Row(
-          children: [
-            _chip(text, Icons.directions_walk_rounded, _fmt(sel.meters)),
-            const SizedBox(width: 8),
-            _chip(
-                text,
-                sel.isBus
-                    ? Icons.directions_bus_filled_rounded
-                    : lineTypeIcon(sel.line!.type),
-                sel.isBus ? 'Otobüs durağı' : sel.line!.type.label),
-          ],
-        ),
-        const SizedBox(height: 16),
-        // Buradan geçen hatlar
-        if (sel.isBus) ...[
-          Text('Buradan geçen hatlar',
-              style: text.labelLarge?.copyWith(fontWeight: FontWeight.w700)),
-          const SizedBox(height: 8),
-          if (_linesLoading)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 8),
-              child: SizedBox(
-                height: 20,
-                width: 20,
-                child: CircularProgressIndicator(
-                    strokeWidth: 2, color: VigilantColors.primary),
-              ),
-            )
-          else if (_stopLines.isEmpty)
-            Text('Hat bilgisi bulunamadı.',
-                style: text.labelMedium
-                    ?.copyWith(color: VigilantColors.onSurfaceVariant))
-          else
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final l in _stopLines)
-                  GestureDetector(
-                    onTap: () {
-                      Haptics.light();
-                      Navigator.of(context).push(MaterialPageRoute(
-                          builder: (_) => LineDetailScreen(code: l.code)));
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: VigilantColors.primary.withValues(alpha: 0.14),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                            color: VigilantColors.primary
-                                .withValues(alpha: 0.35)),
-                      ),
-                      child: Text(l.code,
-                          style: text.labelLarge?.copyWith(
-                              color: VigilantColors.primary,
-                              fontWeight: FontWeight.w800)),
-                    ),
-                  ),
-              ],
-            ),
-          const SizedBox(height: 16),
-        ],
-        // Eylemler
-        Row(
-          children: [
-            Expanded(
-              child: SizedBox(
-                height: 46,
-                child: FilledButton.icon(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: VigilantColors.primary,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                  ),
-                  onPressed: () => _startAlarm(sel),
-                  icon: const Icon(Icons.alarm_add_rounded, size: 18),
-                  label: const Text('Alarm Kur'),
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            SizedBox(
-              height: 46,
-              child: OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: VigilantColors.onSurface,
-                  side: BorderSide(
-                      color: VigilantColors.surfaceVariant
-                          .withValues(alpha: 0.6)),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                ),
-                onPressed: _walkLoading ? null : () => _drawWalk(sel),
-                icon: _walkLoading
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: VigilantColors.accentBlue))
-                    : const Icon(Icons.directions_walk_rounded,
-                        size: 18, color: VigilantColors.accentBlue),
-                label: Text(_walk.length >= 2 ? 'Yol çizildi' : 'Yol tarifi'),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _chip(TextTheme text, IconData icon, String label) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: VigilantColors.surfaceContainer,
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 14, color: VigilantColors.onSurfaceVariant),
-            const SizedBox(width: 6),
-            Text(label,
-                style: text.labelMedium
-                    ?.copyWith(color: VigilantColors.onSurfaceVariant)),
-          ],
-        ),
-      );
-
-  /// Boş durum — görünen alanda durak yok. Çok uzaktaysa "yakınlaş", kapsam
-  /// dışındaysa "en yakın durağa git" kısayolu sunar.
   Widget _empty(TextTheme text, bool hasNearest) {
     return Center(
       child: Padding(

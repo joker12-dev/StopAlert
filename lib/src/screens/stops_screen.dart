@@ -9,7 +9,6 @@ import '../state/journey_provider.dart';
 import '../theme/app_theme.dart';
 import '../util/haptics.dart';
 import '../util/insets.dart';
-import '../widgets/glass_panel.dart';
 import '../widgets/skeleton.dart';
 import 'nearby_map_screen.dart';
 import 'stop_lines_screen.dart';
@@ -80,22 +79,34 @@ class _SearchBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    return GlassPanel(
-      borderRadius: 20,
-      onTap: onTap,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: Row(
-        children: [
-          const Icon(Icons.search, color: VigilantColors.primary, size: 22),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text('Durak ara…',
-                style: text.bodyMedium
-                    ?.copyWith(color: VigilantColors.onSurfaceVariant)),
+    // OPAK: cam efektinde harita döşemeleri yazının arkasından görünüyor ve
+    // "Durak ara" okunmuyordu. Hareket eden bir haritanın üstünde
+    // okunabilirlik saydamlıktan önce gelir.
+    return Material(
+      color: VigilantColors.surfaceContainer,
+      borderRadius: BorderRadius.circular(20),
+      elevation: 6,
+      shadowColor: const Color(0x66000000),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              const Icon(Icons.search,
+                  color: VigilantColors.primary, size: 22),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text('Durak ara…',
+                    style: text.bodyMedium
+                        ?.copyWith(color: VigilantColors.onSurfaceVariant)),
+              ),
+              const Icon(Icons.tune_rounded,
+                  size: 18, color: VigilantColors.onSurfaceVariant),
+            ],
           ),
-          const Icon(Icons.tune_rounded,
-              size: 18, color: VigilantColors.onSurfaceVariant),
-        ],
+        ),
       ),
     );
   }

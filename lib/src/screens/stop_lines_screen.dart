@@ -31,7 +31,14 @@ class StopLinesScreen extends ConsumerStatefulWidget {
     required this.stop,
     required this.lines,
     this.city,
+    this.embedded = false,
   });
+
+  /// Bir PANELİN içinde mi gösteriliyor (yakındaki duraklar haritası)?
+  ///
+  /// Gömülüyken kendi Scaffold'unu ve geri satırını çizmez — paneli saran
+  /// ekran zaten bir kapatma yolu sunuyor.
+  final bool embedded;
 
   final Stop stop;
   final List<TransitLineBrief> lines;
@@ -371,25 +378,23 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    return Scaffold(
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 8, 20, 0),
-              child: Row(
-                children: [
-                  IconButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.arrow_back,
-                        color: VigilantColors.onSurfaceVariant),
-                  ),
-                  const Spacer(),
-                ],
+    final body = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+            if (!widget.embedded)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 8, 20, 0),
+                child: Row(
+                  children: [
+                    IconButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.arrow_back,
+                          color: VigilantColors.onSurfaceVariant),
+                    ),
+                    const Spacer(),
+                  ],
+                ),
               ),
-            ),
             // Durak künyesi: ad, yön, durak kodu + "Konuma git".
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
@@ -518,10 +523,12 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
                 ],
               ),
             ),
-          ],
-        ),
-      ),
+      ],
     );
+    // Gömülüyken panelin içine düz gövde konur; tek başına açıldığında
+    // kendi Scaffold'u olur.
+    if (widget.embedded) return body;
+    return Scaffold(body: SafeArea(bottom: false, child: body));
   }
 }
 
