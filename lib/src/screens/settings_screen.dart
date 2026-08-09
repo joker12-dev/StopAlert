@@ -63,12 +63,58 @@ class SettingsScreen extends ConsumerWidget {
 
   Future<void> _link(
     BuildContext context,
+    WidgetRef ref,
     Future<AuthLinkResult> Function() action,
   ) async {
     Haptics.light();
     final messenger = ScaffoldMessenger.of(context);
     final result = await action();
     if (result.cancelled) return;
+
+    // BAŞKA BİR KAYDA BAĞLI hesap: bağlamak mümkün değil ama GİRİŞ mümkün.
+    // İkinci cihazda olan tam olarak budur — kullanıcı hesabına dönmek
+    // istiyor, yeni bir bağ kurmak değil. Eskiden yalnızca "bu hesap zaten
+    // kullanılıyor" deyip bırakıyorduk ve kullanıcının hesabına dönmesinin
+    // hiçbir yolu yoktu.
+    if (result.alreadyLinkedElsewhere && context.mounted) {
+      final cred = result.credential!;
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: VigilantColors.surfaceContainerHigh,
+          title: const Text('Bu hesaba giriş yapılsın mı?'),
+          content: const Text(
+            'Bu Google hesabı zaten bir StopAlert kaydına bağlı. '
+            'Giriş yaparsan o kayda dönersin. '
+            'Bu cihazdaki kaydedilmemiş veriler (anonim geçmiş, favoriler) '
+            'o hesaba TAŞINMAZ.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Vazgeç'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Giriş yap',
+                  style: TextStyle(color: VigilantColors.primary)),
+            ),
+          ],
+        ),
+      );
+      if (ok ?? false) {
+        final signed = await ref.read(authServiceProvider).signInWithCredential(cred);
+        messenger
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(
+            content: Text(signed.ok
+                ? 'Hesabına giriş yapıldı.'
+                : (signed.error ?? 'Giriş başarısız.')),
+          ));
+      }
+      return;
+    }
+
     messenger
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(
@@ -416,7 +462,7 @@ class SettingsScreen extends ConsumerWidget {
                   subtitle: 'Verilerini kalıcılaştır (cihaz değişince kaybolmaz)',
                   trailing: const Icon(Icons.chevron_right,
                       color: VigilantColors.onSurfaceVariant),
-                  onTap: () => _link(context, auth.linkGoogle),
+                  onTap: () => _link(context, ref, auth.linkGoogle),
                 ),
                 // APPLE yalnızca iOS'ta: Android'de "Apple ile giriş"
                 // akışı zaten çalışmıyor, düğme ölü dokunuş oluyordu.
@@ -426,7 +472,7 @@ class SettingsScreen extends ConsumerWidget {
                     title: 'Apple ile bağla',
                     trailing: const Icon(Icons.chevron_right,
                         color: VigilantColors.onSurfaceVariant),
-                    onTap: () => _link(context, auth.linkApple),
+                    onTap: () => _link(context, ref, auth.linkApple),
                   ),
               ],
             ],
