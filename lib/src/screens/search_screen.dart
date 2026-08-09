@@ -450,16 +450,11 @@ class _SuggestionsView extends ConsumerWidget {
       onStopTap;
   final void Function(RecentSearch entry) onRecentTap;
 
-  String _fmtMeters(double m) => m >= 1000
-      ? '${(m / 1000).toStringAsFixed(1).replaceAll('.', ',')} km'
-      : '${m.round()} m';
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final text = Theme.of(context).textTheme;
     final recents =
         ref.watch(recentSearchesProvider).valueOrNull ?? const <RecentSearch>[];
-    final nearby = ref.watch(nearbyStopsProvider);
 
     return ListView(
       padding: EdgeInsets.fromLTRB(20, 0, 20, AppInsets.listBottom(context)),
@@ -510,54 +505,8 @@ class _SuggestionsView extends ConsumerWidget {
               onTap: () => onRecentTap(recents[i]),
             ),
           ],
-        const SizedBox(height: 32),
-        const _SectionLabel(
-            icon: Icons.near_me_outlined, label: 'YAKINDAKİ DURAKLAR'),
-        const SizedBox(height: 12),
-        ...nearby.when(
-          // İskelet yer tutucular (AppAnim kapalıysa statik — testleri kilitlemez).
-          loading: () => const [
-            SkeletonTile(),
-            SizedBox(height: 12),
-            SkeletonTile(),
-            SizedBox(height: 12),
-            SkeletonTile(),
-          ],
-          error: (_, __) => [
-            Text(
-              'Yakındaki duraklar alınamadı.',
-              style: text.labelMedium
-                  ?.copyWith(color: VigilantColors.onSurfaceVariant),
-            ),
-          ],
-          data: (hits) => hits.isEmpty
-              ? [
-                  Text(
-                    'Konum kapalı — yakındaki durakları görmek için '
-                    'konum izni ver.',
-                    style: text.labelMedium
-                        ?.copyWith(color: VigilantColors.onSurfaceVariant),
-                  ),
-                ]
-              : [
-                  for (var i = 0; i < hits.length; i++) ...[
-                    if (i > 0) const SizedBox(height: 12),
-                    _NearbyTile(
-                      name: hits[i].stop.name,
-                      meta: hits[i].line == null
-                          ? '${_fmtMeters(hits[i].meters)} • Otobüs durağı'
-                          : '${_fmtMeters(hits[i].meters)} • '
-                              '${hits[i].line!.code} '
-                              '${hits[i].line!.type.label}',
-                      onTap: () => onStopTap(
-                        hits[i].stop.name,
-                        line: hits[i].line,
-                        stop: hits[i].stop,
-                      ),
-                    ),
-                  ],
-                ],
-        ),
+        // YAKINDAKİ DURAKLAR buradan kaldırıldı: duraklar artık kendi
+        // sekmesinde (Duraklar), orada hem yakındakiler hem arama var.
       ],
     );
   }
@@ -603,17 +552,7 @@ class _ResultsView extends StatelessWidget {
       for (final b in bus.lines)
         if (!b.line.isMetrobus && filter.accepts(LineType.bus)) b,
     ];
-    final rail = [
-      for (final r in transitResults)
-        if (filter.accepts(r.$1.type)) r,
-    ];
-    final busStops = filter.showsBusStops ? bus.stops : const [];
-
-    final nothing = rail.isEmpty &&
-        metrobus.isEmpty &&
-        busOnly.isEmpty &&
-        busStops.isEmpty &&
-        !busLoading;
+    final nothing = metrobus.isEmpty && busOnly.isEmpty && !busLoading;
 
     if (nothing) {
       return Center(
@@ -669,33 +608,9 @@ class _ResultsView extends StatelessWidget {
       children.add(const SizedBox(height: 20));
     }
 
-    // Ray & vapur durakları (mevcut davranış — durak = hedef).
-    if (rail.isNotEmpty) {
-      children.add(const _SectionLabel(
-          icon: Icons.directions_transit_rounded, label: 'RAY & VAPUR'));
-      children.add(const SizedBox(height: 12));
-      for (final (line, stop) in rail) {
-        children.add(_TransitResultTile(
-            line: line, stop: stop, onTap: () => onTransitStop(line, stop)));
-        children.add(const SizedBox(height: 12));
-      }
-      children.add(const SizedBox(height: 20));
-    }
-
-    // Otobüs durakları — durak = hedef; hangi hatla gidileceği seçilir.
-    if (busStops.isNotEmpty) {
-      children.add(const _SectionLabel(
-          icon: Icons.location_on_outlined, label: 'OTOBÜS DURAKLARI'));
-      children.add(const SizedBox(height: 12));
-      for (final s in busStops) {
-        children.add(_BusStopTile(
-            stop: s.stop,
-            city: s.city,
-            showCity: s.city.id != activeCity.id,
-            onTap: () => onBusStop(s.stop, s.city)));
-        children.add(const SizedBox(height: 12));
-      }
-    }
+    // DURAK sonuçları burada YOK — onlar Duraklar sekmesinde.
+    // Hat ve durak tek listede karışınca "Şişli" yazan kullanıcı ne aradığını
+    // bulamıyordu; her sekme tek bir şeye cevap veriyor.
 
     if (busLoading && children.isEmpty) {
       children.addAll(const [
@@ -713,62 +628,6 @@ class _ResultsView extends StatelessWidget {
 }
 
 /// Ray/vapur durak sonucu (durak adı + hat kodu • tür).
-class _TransitResultTile extends StatelessWidget {
-  const _TransitResultTile(
-      {required this.line, required this.stop, required this.onTap});
-
-  final TransitLine line;
-  final Stop stop;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final text = Theme.of(context).textTheme;
-    final color = lineTypeColor(line.type);
-    return GlassPanel(
-      borderRadius: 24,
-      padding: const EdgeInsets.all(16),
-      onTap: onTap,
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: VigilantColors.surfaceContainerHigh,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Icon(lineTypeIcon(line.type), color: color),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(stop.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: text.bodyMedium
-                        ?.copyWith(fontWeight: FontWeight.w500)),
-                const SizedBox(height: 2),
-                Text(
-                  '${line.code} • ${line.type.label}'
-                  '${stop.underground ? ' • Yeraltı' : ''}',
-                  style: text.labelMedium
-                      ?.copyWith(color: VigilantColors.onSurfaceVariant),
-                ),
-              ],
-            ),
-          ),
-          const Icon(Icons.arrow_forward,
-              color: VigilantColors.primary, size: 20),
-        ],
-      ),
-    );
-  }
-}
-
-/// Otobüs hattı sonucu (kod + güzergâh adı). Dokununca hedef durak seçilir.
 class _LineResultTile extends StatelessWidget {
   const _LineResultTile({
     required this.brief,
@@ -889,69 +748,6 @@ class _CityBadge extends StatelessWidget {
   }
 }
 
-class _BusStopTile extends StatelessWidget {
-  const _BusStopTile({
-    required this.stop,
-    required this.city,
-    required this.showCity,
-    required this.onTap,
-  });
-
-  final Stop stop;
-  final TransitCity city;
-  final bool showCity;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final text = Theme.of(context).textTheme;
-    return GlassPanel(
-      borderRadius: 24,
-      padding: const EdgeInsets.all(16),
-      onTap: onTap,
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: VigilantColors.surfaceContainerHigh,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Icon(Icons.directions_bus_filled_rounded,
-                color: VigilantColors.onSurfaceVariant),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(stop.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: text.bodyMedium
-                        ?.copyWith(fontWeight: FontWeight.w500)),
-                const SizedBox(height: 2),
-                _CityBadge(name: city.name, isCurrent: !showCity),
-                Text(
-                    stop.contextLabel.isNotEmpty
-                        ? 'Otobüs · ${stop.contextLabel}'
-                        : 'Otobüs durağı',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: text.labelMedium
-                        ?.copyWith(color: VigilantColors.onSurfaceVariant)),
-              ],
-            ),
-          ),
-          const Icon(Icons.arrow_forward,
-              color: VigilantColors.primary, size: 20),
-        ],
-      ),
-    );
-  }
-}
-
 class _SectionLabel extends StatelessWidget {
   const _SectionLabel({required this.icon, required this.label, this.trailing});
 
@@ -1041,80 +837,6 @@ class _RecentTile extends StatelessWidget {
   }
 }
 
-class _NearbyTile extends StatelessWidget {
-  const _NearbyTile({
-    required this.name,
-    required this.meta,
-    required this.onTap,
-  });
-
-  final String name;
-  final String meta;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final text = Theme.of(context).textTheme;
-    return GlassPanel(
-      borderRadius: 24,
-      padding: const EdgeInsets.all(16),
-      onTap: onTap,
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: VigilantColors.primary.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: VigilantColors.primary.withValues(alpha: 0.3),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: VigilantColors.accentBlue.withValues(alpha: 0.2),
-                  blurRadius: 15,
-                ),
-              ],
-            ),
-            child: const Icon(Icons.location_on, color: VigilantColors.primary),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(name,
-                    style:
-                        text.bodyMedium?.copyWith(fontWeight: FontWeight.w500)),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    const Icon(Icons.directions_walk,
-                        size: 14, color: VigilantColors.onSurfaceVariant),
-                    const SizedBox(width: 4),
-                    Flexible(
-                      child: Text(
-                        meta,
-                        overflow: TextOverflow.ellipsis,
-                        style: text.labelMedium
-                            ?.copyWith(color: VigilantColors.onSurfaceVariant),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const Icon(Icons.arrow_forward,
-              color: VigilantColors.primary, size: 20),
-        ],
-      ),
-    );
-  }
-}
-
-/// Arama sonucu tür süzgeci — yatay kaydırılabilir çip şeridi.
 class _FilterChips extends StatelessWidget {
   const _FilterChips({required this.selected, required this.onSelected});
 

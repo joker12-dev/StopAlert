@@ -57,7 +57,8 @@ flutter:
     - assets/banners/
     - assets/types/
     - assets/images/
-    - assets/images/hero/
+    - assets/images/hero/day/
+    - assets/images/hero/night/
 
   fonts:
     - family: Inter

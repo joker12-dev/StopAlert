@@ -61,7 +61,7 @@ class HomeScreen extends ConsumerWidget {
 
     void goToRoutes() {
       Haptics.light();
-      ref.read(bottomNavIndexProvider.notifier).state = 1;
+      ref.read(bottomNavIndexProvider.notifier).state = NavTab.lines;
     }
 
     return Scaffold(
@@ -143,7 +143,7 @@ class HomeScreen extends ConsumerWidget {
         actionLabel: 'Tümü',
         onAction: () {
           Haptics.light();
-          ref.read(bottomNavIndexProvider.notifier).state = 2;
+          ref.read(bottomNavIndexProvider.notifier).state = NavTab.favorites;
         },
       ),
       const SizedBox(height: 12),
@@ -196,7 +196,7 @@ class HomeScreen extends ConsumerWidget {
           actionLabel: 'Tümü',
           onAction: () {
             Haptics.light();
-            ref.read(bottomNavIndexProvider.notifier).state = 3;
+            ref.read(bottomNavIndexProvider.notifier).state = NavTab.profile;
           },
         ),
         const SizedBox(height: 12),
@@ -474,7 +474,7 @@ class _HeroBackground extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final bg = Theme.of(context).scaffoldBackgroundColor;
-    final asset = ref.watch(heroImageProvider).valueOrNull;
+    final asset = ref.watch(heroImageProvider);
     return SizedBox(
       height: 300,
       width: double.infinity,

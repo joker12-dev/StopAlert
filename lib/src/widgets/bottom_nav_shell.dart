@@ -7,16 +7,29 @@ import '../screens/favorites_screen.dart';
 import '../screens/home_screen.dart';
 import '../screens/profile_screen.dart';
 import '../screens/search_screen.dart';
+import '../screens/stops_screen.dart';
 import '../theme/app_theme.dart';
 
-/// Aktif alt sekme indeksi (0: Ana Sayfa, 1: Hatlar, 2: Favoriler, 3: Profil).
+/// Sekme indeksleri — ÇAĞIRAN TARAF BU ADLARI KULLANIR.
+///
+/// Sayı yazmak kırılgandı: araya yeni bir sekme eklendiğinde ana sayfadaki
+/// "Tümü" bağlantıları sessizce yanlış sayfaya gidiyordu.
+abstract final class NavTab {
+  static const home = 0;
+  static const lines = 1;
+  static const stops = 2;
+  static const favorites = 3;
+  static const profile = 4;
+}
+
+/// Aktif alt sekme indeksi (bkz. [NavTab]).
 ///
 /// Ana sayfadaki "Tümünü Gör", tür butonları vb. bir sekmeye geçmek için
 /// yeni sayfa PUSH etmek yerine bu değeri değiştirir — böylece alt menü
 /// kaybolmaz ve kullanıcı sekmeler arasında serbestçe gezebilir.
-final bottomNavIndexProvider = StateProvider<int>((ref) => 0);
+final bottomNavIndexProvider = StateProvider<int>((ref) => NavTab.home);
 
-/// Alt navigasyon kabuğu: Ana Sayfa / Hatlar / Favoriler / Profil.
+/// Alt navigasyon kabuğu: Ana Sayfa / Hatlar / Duraklar / Favoriler / Profil.
 /// Tasarımdaki gibi buzlu cam zemin, üstten 32px yuvarlatma ve
 /// aktif sekmede kırmızı hap arka planı kullanır.
 class BottomNavShell extends ConsumerStatefulWidget {
@@ -31,6 +44,9 @@ class _BottomNavShellState extends ConsumerState<BottomNavShell> {
     (icon: Icons.home_rounded, label: 'Ana Sayfa'),
     // "Rotalar" yol tarifi çağrıştırıyordu; sekme aslında HAT arama.
     (icon: Icons.alt_route_rounded, label: 'Hatlar'),
+    // Durak arama AYRI sekme: hat ve durak tek listede karışınca kullanıcı
+    // ne aradığını bulamıyordu.
+    (icon: Icons.location_on_rounded, label: 'Duraklar'),
     (icon: Icons.bookmark_rounded, label: 'Favoriler'),
     (icon: Icons.person_rounded, label: 'Profil'),
   ];
@@ -41,9 +57,10 @@ class _BottomNavShellState extends ConsumerState<BottomNavShell> {
   final Set<int> _visited = {0};
 
   Widget _screenFor(int i) => switch (i) {
-        0 => const HomeScreen(),
-        1 => const SearchScreen(),
-        2 => const FavoritesScreen(),
+        NavTab.home => const HomeScreen(),
+        NavTab.lines => const SearchScreen(),
+        NavTab.stops => const StopsScreen(),
+        NavTab.favorites => const FavoritesScreen(),
         _ => const ProfileScreen(),
       };
 

@@ -8,7 +8,9 @@ import '../data/recent_search.dart';
 import '../data/transit_city.dart';
 import '../data/transit_db.dart';
 import '../engine/arrival_estimator.dart';
+import '../data/timetable.dart';
 import '../services/live_bus_service.dart';
+import '../services/timetable_service.dart';
 import '../services/segment_learning_store.dart';
 import '../state/city_provider.dart';
 import '../state/journey_provider.dart';
@@ -52,6 +54,10 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
 
   /// Bu durağa yaklaşan otobüsler — en yakın varıştan uzağa sıralı.
   List<_Arrival> _arrivals = const [];
+
+  /// Canlı konum OLMAYAN şehirlerde (Kocaeli) tarifeye göre sıradaki
+  /// seferler. Canlı veriyle aynı şey değil, ayrı gösterilir.
+  List<_Scheduled> _scheduled = const [];
   bool _loadingArrivals = false;
   DateTime? _arrivalsAt;
 
@@ -71,7 +77,11 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
   /// Şehrin canlı filo servisi varsa yaklaşan otobüsleri hesapla.
   Future<void> _loadArrivals() async {
     final TransitCity lineCity = city ?? ref.read(activeCityProvider);
-    if (!lineCity.hasLiveBus) return;
+    // Canlı araç konumu yoksa tarifeye düş (Kocaeli).
+    if (!lineCity.hasLiveBus) {
+      if (lineCity.hasTimetable) await _loadScheduled(lineCity);
+      return;
+    }
     setState(() => _loadingArrivals = true);
 
     final learner = await SegmentLearningStore.load();
@@ -117,11 +127,71 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
     });
   }
 
+  /// Tarifeye göre sıradaki seferler (canlı konum olmayan şehirler).
+  ///
+  /// Hesap: seferin İLK DURAKTAN kalkış saati + ilk duraktan bu durağa
+  /// kadarki yol süresi. Plan; trafiği ve gecikmeyi bilmez.
+  Future<void> _loadScheduled(TransitCity lineCity) async {
+    setState(() => _loadingArrivals = true);
+    final learner = await SegmentLearningStore.load();
+    final today = DayType.forDate(DateTime.now());
+    final found = <_Scheduled>[];
+
+    for (final brief in lines.take(_maxLinesQueried)) {
+      try {
+        final line =
+            await TransitDb.instance.buildLine(brief.id, cityId: city?.id);
+        if (line == null || line.indexOfStop(stop.id) < 0) continue;
+        final table =
+            await TimetableService.instance.forLine(brief.code, city: lineCity);
+        if (table.isEmpty) continue;
+        // Bu varyant hangi yön: kimlikte kodlu ("10_G" gidiş).
+        final rows =
+            table.forDay(today, outbound: line.id.contains('_G'));
+        if (rows.isEmpty) continue;
+        final next = ScheduledArrivals.fromSchedule(
+          line: line,
+          targetStopId: stop.id,
+          departures: rows,
+          learner: learner,
+          limit: 2,
+        );
+        for (final n in next) {
+          found.add(_Scheduled(brief: brief, line: line, arrival: n));
+        }
+      } catch (_) {
+        // Tek hattın verisi alınamadıysa ötekiler yine gösterilir.
+      }
+    }
+
+    found.sort((a, b) =>
+        a.arrival.secondsAway.compareTo(b.arrival.secondsAway));
+    if (!mounted) return;
+    setState(() {
+      _scheduled = found;
+      _loadingArrivals = false;
+      _arrivalsAt = DateTime.now();
+    });
+  }
+
   Future<void> _pick(
       BuildContext context, WidgetRef ref, TransitLineBrief brief) async {
     Haptics.light();
-    final line =
-        await TransitDb.instance.buildLine(brief.id, cityId: city?.id);
+    // RAY/VAPUR hatları indirilen SQLite paketinde DEĞİL, ayrı listede.
+    // Yalnızca otobüs veritabanına bakmak Marmaray/metro duraklarında
+    // "hat verisi yüklenemedi" hatası veriyordu.
+    TransitLine? line;
+    if (isBusId(brief.id)) {
+      line = await TransitDb.instance.buildLine(brief.id, cityId: city?.id);
+    } else {
+      for (final l in ref.read(linesProvider).valueOrNull ??
+          const <TransitLine>[]) {
+        if (l.id == brief.id) {
+          line = l;
+          break;
+        }
+      }
+    }
     if (!context.mounted) return;
     if (line == null) {
       ScaffoldMessenger.of(context)
@@ -130,25 +200,84 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
             const SnackBar(content: Text('Hat verisi yüklenemedi — tekrar dene.')));
       return;
     }
+    // Buradan sonra hat KESİN var (null yukarıda ele alındı); yerel bir
+    // değişkene alıp akış analizini netleştiriyoruz.
+    final resolved = line;
     // Seçilen durağı hatta bul (aynı bus: önekli id).
     var target = stop;
-    final i = line.indexOfStop(stop.id);
-    if (i != -1) target = line.stops[i];
+    final i = resolved.indexOfStop(stop.id);
+    if (i != -1) target = resolved.stops[i];
     ref.read(journeyDraftProvider.notifier)
       ..reset()
-      ..selectLine(line)
+      ..selectLine(resolved)
       ..selectTargetStop(target.id);
     ref.read(recentSearchesProvider.notifier).add(RecentSearch(
           stopName: target.name,
           stopId: target.id,
-          lineId: line.id,
-          lineCode: line.code,
-          lineTypeName: line.type.name,
+          lineId: resolved.id,
+          lineCode: resolved.code,
+          lineTypeName: resolved.type.name,
         ));
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) =>
-          AlarmSetupScreen(stopName: target.name, lineLabel: line.code),
+          AlarmSetupScreen(stopName: target.name, lineLabel: resolved.code),
     ));
+  }
+
+  /// TARİFEYE göre sıradaki seferler bloğu.
+  ///
+  /// Canlı bölümden AYRI ve farklı isimli: "yaklaşan otobüs" demek, gerçekten
+  /// yolda olduğunu bildiğimiz anlamına gelir. Burada yalnızca planı biliyoruz.
+  List<Widget> _scheduledSection(TextTheme text, TransitCity lineCity) {
+    if (!lineCity.hasTimetable) return const [];
+    if (!_loadingArrivals && _scheduled.isEmpty && _arrivalsAt == null) {
+      return const [];
+    }
+    return [
+      Row(
+        children: [
+          const Icon(Icons.schedule_rounded,
+              size: 16, color: VigilantColors.tertiaryContainer),
+          const SizedBox(width: 8),
+          Text('TARİFEYE GÖRE SIRADAKİ',
+              style: text.labelSmall?.copyWith(
+                  color: VigilantColors.onSurfaceVariant, letterSpacing: 1.2)),
+          const Spacer(),
+          if (_loadingArrivals)
+            const SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+        ],
+      ),
+      const SizedBox(height: 10),
+      if (_scheduled.isEmpty && !_loadingArrivals)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Text(
+            'Bugün için kalan sefer görünmüyor.',
+            style: text.labelMedium
+                ?.copyWith(color: VigilantColors.onSurfaceVariant),
+          ),
+        )
+      else
+        for (final a in _scheduled.take(6)) ...[
+          _ScheduledRow(item: a, onAlarm: () => _pick(context, ref, a.brief)),
+          const SizedBox(height: 8),
+        ],
+      if (_scheduled.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.only(top: 2, bottom: 4),
+          child: Text(
+            'Bu şehirde canlı otobüs konumu yayınlanmıyor; saatler TARİFEDEN '
+            'hesaplanır ve trafiği hesaba katmaz.',
+            style: text.labelSmall
+                ?.copyWith(color: VigilantColors.onSurfaceVariant),
+          ),
+        ),
+      const SizedBox(height: 18),
+    ];
   }
 
   /// Bu otobüsü haritada TEK BAŞINA göster.
@@ -166,7 +295,7 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
   /// "Yaklaşan otobüsler" bloğu — hiç canlı veri yoksa hiç çizilmez.
   List<Widget> _arrivalsSection(TextTheme text) {
     final TransitCity lineCity = city ?? ref.read(activeCityProvider);
-    if (!lineCity.hasLiveBus) return const [];
+    if (!lineCity.hasLiveBus) return _scheduledSection(text, lineCity);
     if (!_loadingArrivals && _arrivals.isEmpty && _arrivalsAt == null) {
       return const [];
     }
@@ -236,17 +365,6 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
           ),
         ),
       const SizedBox(height: 18),
-      Row(
-        children: [
-          const Icon(Icons.alt_route_rounded,
-              size: 16, color: VigilantColors.primary),
-          const SizedBox(width: 8),
-          Text('BU DURAKTAN GEÇEN HATLAR',
-              style: text.labelSmall?.copyWith(
-                  color: VigilantColors.onSurfaceVariant, letterSpacing: 1.2)),
-        ],
-      ),
-      const SizedBox(height: 10),
     ];
   }
 
@@ -373,6 +491,23 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
                     20, 0, 20, AppInsets.pageBottom(context)),
                 children: [
                   ..._arrivalsSection(text),
+                  // Başlık BÖLÜMLERDEN BAĞIMSIZ: yaklaşan otobüs / tarife
+                  // bölümü çizilmediğinde (canlı veri yok, şehir
+                  // desteklemiyor) hat listesi başlıksız kalıyordu.
+                  if (lines.isNotEmpty) ...[
+                    Row(
+                      children: [
+                        const Icon(Icons.alt_route_rounded,
+                            size: 16, color: VigilantColors.primary),
+                        const SizedBox(width: 8),
+                        Text('BU DURAKTAN GEÇEN HATLAR',
+                            style: text.labelSmall?.copyWith(
+                                color: VigilantColors.onSurfaceVariant,
+                                letterSpacing: 1.2)),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                  ],
                   for (var i = 0; i < lines.length; i++) ...[
                     if (i > 0) const SizedBox(height: 10),
                     _LineCard(
@@ -651,6 +786,96 @@ class _StopsAwayGauge extends StatelessWidget {
           const Icon(Icons.person_pin_circle_rounded,
               size: 18, color: VigilantColors.primary),
         ],
+      ),
+    );
+  }
+}
+
+/// Tarifeye göre planlanmış tek sefer.
+class _Scheduled {
+  const _Scheduled({
+    required this.brief,
+    required this.line,
+    required this.arrival,
+  });
+
+  final TransitLineBrief brief;
+  final TransitLine line;
+  final ScheduledArrival arrival;
+}
+
+/// Tarifeye göre sıradaki sefer satırı.
+class _ScheduledRow extends StatelessWidget {
+  const _ScheduledRow({required this.item, required this.onAlarm});
+
+  final _Scheduled item;
+  final VoidCallback onAlarm;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final a = item.arrival;
+    return Material(
+      color: VigilantColors.surfaceContainer,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: onAlarm,
+        borderRadius: BorderRadius.circular(18),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(item.brief.code,
+                        style: text.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 3),
+                    Text(
+                      item.line.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: text.labelLarge?.copyWith(
+                          color: VigilantColors.onSurfaceVariant, height: 1.3),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'Kalkış ${a.departureTime}',
+                      style: text.labelSmall
+                          ?.copyWith(color: VigilantColors.onSurfaceVariant),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Saat ÖNCE: tarifeye dayanan bir bilgide "12 dk" değil,
+                  // "14:32" kullanıcının doğrulayabileceği şeydir.
+                  Text(a.clockLabel,
+                      style: text.titleLarge?.copyWith(
+                          color: VigilantColors.tertiaryContainer,
+                          fontWeight: FontWeight.w800)),
+                  Text('~${a.awayLabel}',
+                      style: text.labelSmall
+                          ?.copyWith(color: VigilantColors.onSurfaceVariant)),
+                ],
+              ),
+              IconButton(
+                onPressed: onAlarm,
+                visualDensity: VisualDensity.compact,
+                tooltip: 'Bu hatla alarm kur',
+                icon: const Icon(Icons.alarm_add_rounded,
+                    size: 20, color: VigilantColors.primary),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

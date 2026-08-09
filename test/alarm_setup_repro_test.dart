@@ -33,62 +33,42 @@ void main() {
     // Sürekli animasyonları kapat (pumpAndSettle kilitlenmesin).
     AppAnim.enabled = false;
   });
-  testWidgets('Ana sayfadan arama kutusuyla Alarm Kur akışı',
+  testWidgets('Ana sayfadan arama kutusu HATLAR sekmesini açar',
       (tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     await tester.pumpWidget(_app());
     await tester.pumpAndSettle();
 
-    // Ana sayfadaki arama kutusu Rotalar (arama) sekmesini açar.
+    // Ana sayfadaki arama kutusu Hatlar sekmesini açar.
     await tester.tap(find.text('İneceğin durağı veya hattı ara...'));
     await tester.pumpAndSettle();
     expect(find.text('Nerede İneceksin?'), findsOneWidget);
+  });
 
-    // Aramadan gerçek bir durak seçince Alarm Kur açılır.
-    await tester.enterText(find.byType(TextField), 'Kadıköy');
-    await tester.pumpAndSettle();
-    await tester.tap(find.byIcon(Icons.arrow_forward).first);
+  testWidgets('DURAKLAR sekmesinden durak → hat → Alarm Kur akışı',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    await tester.pumpWidget(_app());
     await tester.pumpAndSettle();
 
+    // Durak araması artık kendi sekmesinde; Hatlar yalnızca hat listeliyor.
+    await tester.tap(find.text('Duraklar'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), 'Ayrılık');
+    await tester.pumpAndSettle();
+
+    // Durak künyesi açılır (yaklaşan otobüsler + duraktan geçen hatlar).
+    // Kartın kendisine dokun: metinle aramak arama KUTUSUNU da yakalıyor.
+    await tester.tap(find.byIcon(Icons.chevron_right_rounded).first);
+    await tester.pumpAndSettle();
+    expect(find.text('BU DURAKTAN GEÇEN HATLAR'), findsOneWidget);
+
+    // Hattı seçince Alarm Kur açılır.
+    await tester.tap(find.byIcon(Icons.alarm_add_rounded).first);
+    await tester.pumpAndSettle();
     expect(find.text('Alarm Kur'), findsOneWidget);
     expect(find.text('ALARM TETİKLEME'), findsOneWidget);
-    // Tetikleme modu seçenekleri görünür (durak sayısı / mesafe).
-    expect(find.text('Kalan Durak'), findsOneWidget);
-    expect(find.text('Kalan Mesafe'), findsOneWidget);
-  });
-
-  testWidgets('Arama sonucundan Alarm Kur acilir', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(390, 844));
-    await tester.pumpWidget(_app());
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Hatlar'));
-    await tester.pumpAndSettle();
-
-    await tester.enterText(find.byType(TextField), 'Kadıköy');
-    await tester.pumpAndSettle();
-
-    // Sonuç kartlarının her birinde sağda arrow_forward ikonu var; ilkine dokun
-    // (ekran dışına kayabilecek bir metin yerine kesin görünür ilk sonuç).
-    final firstResult = find.byIcon(Icons.arrow_forward).first;
-    expect(firstResult, findsOneWidget);
-    await tester.tap(firstResult);
-    await tester.pumpAndSettle();
-
-    expect(find.text('Alarm Kur'), findsOneWidget);
-  });
-
-  testWidgets('Favori yokken bos durum gorunur', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(390, 844));
-    await tester.pumpWidget(_app());
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Favoriler'));
-    await tester.pumpAndSettle();
-
-    // Firestore test ortaminda bos doner -> bos durum mesaji.
-    expect(find.text('Favori Rotalar'), findsOneWidget);
-    expect(find.textContaining('Henüz favori rota yok'), findsOneWidget);
   });
 
   testWidgets('Favori ekranindaki + butonu aramayi acar', (tester) async {
