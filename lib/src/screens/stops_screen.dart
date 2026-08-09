@@ -4,22 +4,24 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/models.dart';
 import '../data/transit_city.dart';
 import '../data/transit_db.dart';
-import '../services/bus_data_service.dart';
 import '../state/city_provider.dart';
 import '../state/journey_provider.dart';
 import '../theme/app_theme.dart';
 import '../util/haptics.dart';
 import '../util/insets.dart';
+import '../widgets/glass_panel.dart';
 import '../widgets/skeleton.dart';
 import 'nearby_map_screen.dart';
 import 'stop_lines_screen.dart';
 
-/// DURAKLAR sekmesi — yalnızca durak arama.
+/// DURAKLAR sekmesi — üstte harita, altta yükseklik ayarlanabilir liste.
 ///
 /// Hatlar sekmesi hat arıyor, burası durak: ikisi tek listede karışınca
-/// "Şişli" yazan kullanıcı ne aradığını bulamıyordu. Boş sorguda yakındaki
-/// duraklar listelenir — durak arayan kişinin çoğu zaman aradığı zaten
-/// yanı başındaki duraktır.
+/// "Şişli" yazan kullanıcı ne aradığını bulamıyordu.
+///
+/// Varsayılan görünüm HARİTA: durak arayan kişinin çoğu zaman aradığı yanı
+/// başındaki duraktır ve onu listede değil haritada tanır. Arama çubuğuna
+/// dokununca tam ekran arama açılır.
 class StopsScreen extends ConsumerStatefulWidget {
   const StopsScreen({super.key});
 
@@ -28,73 +30,118 @@ class StopsScreen extends ConsumerStatefulWidget {
 }
 
 class _StopsScreenState extends ConsumerState<StopsScreen> {
-  final _controller = TextEditingController();
-  String _query = '';
-  List<Stop> _results = const [];
   bool _searching = false;
 
-  /// Arama sırası — geç dönen eski sorgu yenisini ezmesin.
-  int _seq = 0;
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Stack(
+        children: [
+          // Harita + sürüklenebilir yakındaki duraklar paneli. Kendi üst
+          // çubuğunu çizmez (embedded); onun yerine arama çubuğu duruyor.
+          const Positioned.fill(child: NearbyMapScreen(embedded: true)),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                child: _SearchBar(
+                  onTap: () {
+                    Haptics.light();
+                    setState(() => _searching = true);
+                  },
+                ),
+              ),
+            ),
+          ),
+          // Arama TAM EKRAN kaplar: harita arkada kalır, kullanıcı geri
+          // dönünce baktığı yeri kaybetmez.
+          if (_searching)
+            Positioned.fill(
+              child: _StopSearchView(
+                onClose: () => setState(() => _searching = false),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Haritanın üstünde yüzen arama çubuğu (dokununca aramayı açar).
+class _SearchBar extends StatelessWidget {
+  const _SearchBar({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return GlassPanel(
+      borderRadius: 20,
+      onTap: onTap,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Row(
+        children: [
+          const Icon(Icons.search, color: VigilantColors.primary, size: 22),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text('Durak ara…',
+                style: text.bodyMedium
+                    ?.copyWith(color: VigilantColors.onSurfaceVariant)),
+          ),
+          const Icon(Icons.tune_rounded,
+              size: 18, color: VigilantColors.onSurfaceVariant),
+        ],
+      ),
+    );
+  }
+}
+
+/// Tam ekran durak arama.
+///
+/// TÜM KURULU ŞEHİRLERDE arar ve her sonucun ilini rozetle yazar: Kocaeli'deki
+/// biri İstanbul'daki bir durağa bakmak için ayar değiştirmek zorunda
+/// kalmasın, ama hangi ildeki durağa baktığını da karıştırmasın.
+class _StopSearchView extends ConsumerStatefulWidget {
+  const _StopSearchView({required this.onClose});
+
+  final VoidCallback onClose;
+
+  @override
+  ConsumerState<_StopSearchView> createState() => _StopSearchViewState();
+}
+
+class _StopSearchViewState extends ConsumerState<_StopSearchView> {
+  final _controller = TextEditingController();
+  final _focus = FocusNode();
+  String _query = '';
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => _focus.requestFocus());
+  }
 
   @override
   void dispose() {
     _controller.dispose();
+    _focus.dispose();
     super.dispose();
   }
 
-  Future<void> _search(String raw) async {
-    final q = raw.trim();
-    setState(() => _query = q);
-    if (q.length < 2) {
-      setState(() {
-        _results = const [];
-        _searching = false;
-      });
-      return;
-    }
-    final seq = ++_seq;
-    setState(() => _searching = true);
-
-    final city = ref.read(activeCityProvider);
-    final out = <String, Stop>{};
-
-    // 1) İndirilen paketteki duraklar (İstanbul 13.000, Kocaeli 8.400).
-    try {
-      for (final s in await TransitDb.instance.searchStops(q, limit: 40)) {
-        out.putIfAbsent('${s.name}|${s.direction}', () => s);
-      }
-    } catch (_) {
-      // Paket yok: yalnızca ray/vapur durakları listelenir.
-    }
-
-    // 2) Ray/vapur durakları ayrı kaynakta (gömülü/indirilen JSON).
-    final norm = transitNorm(q);
-    final rail = ref.read(linesProvider).valueOrNull ?? const <TransitLine>[];
-    for (final l in rail) {
-      for (final s in l.stops) {
-        if (!transitNorm(s.name).contains(norm)) continue;
-        out.putIfAbsent('${s.name}|${s.direction}', () => s);
-      }
-    }
-
-    if (!mounted || seq != _seq) return;
-    setState(() {
-      _results = out.values.toList()
-        ..sort((a, b) => a.name.compareTo(b.name));
-      _searching = false;
-      // Şehir etiketi için (aktif şehirde arıyoruz).
-      _city = city;
-    });
-  }
-
-  TransitCity? _city;
-
   /// Durak künyesini aç: yaklaşan otobüsler + duraktan geçen hatlar.
-  Future<void> _open(Stop stop) async {
+  Future<void> _open(Stop stop, TransitCity city) async {
     Haptics.light();
+    final active = ref.read(activeCityProvider);
+    final other = city.id == active.id ? null : city;
     var lines = const <TransitLineBrief>[];
     if (isBusId(stop.id)) {
-      lines = await TransitDb.instance.linesForStop(stop.id);
+      lines = await TransitDb.instance.linesForStop(stop.id, cityId: other?.id);
     } else {
       // Ray/vapur: durağı içeren hatları gömülü listeden topla.
       final rail = ref.read(linesProvider).valueOrNull ?? const <TransitLine>[];
@@ -107,138 +154,112 @@ class _StopsScreenState extends ConsumerState<StopsScreen> {
     }
     if (!mounted) return;
     Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => StopLinesScreen(stop: stop, lines: lines),
+      builder: (_) => StopLinesScreen(stop: stop, lines: lines, city: other),
     ));
-  }
-
-  Future<void> _switchCity(TransitCity city) async {
-    if (city.id == ref.read(activeCityProvider).id) return;
-    Haptics.selection();
-    await ref.read(cityProvider.notifier).select(city);
-    await BusDataService.instance.ensureReady(city: city);
-    if (!mounted) return;
-    ref.invalidate(linesProvider);
-    ref.invalidate(nearbyStopsProvider);
-    if (_query.isNotEmpty) await _search(_query);
-    if (mounted) setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    final city = ref.watch(activeCityProvider);
+    final active = ref.watch(activeCityProvider);
+    final q = _query.trim();
 
-    return Scaffold(
-      body: SafeArea(
+    // Otobüs durakları TÜM kurulu şehirlerde aranır (şehir etiketli gelir).
+    final busAsync = ref.watch(busSearchProvider(q));
+    final bus = busAsync.valueOrNull ?? const BusSearchResults();
+
+    // Ray/vapur durakları ayrı kaynakta — aktif şehrin listesi.
+    final norm = transitNorm(q);
+    final rail = <(Stop, TransitCity)>[];
+    if (q.length >= 2) {
+      final seen = <String>{};
+      for (final l in ref.read(linesProvider).valueOrNull ??
+          const <TransitLine>[]) {
+        for (final s in l.stops) {
+          if (!transitNorm(s.name).contains(norm)) continue;
+          if (!seen.add('${s.name}|${s.direction}')) continue;
+          rail.add((s, active));
+        }
+      }
+    }
+
+    final results = <(Stop, TransitCity)>[
+      for (final s in bus.stops) (s.stop, s.city),
+      ...rail,
+    ];
+
+    return ColoredBox(
+      color: VigilantColors.background,
+      child: SafeArea(
         bottom: false,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 10, 8, 0),
+              padding: const EdgeInsets.fromLTRB(8, 8, 16, 8),
               child: Row(
                 children: [
-                  Expanded(
-                    child: Text('Durak Ara',
-                        style: text.headlineSmall?.copyWith(fontSize: 20)),
+                  IconButton(
+                    onPressed: widget.onClose,
+                    icon: const Icon(Icons.arrow_back,
+                        color: VigilantColors.onSurfaceVariant),
                   ),
-                  PopupMenuButton<TransitCity>(
-                    tooltip: 'Şehir',
-                    onSelected: _switchCity,
-                    itemBuilder: (context) => [
-                      for (final c in TransitCities.all)
-                        PopupMenuItem(
-                          value: c,
-                          child: Row(
-                            children: [
-                              Icon(
-                                c.id == city.id
-                                    ? Icons.radio_button_checked
-                                    : Icons.radio_button_unchecked,
-                                size: 18,
-                                color: c.id == city.id
-                                    ? VigilantColors.primary
-                                    : VigilantColors.onSurfaceVariant,
+                  Expanded(
+                    child: TextField(
+                      controller: _controller,
+                      focusNode: _focus,
+                      onChanged: (v) => setState(() => _query = v),
+                      textInputAction: TextInputAction.search,
+                      decoration: InputDecoration(
+                        isDense: true,
+                        filled: true,
+                        fillColor: VigilantColors.surfaceContainer,
+                        hintText: 'Durak adı ara…',
+                        prefixIcon: const Icon(Icons.search,
+                            color: VigilantColors.primary),
+                        suffixIcon: q.isEmpty
+                            ? null
+                            : IconButton(
+                                icon:
+                                    const Icon(Icons.close_rounded, size: 18),
+                                onPressed: () {
+                                  _controller.clear();
+                                  setState(() => _query = '');
+                                },
                               ),
-                              const SizedBox(width: 10),
-                              Text(c.name),
-                            ],
-                          ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(18),
+                          borderSide: BorderSide.none,
                         ),
-                    ],
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.location_city_rounded, size: 18),
-                          const SizedBox(width: 6),
-                          Text(city.name, style: text.labelLarge),
-                          const Icon(Icons.arrow_drop_down, size: 20),
-                        ],
                       ),
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 10),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: TextField(
-                controller: _controller,
-                onChanged: _search,
-                textInputAction: TextInputAction.search,
-                decoration: InputDecoration(
-                  isDense: true,
-                  filled: true,
-                  fillColor: VigilantColors.surfaceContainer,
-                  hintText: 'Durak adı ara…',
-                  prefixIcon: const Icon(Icons.search,
-                      color: VigilantColors.primary),
-                  suffixIcon: _query.isEmpty
-                      ? null
-                      : IconButton(
-                          icon: const Icon(Icons.close_rounded, size: 18),
-                          onPressed: () {
-                            _controller.clear();
-                            _search('');
-                          },
-                        ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(18),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-              ),
+            Expanded(
+              child: _body(text, q, results, busAsync.isLoading, active),
             ),
-            const SizedBox(height: 16),
-            Expanded(child: _body(text)),
           ],
         ),
       ),
     );
   }
 
-  Widget _body(TextTheme text) {
-    if (_query.isEmpty) return _nearby(text);
-    if (_searching && _results.isEmpty) {
-      return ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        children: const [
-          SkeletonTile(),
-          SizedBox(height: 12),
-          SkeletonTile(),
-        ],
-      );
-    }
-    if (_results.isEmpty) {
+  Widget _body(
+    TextTheme text,
+    String q,
+    List<(Stop, TransitCity)> results,
+    bool loading,
+    TransitCity active,
+  ) {
+    if (q.length < 2) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(32),
           child: Text(
-            _query.length < 2
-                ? 'Aramak için en az iki harf yaz.'
-                : 'Durak bulunamadı.',
+            'Durak adının en az iki harfini yaz.\n'
+            'Kurulu bütün illerde aranır.',
             textAlign: TextAlign.center,
             style: text.bodyMedium
                 ?.copyWith(color: VigilantColors.onSurfaceVariant),
@@ -246,115 +267,54 @@ class _StopsScreenState extends ConsumerState<StopsScreen> {
         ),
       );
     }
+    if (results.isEmpty) {
+      return loading
+          ? ListView(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              children: const [
+                SkeletonTile(),
+                SizedBox(height: 12),
+                SkeletonTile(),
+              ],
+            )
+          : Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Text('Durak bulunamadı.',
+                    style: text.bodyMedium
+                        ?.copyWith(color: VigilantColors.onSurfaceVariant)),
+              ),
+            );
+    }
     return ListView.separated(
       padding: EdgeInsets.fromLTRB(20, 0, 20, AppInsets.listBottom(context)),
-      itemCount: _results.length,
+      itemCount: results.length,
       separatorBuilder: (_, __) => const SizedBox(height: 10),
-      itemBuilder: (context, i) => _StopTile(
-        stop: _results[i],
-        cityLabel: _city?.name,
-        onTap: () => _open(_results[i]),
-      ),
-    );
-  }
-
-  /// Boş sorgu: yakındaki duraklar + haritada gör kısayolu.
-  Widget _nearby(TextTheme text) {
-    final nearby = ref.watch(nearbyStopsProvider);
-    return ListView(
-      padding: EdgeInsets.fromLTRB(20, 0, 20, AppInsets.listBottom(context)),
-      children: [
-        SizedBox(
-          height: 46,
-          child: OutlinedButton.icon(
-            style: OutlinedButton.styleFrom(
-              foregroundColor: VigilantColors.onSurface,
-              side: BorderSide(
-                  color:
-                      VigilantColors.surfaceVariant.withValues(alpha: 0.6)),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14)),
-            ),
-            onPressed: () {
-              Haptics.light();
-              Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => const NearbyMapScreen(),
-              ));
-            },
-            icon: const Icon(Icons.map_rounded,
-                size: 18, color: VigilantColors.primary),
-            label: const Text('Haritada duraklar'),
-          ),
-        ),
-        const SizedBox(height: 20),
-        Row(
-          children: [
-            const Icon(Icons.near_me_outlined,
-                size: 16, color: VigilantColors.onSurfaceVariant),
-            const SizedBox(width: 8),
-            Text('YAKINDAKİ DURAKLAR',
-                style: text.labelSmall?.copyWith(
-                    color: VigilantColors.onSurfaceVariant,
-                    letterSpacing: 1.2)),
-          ],
-        ),
-        const SizedBox(height: 12),
-        ...nearby.when(
-          loading: () => const [
-            SkeletonTile(),
-            SizedBox(height: 12),
-            SkeletonTile(),
-          ],
-          error: (_, __) => [
-            Text('Yakındaki duraklar alınamadı.',
-                style: text.labelMedium
-                    ?.copyWith(color: VigilantColors.onSurfaceVariant)),
-          ],
-          data: (hits) => hits.isEmpty
-              ? [
-                  Text(
-                    'Konum yoksa yakındaki duraklar listelenemez — '
-                    'yukarıdan arayabilirsin.',
-                    style: text.labelMedium
-                        ?.copyWith(color: VigilantColors.onSurfaceVariant),
-                  ),
-                ]
-              : [
-                  for (final h in hits.take(12)) ...[
-                    _StopTile(
-                      stop: h.stop,
-                      meters: h.meters,
-                      onTap: () => _open(h.stop),
-                    ),
-                    const SizedBox(height: 10),
-                  ],
-                ],
-        ),
-      ],
+      itemBuilder: (context, i) {
+        final (stop, city) = results[i];
+        return _StopResultTile(
+          stop: stop,
+          city: city,
+          isActiveCity: city.id == active.id,
+          onTap: () => _open(stop, city),
+        );
+      },
     );
   }
 }
 
-class _StopTile extends StatelessWidget {
-  const _StopTile({
+class _StopResultTile extends StatelessWidget {
+  const _StopResultTile({
     required this.stop,
+    required this.city,
+    required this.isActiveCity,
     required this.onTap,
-    this.meters,
-    this.cityLabel,
   });
 
   final Stop stop;
+  final TransitCity city;
+  final bool isActiveCity;
   final VoidCallback onTap;
-  final double? meters;
-  final String? cityLabel;
-
-  String get _distance {
-    final m = meters;
-    if (m == null) return '';
-    return m >= 1000
-        ? '${(m / 1000).toStringAsFixed(1).replaceAll('.', ',')} km'
-        : '${m.round()} m';
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -400,15 +360,29 @@ class _StopTile extends StatelessWidget {
                   ],
                 ),
               ),
-              if (_distance.isNotEmpty) ...[
-                const SizedBox(width: 8),
-                Text(_distance,
-                    style: text.labelMedium
-                        ?.copyWith(color: VigilantColors.primary)),
-              ],
-              const SizedBox(width: 4),
-              const Icon(Icons.chevron_right_rounded,
-                  size: 20, color: VigilantColors.onSurfaceVariant),
+              const SizedBox(width: 8),
+              // İL ROZETİ — bulunduğun il farklı renkte, ötekiler soluk değil
+              // (soluk gösterim "ikinci sınıf sonuç" izlenimi veriyordu).
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                decoration: BoxDecoration(
+                  color: (isActiveCity
+                          ? VigilantColors.primary
+                          : VigilantColors.accentBlue)
+                      .withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  city.name,
+                  style: text.labelSmall?.copyWith(
+                    color: isActiveCity
+                        ? VigilantColors.primary
+                        : VigilantColors.accentBlue,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
             ],
           ),
         ),

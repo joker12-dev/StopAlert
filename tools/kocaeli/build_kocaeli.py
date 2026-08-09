@@ -573,10 +573,42 @@ def build(version):
     db.executemany('INSERT INTO line_stops VALUES(?,?,?,?)', ls_rows)
     db.executemany('INSERT INTO departures VALUES(?,?,?)', dep_rows)
     print(f'  sefer saati: {len(dep_rows)} kalkış')
+    # DURAK YÖNÜ — kaynakta YOK, hatlardan TÜRETİLİYOR.
+    #
+    # İETT durak verisinde "yön" alanı var (o duraktan geçen araçların gittiği
+    # uç); Kocaeli GTFS'inde ve belediyenin hat sayfasında böyle bir alan yok.
+    # Aynı bilgi hatlardan çıkarılabiliyor: bir duraktan geçen seferlerin SON
+    # DURAK adları toplanır, en sık geçen ad o durağın yönü sayılır.
+    #
+    # Durağın kendisi seferin son durağıysa sayılmaz — "X durağı X yönünde"
+    # demek bilgi taşımaz.
+    last_stop_name = {}
+    for lid, code, lname, lnorm, yon, depar, ltype, color, operator in line_rows:
+        last_stop_name[lid] = lname.split(' - ')[-1].strip()
+
+    from collections import Counter
+    dir_votes = {}
+    seq_max = {}
+    for lid, k, sid, sec in ls_rows:
+        seq_max[lid] = max(seq_max.get(lid, 0), k)
+    for lid, k, sid, sec in ls_rows:
+        if k >= seq_max.get(lid, 0):
+            continue                      # bu durak seferin sonu
+        dest = last_stop_name.get(lid, '')
+        if not dest:
+            continue
+        dir_votes.setdefault(sid, Counter())[dest] += 1
+
+    def direction_of(sid):
+        c = dir_votes.get(sid)
+        return c.most_common(1)[0][0] if c else ''
+
     db.executemany('INSERT OR IGNORE INTO stops VALUES(?,?,?,?,?,?,?)', [
-        (sid, v[0], norm(v[0]), '', '', v[1], v[2])
+        (sid, v[0], norm(v[0]), direction_of(sid), '', v[1], v[2])
         for sid, v in used_stops.items()
     ])
+    with_dir = sum(1 for sid in used_stops if direction_of(sid))
+    print(f'  durak yönü (hatlardan türetildi): {with_dir}/{len(used_stops)}')
     db.executescript('''
       CREATE INDEX ix_stops_lat ON stops(lat);
       CREATE INDEX ix_stops_lon ON stops(lon);

@@ -55,12 +55,17 @@ void main() {
     await tester.tap(find.text('Duraklar'));
     await tester.pumpAndSettle();
 
+    // Duraklar sekmesi HARİTA ile açılır; arama çubuğuna dokununca tam ekran
+    // arama gelir.
+    await tester.tap(find.text('Durak ara…'));
+    await tester.pumpAndSettle();
+
     await tester.enterText(find.byType(TextField), 'Ayrılık');
     await tester.pumpAndSettle();
 
     // Durak künyesi açılır (yaklaşan otobüsler + duraktan geçen hatlar).
     // Kartın kendisine dokun: metinle aramak arama KUTUSUNU da yakalıyor.
-    await tester.tap(find.byIcon(Icons.chevron_right_rounded).first);
+    await tester.tap(find.byIcon(Icons.location_on_outlined).first);
     await tester.pumpAndSettle();
     expect(find.text('BU DURAKTAN GEÇEN HATLAR'), findsOneWidget);
 

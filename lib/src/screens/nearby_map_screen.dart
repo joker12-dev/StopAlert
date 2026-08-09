@@ -28,7 +28,17 @@ import 'stop_lines_screen.dart';
 /// dokununca harita o durağa zoomlanır ve konumundan durağa YÜRÜME ROTASI
 /// (OSRM, yollardan) çizilir — kullanıcı nereden gideceğini görür.
 class NearbyMapScreen extends ConsumerStatefulWidget {
-  const NearbyMapScreen({super.key, this.focusStop});
+  const NearbyMapScreen({
+    super.key,
+    this.focusStop,
+    this.embedded = false,
+  });
+
+  /// SEKME İÇİNDE mi gösteriliyor (Duraklar sekmesi)?
+  ///
+  /// Gömülüyken kendi üst çubuğunu çizmez — arama çubuğunu saran ekran
+  /// koyar — ve geri butonu göstermez (sekmeden çıkılacak bir yer yok).
+  final bool embedded;
 
   /// Verilirse harita bu durağa odaklanır ve durak seçili açılır
   /// (durak sayfasındaki "Haritada göster" akışı).
@@ -470,6 +480,13 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
     ));
   }
 
+  /// Yürüme süresi — 80 m/dk (≈4,8 km/s, şehir içi yaya ortalaması).
+  /// Sıfıra yuvarlanmasın diye en az 1 dk.
+  String _walkMinutes(double meters) {
+    final dk = (meters / 80).ceil();
+    return '~${dk < 1 ? 1 : dk} dk yürüme';
+  }
+
   String _fmt(double m) => m >= 1000
       ? '${(m / 1000).toStringAsFixed(1).replaceAll('.', ',')} km'
       : '${m.round()} m';
@@ -688,7 +705,8 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
               ),
               // Üst çubuk — Positioned (Stack'in tüm çocukları konumlanmalı ki
               // Stack tüm ekranı doldursun; aksi halde SafeArea'ya küçülür).
-              Positioned(
+              if (!widget.embedded)
+                Positioned(
                 top: 0,
                 left: 0,
                 right: 0,
@@ -819,9 +837,15 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
             ),
           ),
           // Yarıçap çipleri
-          Padding(
-            padding: const EdgeInsets.fromLTRB(18, 0, 18, 10),
-            child: Row(
+          //
+          // KAYDIRILABİLİR: üç çip + "haritayı gezdir" ipucu 390 px'lik bir
+          // ekranda yan yana sığmıyor ve satır taşıyordu (93 px). İpucu
+          // çiplerin altına alındı, çipler kendi şeridinde kaydırılıyor.
+          SizedBox(
+            height: 38,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 18),
               children: [
                 for (final r in _radiusOptions) ...[
                   _RadiusChip(
@@ -833,12 +857,14 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
                   ),
                   const SizedBox(width: 8),
                 ],
-                const Spacer(),
-                Text('haritayı gezdir',
-                    style: text.labelSmall
-                        ?.copyWith(color: VigilantColors.onSurfaceVariant)),
               ],
             ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 4, 18, 10),
+            child: Text('Listeyi değiştirmek için haritayı gezdir',
+                style: text.labelSmall
+                    ?.copyWith(color: VigilantColors.onSurfaceVariant)),
           ),
           Expanded(
             child: _loadingStops && stops.isEmpty
@@ -856,6 +882,7 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
                           return _StopTile(
                             m: m,
                             distanceText: _fmt(m.meters),
+                            walkText: _walkMinutes(m.meters),
                             selected: _isSelected(m),
                             onTap: () => _selectStop(m),
                           );
@@ -1093,12 +1120,17 @@ class _StopTile extends StatelessWidget {
   const _StopTile({
     required this.m,
     required this.distanceText,
+    required this.walkText,
     required this.selected,
     required this.onTap,
   });
 
   final MapStop m;
   final String distanceText;
+
+  /// "~4 dk" — yürüme süresi. Mesafeyi dakikaya çevirmek kullanıcının
+  /// kafasında yaptığı işi ona bırakmamak demek.
+  final String walkText;
   final bool selected;
   final VoidCallback onTap;
 
@@ -1168,6 +1200,9 @@ class _StopTile extends StatelessWidget {
                       style: text.labelLarge?.copyWith(
                           color: VigilantColors.primary,
                           fontWeight: FontWeight.w700)),
+                  Text(walkText,
+                      style: text.labelSmall?.copyWith(
+                          color: VigilantColors.onSurfaceVariant)),
                   const Icon(Icons.chevron_right,
                       size: 18, color: VigilantColors.onSurfaceVariant),
                 ],
