@@ -13,6 +13,7 @@ import '../state/settings_provider.dart';
 import '../theme/app_theme.dart';
 import '../util/insets.dart';
 import '../util/haptics.dart';
+import '../util/platform_check.dart';
 import 'data_packages_screen.dart';
 import 'help_screen.dart';
 import 'privacy_screen.dart';
@@ -417,13 +418,16 @@ class SettingsScreen extends ConsumerWidget {
                       color: VigilantColors.onSurfaceVariant),
                   onTap: () => _link(context, auth.linkGoogle),
                 ),
-                _SettingsTile(
-                  icon: Icons.apple,
-                  title: 'Apple ile bağla',
-                  trailing: const Icon(Icons.chevron_right,
-                      color: VigilantColors.onSurfaceVariant),
-                  onTap: () => _link(context, auth.linkApple),
-                ),
+                // APPLE yalnızca iOS'ta: Android'de "Apple ile giriş"
+                // akışı zaten çalışmıyor, düğme ölü dokunuş oluyordu.
+                if (isIosDevice)
+                  _SettingsTile(
+                    icon: Icons.apple,
+                    title: 'Apple ile bağla',
+                    trailing: const Icon(Icons.chevron_right,
+                        color: VigilantColors.onSurfaceVariant),
+                    onTap: () => _link(context, auth.linkApple),
+                  ),
               ],
             ],
           ),

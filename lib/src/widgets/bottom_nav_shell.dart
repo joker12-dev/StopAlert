@@ -9,14 +9,14 @@ import '../screens/profile_screen.dart';
 import '../screens/search_screen.dart';
 import '../theme/app_theme.dart';
 
-/// Aktif alt sekme indeksi (0: Ana Sayfa, 1: Rotalar, 2: Favoriler, 3: Profil).
+/// Aktif alt sekme indeksi (0: Ana Sayfa, 1: Hatlar, 2: Favoriler, 3: Profil).
 ///
 /// Ana sayfadaki "Tümünü Gör", tür butonları vb. bir sekmeye geçmek için
 /// yeni sayfa PUSH etmek yerine bu değeri değiştirir — böylece alt menü
 /// kaybolmaz ve kullanıcı sekmeler arasında serbestçe gezebilir.
 final bottomNavIndexProvider = StateProvider<int>((ref) => 0);
 
-/// Alt navigasyon kabuğu: Ana Sayfa / Rotalar / Favoriler / Profil.
+/// Alt navigasyon kabuğu: Ana Sayfa / Hatlar / Favoriler / Profil.
 /// Tasarımdaki gibi buzlu cam zemin, üstten 32px yuvarlatma ve
 /// aktif sekmede kırmızı hap arka planı kullanır.
 class BottomNavShell extends ConsumerStatefulWidget {
@@ -29,7 +29,8 @@ class BottomNavShell extends ConsumerStatefulWidget {
 class _BottomNavShellState extends ConsumerState<BottomNavShell> {
   static const _tabs = [
     (icon: Icons.home_rounded, label: 'Ana Sayfa'),
-    (icon: Icons.directions_bus_rounded, label: 'Rotalar'),
+    // "Rotalar" yol tarifi çağrıştırıyordu; sekme aslında HAT arama.
+    (icon: Icons.alt_route_rounded, label: 'Hatlar'),
     (icon: Icons.bookmark_rounded, label: 'Favoriler'),
     (icon: Icons.person_rounded, label: 'Profil'),
   ];

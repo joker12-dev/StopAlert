@@ -22,7 +22,7 @@ void main() {
 
     // Ana Sayfa (premium) — üst bölüm öğeleri
     expect(find.text('Merhaba, Yolcu!'), findsOneWidget);
-    expect(find.text('Nereye gitmek istersiniz?'), findsOneWidget);
+    expect(find.text('Nerede ineceksin?'), findsOneWidget);
     expect(find.text('Yakındaki Duraklar'), findsOneWidget);
 
     // Favoriler sekmesi
@@ -36,8 +36,8 @@ void main() {
     expect(find.text('StopAlert Yolcusu'), findsOneWidget);
 
     // Rotalar (arama) sekmesi
-    await tester.tap(find.text('Rotalar'));
+    await tester.tap(find.text('Hatlar'));
     await tester.pumpAndSettle();
-    expect(find.text('Nereye Gitmek İstersiniz?'), findsOneWidget);
+    expect(find.text('Nerede İneceksin?'), findsOneWidget);
   });
 }

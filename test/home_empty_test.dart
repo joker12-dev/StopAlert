@@ -66,7 +66,7 @@ void main() {
     await tester.tap(find.text('Yolculuk Yap'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Nereye Gitmek İstersiniz?'), findsOneWidget);
+    expect(find.text('Nerede İneceksin?'), findsOneWidget);
   });
 
   testWidgets('Yakındaki durak dokunuşu Alarm Kur açar', (tester) async {

@@ -70,8 +70,12 @@ class LocationService {
     }
   }
 
-  /// Koordinatı okunabilir bir semt/mahalle adına çevirir (OpenStreetMap
-  /// Nominatim — ücretsiz, anahtarsız). Başarısızsa null döner.
+  /// Koordinatı okunabilir bir adrese çevirir (OpenStreetMap Nominatim —
+  /// ücretsiz, anahtarsız). Başarısızsa null döner.
+  ///
+  /// "Mahalle, İlçe, İl" biçiminde: yalnızca mahalle adı yazınca kullanıcı
+  /// hangi ilçede olduğunu göremiyordu ve aynı adlı mahalleler (Türkiye'de
+  /// bol) ayırt edilemiyordu.
   Future<String?> reverseGeocode(LatLng point) async {
     try {
       final uri = Uri.parse(
@@ -86,15 +90,28 @@ class LocationService {
       final data = jsonDecode(res.body) as Map<String, dynamic>;
       final addr = data['address'] as Map<String, dynamic>?;
       if (addr == null) return null;
-      // Öncelik: mahalle > semt > ilçe > şehir.
-      final name = addr['neighbourhood'] ??
-          addr['suburb'] ??
-          addr['quarter'] ??
-          addr['city_district'] ??
-          addr['town'] ??
-          addr['city'] ??
-          addr['county'];
-      return name as String?;
+      String? pick(List<String> keys) {
+        for (final k in keys) {
+          final v = addr[k];
+          if (v is String && v.trim().isNotEmpty) return v.trim();
+        }
+        return null;
+      }
+
+      final mahalle = pick(['neighbourhood', 'quarter', 'suburb']);
+      final ilce = pick(['city_district', 'town', 'district', 'county']);
+      final il = pick(['province', 'city', 'state']);
+
+      // Aynı adı iki kez yazma: Nominatim bazen ilçe ile ili aynı veriyor
+      // (ör. merkez ilçelerde "İzmit / Kocaeli" yerine "Kocaeli / Kocaeli").
+      final parts = <String>[];
+      for (final p in [mahalle, ilce, il]) {
+        if (p == null) continue;
+        if (parts.any((q) => q.toLowerCase() == p.toLowerCase())) continue;
+        parts.add(p);
+      }
+      if (parts.isEmpty) return null;
+      return parts.join(', ');
     } catch (_) {
       return null;
     }

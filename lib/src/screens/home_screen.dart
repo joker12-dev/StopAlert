@@ -10,6 +10,7 @@ import '../data/transit_db.dart';
 import '../services/bus_data_service.dart';
 import '../data/stopi_tips.dart';
 import '../state/city_provider.dart';
+import '../state/hero_image_provider.dart';
 import '../state/journey_provider.dart';
 import '../state/settings_provider.dart';
 import '../state/weather_provider.dart';
@@ -25,6 +26,7 @@ import '../widgets/skeleton.dart';
 import '../widgets/traffic_strip.dart';
 import 'alarm_setup_screen.dart';
 import 'announcements_screen.dart';
+import 'lines_by_type_screen.dart';
 import 'live_tracking_screen.dart';
 import 'nearby_map_screen.dart';
 import 'stop_lines_screen.dart';
@@ -97,7 +99,15 @@ class HomeScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 28),
-            EntranceFade(delayMs: 180, child: _CategoryRow(onTap: goToRoutes)),
+            EntranceFade(
+              delayMs: 180,
+              child: _CategoryRow(
+                onTap: (type) => Navigator.of(context).push(
+                  MaterialPageRoute(
+                      builder: (_) => LinesByTypeScreen(type: type)),
+                ),
+              ),
+            ),
             const SizedBox(height: 28),
             EntranceFade(delayMs: 220, child: _PromoHero(onStart: goToRoutes)),
             const SizedBox(height: 28),
@@ -452,27 +462,32 @@ class HomeScreen extends ConsumerWidget {
 
 // ===================== Bileşenler =====================
 
-/// Sayfanın en üstündeki İstanbul arka planı. Foto üste hizalı; alt tarafı
+/// Sayfanın en üstündeki şehir arka planı. Foto üste hizalı; alt tarafı
 /// tema rengine doğru gradient geçişli (üstte hafif koyu perde → selam/tarih
 /// yazıları okunur kalır). Foto yoksa (asset eksik) sessizce boş geçer.
-class _HeroBackground extends StatelessWidget {
+///
+/// Görsel HER AÇILIŞTA rastgele seçilir (bkz. [heroImageProvider]); oturum
+/// içinde sabit kalır ki her yeniden çizimde değişip göz yormasın.
+class _HeroBackground extends ConsumerWidget {
   const _HeroBackground();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final bg = Theme.of(context).scaffoldBackgroundColor;
+    final asset = ref.watch(heroImageProvider).valueOrNull;
     return SizedBox(
       height: 300,
       width: double.infinity,
       child: Stack(
         fit: StackFit.expand,
         children: [
-          Image.asset(
-            'assets/images/istanbul_header.jpg',
-            fit: BoxFit.cover,
-            alignment: Alignment.topCenter,
-            errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-          ),
+          if (asset != null)
+            Image.asset(
+              asset,
+              fit: BoxFit.cover,
+              alignment: Alignment.topCenter,
+              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+            ),
           DecoratedBox(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -603,7 +618,7 @@ class _TopBar extends ConsumerWidget {
   }
 }
 
-/// Arama satırı: "Nereye gitmek istersiniz?" + cam arama kutusu + filtre.
+/// Arama satırı: "Nerede ineceksin?" + cam arama kutusu + filtre.
 class _SearchRow extends StatelessWidget {
   const _SearchRow({required this.onTap});
 
@@ -615,7 +630,7 @@ class _SearchRow extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Nereye gitmek istersiniz?',
+        Text('Nerede ineceksin?',
             style:
                 text.bodyMedium?.copyWith(color: VigilantColors.onSurface)),
         const SizedBox(height: 12),
@@ -632,7 +647,7 @@ class _SearchRow extends StatelessWidget {
                         color: VigilantColors.onSurfaceVariant),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: Text('Durak veya hat ara...',
+                      child: Text('İneceğin durağı veya hattı ara...',
                           overflow: TextOverflow.ellipsis,
                           style: text.bodyMedium?.copyWith(
                               color: VigilantColors.onSurfaceVariant
@@ -935,18 +950,36 @@ class _PrimaryCta extends StatelessWidget {
   }
 }
 
-/// Ulaşım kategorileri — dokununca büyüyüp kırmızıya dönen premium çipler.
+/// Ulaşım kategorileri — her biri o TÜRÜN hat listesini açar.
+///
+/// Eskiden hepsi aynı yere (arama ekranına) gidiyordu; çipler süs gibiydi.
 class _CategoryRow extends StatelessWidget {
   const _CategoryRow({required this.onTap});
 
-  final VoidCallback onTap;
+  final void Function(LineType type) onTap;
 
   static const _cats = [
-    (label: 'Otobüs', icon: Icons.directions_bus_filled_rounded),
-    (label: 'Metrobüs', icon: Icons.airport_shuttle_rounded),
-    (label: 'Marmaray', icon: Icons.directions_railway_filled_rounded),
-    (label: 'Metro', icon: Icons.subway_rounded),
-    (label: 'Vapur', icon: Icons.directions_boat_rounded),
+    (
+      label: 'Otobüs',
+      icon: Icons.directions_bus_filled_rounded,
+      type: LineType.bus
+    ),
+    (
+      label: 'Metrobüs',
+      icon: Icons.airport_shuttle_rounded,
+      type: LineType.metrobus
+    ),
+    (
+      label: 'Marmaray',
+      icon: Icons.directions_railway_filled_rounded,
+      type: LineType.marmaray
+    ),
+    (label: 'Metro', icon: Icons.subway_rounded, type: LineType.metro),
+    (
+      label: 'Vapur',
+      icon: Icons.directions_boat_rounded,
+      type: LineType.ferry
+    ),
   ];
 
   @override
@@ -957,7 +990,10 @@ class _CategoryRow extends StatelessWidget {
           if (i > 0) const SizedBox(width: 8),
           Expanded(
             child: _CategoryChip(
-                label: _cats[i].label, icon: _cats[i].icon, onTap: onTap),
+              label: _cats[i].label,
+              icon: _cats[i].icon,
+              onTap: () => onTap(_cats[i].type),
+            ),
           ),
         ],
       ],

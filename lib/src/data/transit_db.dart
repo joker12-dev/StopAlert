@@ -191,6 +191,22 @@ class TransitDb {
     return [for (final r in rows) _brief(r)];
   }
 
+  /// Bir TÜRÜN bütün hatları (kod başına tek kayıt) — "Otobüs" sayfası.
+  ///
+  /// Kod başına tek sonuç: kullanıcı listede "10A"yı bir kez görmeli,
+  /// gidiş/dönüş varyantları hat sayfasında ayrılıyor. Depar (garaj) seferleri
+  /// listelenmez — normal yolcu seferi değiller.
+  Future<List<TransitLineBrief>> linesByType(String type,
+      {String? cityId}) async {
+    final db = _dbFor(cityId);
+    if (db == null) return const [];
+    final rows = await db.rawQuery(
+      'SELECT * FROM lines WHERE type = ? AND depar = 0 GROUP BY code',
+      [type],
+    );
+    return [for (final r in rows) _brief(r)];
+  }
+
   /// Bir hattın PAKETTE GÖMÜLÜ sefer saatleri: (yön varyantı id'si, gün, saat).
   ///
   /// Kocaeli'de kalkış saatleri belediyenin hat sayfasından derleme sırasında

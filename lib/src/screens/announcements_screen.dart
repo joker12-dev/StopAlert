@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../services/iett_service.dart';
+import '../data/transit_city.dart';
 import '../state/city_provider.dart';
 import '../theme/app_theme.dart';
 import '../util/insets.dart';
@@ -130,10 +131,13 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen> {
                 ),
               ),
             ),
+            _feedNotice(text, ref.watch(activeCityProvider)),
             Expanded(
-              child: !ref.watch(activeCityProvider).hasAnnouncements
-                  ? _noFeed(text, ref.watch(activeCityProvider).name)
-                  : async.isLoading && all.isEmpty
+              // BESLEME ŞEHRE KİLİTLİ DEĞİL. Duyurular İETT'nin (İstanbul)
+              // ve Kocaeli'nin eşdeğer bir servisi yok; eskiden Kocaeli'deki
+              // kullanıcıya boş ekran gösteriliyordu. Artık liste görünüyor,
+              // üstünde kimin duyurusu olduğu yazıyor (bkz. _feedNotice).
+              child: async.isLoading && all.isEmpty
                   ? const Center(
                       child: CircularProgressIndicator(
                           color: VigilantColors.primary))
@@ -166,32 +170,42 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen> {
 
   /// Şehrin duyuru beslemesi yok (İETT'nin karşılığı Kocaeli'de bulunmuyor).
   /// Boş liste göstermek "duyuru yok" gibi okunurdu; sebebi açıkça yazılır.
-  Widget _noFeed(TextTheme text, String cityName) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Mascot(MascotAssets.dikkat, height: 110),
-              const SizedBox(height: 12),
-              Text(
-                '$cityName için duyuru servisi yok',
-                textAlign: TextAlign.center,
-                style: text.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Hat duyuruları İETT’nin açık servisinden geliyor; '
-                '$cityName belediyesi böyle bir besleme yayınlamıyor. '
-                'Alarm ve takip normal çalışır.',
-                textAlign: TextAlign.center,
-                style: text.bodyMedium
-                    ?.copyWith(color: VigilantColors.onSurfaceVariant),
-              ),
-            ],
-          ),
+  /// Beslemenin KİME ait olduğunu söyleyen şerit.
+  ///
+  /// Duyurular İETT'nin; Kocaeli'nin eşdeğer bir servisi yok. Başka şehirdeki
+  /// kullanıcıya boş ekran göstermektense listeyi verip kaynağı açıkça
+  /// yazmak daha faydalı — ama "senin şehrinin duyurusu" izlenimi
+  /// bırakmadan.
+  Widget _feedNotice(TextTheme text, TransitCity city) {
+    if (city.hasAnnouncements) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        decoration: BoxDecoration(
+          color: VigilantColors.tertiaryContainer.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+              color: VigilantColors.tertiaryContainer.withValues(alpha: 0.3)),
         ),
-      );
+        child: Row(
+          children: [
+            const Icon(Icons.info_outline_rounded,
+                size: 15, color: VigilantColors.tertiaryContainer),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Bu duyurular İETT (İstanbul) hatlarına ait — '
+                '${city.name} için duyuru beslemesi yayınlanmıyor.',
+                style: text.labelSmall?.copyWith(
+                    color: VigilantColors.tertiaryContainer, height: 1.3),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Widget _empty(TextTheme text, bool nothingLoaded) => Center(
         child: Padding(

@@ -40,9 +40,9 @@ void main() {
     await tester.pumpAndSettle();
 
     // Ana sayfadaki arama kutusu Rotalar (arama) sekmesini açar.
-    await tester.tap(find.text('Durak veya hat ara...'));
+    await tester.tap(find.text('İneceğin durağı veya hattı ara...'));
     await tester.pumpAndSettle();
-    expect(find.text('Nereye Gitmek İstersiniz?'), findsOneWidget);
+    expect(find.text('Nerede İneceksin?'), findsOneWidget);
 
     // Aramadan gerçek bir durak seçince Alarm Kur açılır.
     await tester.enterText(find.byType(TextField), 'Kadıköy');
@@ -62,7 +62,7 @@ void main() {
     await tester.pumpWidget(_app());
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Rotalar'));
+    await tester.tap(find.text('Hatlar'));
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(TextField), 'Kadıköy');
@@ -102,6 +102,6 @@ void main() {
     await tester.tap(find.byIcon(Icons.add));
     await tester.pumpAndSettle();
 
-    expect(find.text('Nereye Gitmek İstersiniz?'), findsOneWidget);
+    expect(find.text('Nerede İneceksin?'), findsOneWidget);
   });
 }
