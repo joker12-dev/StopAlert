@@ -64,6 +64,15 @@ class HomeScreen extends ConsumerWidget {
       ref.read(bottomNavIndexProvider.notifier).state = NavTab.lines;
     }
 
+    /// Arama kutusu DURAKLAR'a gider, Hatlar'a değil.
+    ///
+    /// Kutunun vaadi "ineceğin durağı ara" — uygulamanın işi de durak alarmı.
+    /// Hat listesine düşürmek kullanıcıyı bir adım uzağa atıyordu.
+    void goToStops() {
+      Haptics.light();
+      ref.read(bottomNavIndexProvider.notifier).state = NavTab.stops;
+    }
+
     return Scaffold(
       body: Stack(
         children: [
@@ -84,7 +93,7 @@ class HomeScreen extends ConsumerWidget {
                 EntranceFade(
                     child: _TopBar(nickname: nickname, dateText: _todayText)),
             const SizedBox(height: 24),
-            EntranceFade(delayMs: 60, child: _SearchRow(onTap: goToRoutes)),
+            EntranceFade(delayMs: 60, child: _SearchRow(onTap: goToStops)),
             const SizedBox(height: 20),
             EntranceFade(
               delayMs: 120,

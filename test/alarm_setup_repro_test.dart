@@ -33,16 +33,16 @@ void main() {
     // Sürekli animasyonları kapat (pumpAndSettle kilitlenmesin).
     AppAnim.enabled = false;
   });
-  testWidgets('Ana sayfadan arama kutusu HATLAR sekmesini açar',
+  testWidgets('Ana sayfadan arama kutusu DURAKLAR sekmesini açar',
       (tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     await tester.pumpWidget(_app());
     await tester.pumpAndSettle();
 
-    // Ana sayfadaki arama kutusu Hatlar sekmesini açar.
+    // Kutunun vaadi "ineceğin durağı ara" — Hatlar'a değil Duraklar'a gider.
     await tester.tap(find.text('İneceğin durağı veya hattı ara...'));
     await tester.pumpAndSettle();
-    expect(find.text('Nerede İneceksin?'), findsOneWidget);
+    expect(find.text('Durak ara…'), findsOneWidget);
   });
 
   testWidgets('DURAKLAR sekmesinden durak → hat → Alarm Kur akışı',
@@ -64,8 +64,9 @@ void main() {
     await tester.pumpAndSettle();
 
     // Durak künyesi açılır (yaklaşan otobüsler + duraktan geçen hatlar).
-    // Kartın kendisine dokun: metinle aramak arama KUTUSUNU da yakalıyor.
-    await tester.tap(find.byIcon(Icons.location_on_outlined).first);
+    // Kartın İL ROZETİNE dokun: durak adıyla aramak arama KUTUSUNU da
+    // yakalıyor, tür simgesi ise durağın türüne göre değişiyor.
+    await tester.tap(find.text('İstanbul').first);
     await tester.pumpAndSettle();
     expect(find.text('BU DURAKTAN GEÇEN HATLAR'), findsOneWidget);
 

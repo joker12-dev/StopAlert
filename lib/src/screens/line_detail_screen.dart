@@ -67,10 +67,36 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
     return null;
   }
 
+  /// RAY/VAPUR hatları indirilen SQLite paketinde DEĞİL, ayrı listede
+  /// (lines.json). Bu sayfa yalnızca pakete bakıyordu ve Marmaray/metro/vapur
+  /// açıldığında durak listesi bomboş geliyordu.
+  TransitLine? _railLine;
+
+  /// Ray hattında yön: tek bir durak dizisi var, dönüş onun TERSİ.
+  bool _railReversed = false;
+
   Future<void> _load() async {
     final v = await TransitDb.instance
         .directionsForCode(widget.code, cityId: widget.city?.id);
     if (!mounted) return;
+
+    if (v.isEmpty) {
+      // Pakette yok: gömülü ray/vapur listesinde ara.
+      final rail = ref.read(linesProvider).valueOrNull ?? const <TransitLine>[];
+      for (final l in rail) {
+        if (l.code == widget.code) {
+          _railLine = l;
+          break;
+        }
+      }
+      if (_railLine != null) {
+        setState(() {
+          _line = _railLine;
+          _loading = false;
+        });
+        return;
+      }
+    }
     _gidis = _firstDir(v, 'G');
     _donus = _firstDir(v, 'D');
     _depar = [for (final x in v) if (x.depar) x];
@@ -88,6 +114,32 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
     _selectedId = (_gidis ?? _donus)?.id;
     await _loadSelected();
     unawaited(_loadLiveBuses());
+  }
+
+  /// Ray hattında yönü ters çevir (paket hatlarında ayrı varyant vardır).
+  void _toggleRailDirection() {
+    final base = _railLine;
+    if (base == null) return;
+    Haptics.selection();
+    setState(() {
+      _railReversed = !_railReversed;
+      _line = TransitLine(
+        id: base.id,
+        code: base.code,
+        name: _railReversed
+            ? base.name.split(' - ').reversed.join(' - ')
+            : base.name,
+        type: base.type,
+        color: base.color,
+        operator: base.operator,
+        stops: _railReversed ? base.stops.reversed.toList() : base.stops,
+        segmentSeconds: base.segmentSeconds == null
+            ? null
+            : (_railReversed
+                ? base.segmentSeconds!.reversed.toList()
+                : base.segmentSeconds),
+      );
+    });
   }
 
   Future<void> _loadSelected() async {
@@ -218,6 +270,33 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // RAY/VAPUR: tek durak dizisi var, yön onun tersi.
+                      if (_railLine case final rail?)
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _DirTab(
+                                label: 'Gidiş',
+                                sub: rail.name,
+                                selected: !_railReversed,
+                                onTap: () {
+                                  if (_railReversed) _toggleRailDirection();
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: _DirTab(
+                                label: 'Dönüş',
+                                sub: rail.name.split(' - ').reversed.join(' - '),
+                                selected: _railReversed,
+                                onTap: () {
+                                  if (!_railReversed) _toggleRailDirection();
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
                       if (_gidis != null || _donus != null)
                         Row(
                           children: [

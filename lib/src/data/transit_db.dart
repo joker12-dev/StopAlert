@@ -150,6 +150,52 @@ class TransitDb {
     return [for (final r in rows) _stop(r)];
   }
 
+  /// TÜM kurulu şehirlerde görünen alandaki duraklar.
+  ///
+  /// NEDEN: harita "aktif şehir" ayarına değil, kullanıcının BULUNDUĞU yere
+  /// bakmalı. Ayarı İstanbul'da kalmış bir kullanıcı Kocaeli'ye gittiğinde
+  /// çevresindeki durakları göremiyordu ve şehri elle değiştirmesi
+  /// gerekiyordu — harita zaten nerede olduğunu biliyor.
+  Future<List<Stop>> stopsInBoundsAllCities(
+    double minLat,
+    double maxLat,
+    double minLon,
+    double maxLon, {
+    int limit = 200,
+  }) async {
+    final out = <Stop>[];
+    final seen = <String>{};
+    for (final db in [if (_db != null) _db!, ..._aux.values]) {
+      try {
+        final rows = await db.query('stops',
+            where: 'lat BETWEEN ? AND ? AND lon BETWEEN ? AND ?',
+            whereArgs: [minLat, maxLat, minLon, maxLon],
+            limit: limit);
+        for (final r in rows) {
+          final stop = _stop(r);
+          // Aynı durak iki pakette olabilir (sınır şehirleri): tekilleştir.
+          if (!seen.add('${stop.name}|${stop.lat}|${stop.lon}')) continue;
+          out.add(stop);
+        }
+      } catch (_) {
+        // Bir paket okunamazsa ötekiler yine listelenir.
+      }
+    }
+    return out;
+  }
+
+  /// TÜM kurulu şehirlerde yakın duraklar (kaba kutu; çağıran daireye kırpar).
+  Future<List<Stop>> nearbyStopsAllCities(
+      double lat, double lon, double radiusMeters,
+      {int limit = 120}) async {
+    final dLat = radiusMeters / 111000.0;
+    final cosLat = math.cos(lat * math.pi / 180).abs();
+    final dLon = radiusMeters / (111000.0 * (cosLat < 0.01 ? 0.01 : cosLat));
+    return stopsInBoundsAllCities(
+        lat - dLat, lat + dLat, lon - dLon, lon + dLon,
+        limit: limit);
+  }
+
   /// [cityId] verilirse o şehrin ek veritabanında arar (bkz. [openAux]).
   Future<List<Stop>> searchStops(String query,
       {int limit = 20, String? cityId}) async {
@@ -189,6 +235,40 @@ class TransitDb {
       ['$compact%', '$n%', '%$n%', limit],
     );
     return [for (final r in rows) _brief(r)];
+  }
+
+  /// Verilen durakların BASKIN hat türü: durak kimliği -> tür adı.
+  ///
+  /// Durak kaydının kendi türü yok; anlamını ondan geçen hatlar veriyor.
+  /// Arama sonucunda "Marmaray" mı "Otobüs" mü olduğunu göstermek için
+  /// gerekiyordu. Tek sorgu: sonuç sayfası başına bir kez çağrılır.
+  Future<Map<String, String>> stopTypes(List<String> externalStopIds,
+      {String? cityId}) async {
+    final db = _dbFor(cityId);
+    if (db == null || externalStopIds.isEmpty) return const {};
+    final raw = <String>[];
+    for (final id in externalStopIds) {
+      final r = _stripId(id);
+      if (r != null) raw.add(r);
+    }
+    if (raw.isEmpty) return const {};
+    final marks = List.filled(raw.length, '?').join(',');
+    final rows = await db.rawQuery(
+      'SELECT ls.stop_id AS sid, l.type AS t, COUNT(*) AS c '
+      'FROM line_stops ls JOIN lines l ON l.id = ls.line_id '
+      'WHERE ls.stop_id IN ($marks) GROUP BY ls.stop_id, l.type',
+      raw,
+    );
+    // Durak başına en çok hattı olan tür kazanır.
+    final best = <String, (String, int)>{};
+    for (final r in rows) {
+      final sid = '$kBusPrefix${r['sid']}';
+      final t = (r['t'] as String?) ?? 'bus';
+      final c = (r['c'] as num?)?.toInt() ?? 0;
+      final cur = best[sid];
+      if (cur == null || c > cur.$2) best[sid] = (t, c);
+    }
+    return {for (final e in best.entries) e.key: e.value.$1};
   }
 
   /// Bir TÜRÜN bütün hatları (kod başına tek kayıt) — "Otobüs" sayfası.

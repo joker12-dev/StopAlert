@@ -314,7 +314,9 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
       final dLat = r / 111000.0;
       final cosLat = math.cos(probe.latitude * math.pi / 180).abs();
       final dLon = r / (111000.0 * (cosLat < 0.01 ? 0.01 : cosLat));
-      final busStops = await TransitDb.instance.stopsInBounds(
+      // TÜM kurulu şehirlerde: kullanıcı ayarı İstanbul'da kalmışken
+      // Kocaeli'ye gittiğinde çevresini görebilsin.
+      final busStops = await TransitDb.instance.stopsInBoundsAllCities(
         probe.latitude - dLat,
         probe.latitude + dLat,
         probe.longitude - dLon,

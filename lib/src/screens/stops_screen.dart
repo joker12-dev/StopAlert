@@ -9,6 +9,7 @@ import '../state/journey_provider.dart';
 import '../theme/app_theme.dart';
 import '../util/haptics.dart';
 import '../util/insets.dart';
+import '../widgets/bottom_nav_shell.dart';
 import '../widgets/skeleton.dart';
 import 'nearby_map_screen.dart';
 import 'stop_lines_screen.dart';
@@ -131,6 +132,15 @@ class _StopSearchViewState extends ConsumerState<_StopSearchView> {
   final _focus = FocusNode();
   String _query = '';
 
+  /// Durak kimliği -> baskın hat türü ("bus", "marmaray", "metro"…).
+  ///
+  /// Durak kaydının kendi türü yok; anlamını ondan geçen hatlar veriyor.
+  Map<String, String> _types = const {};
+  String _typesFor = '';
+
+  /// Sorgu bir HAT KODUNA benziyor mu (Duraklar'da "147" arandı mı)?
+  bool _looksLikeLine = false;
+
   @override
   void initState() {
     super.initState();
@@ -143,6 +153,37 @@ class _StopSearchViewState extends ConsumerState<_StopSearchView> {
     _controller.dispose();
     _focus.dispose();
     super.dispose();
+  }
+
+  /// Sonuç listesi için yardımcı bilgiler: durak türleri ve sorgunun bir
+  /// HAT KODU olup olmadığı.
+  Future<void> _refreshHints(String q) async {
+    if (q.length < 2) {
+      if (mounted) setState(() => _looksLikeLine = false);
+      return;
+    }
+    try {
+      final lines = await TransitDb.instance.searchLines(q, limit: 3);
+      if (!mounted || _query.trim() != q) return;
+      setState(() => _looksLikeLine = lines.isNotEmpty);
+    } catch (_) {
+      // Paket yoksa ipucu gösterilmez; arama yine çalışır.
+    }
+  }
+
+  /// Görünen durakların türlerini tek sorguda çek (sayfa başına bir kez).
+  Future<void> _ensureTypes(List<Stop> stops, String key) async {
+    if (_typesFor == key) return;
+    _typesFor = key;
+    final busIds = [for (final s in stops) if (isBusId(s.id)) s.id];
+    if (busIds.isEmpty) return;
+    try {
+      final map = await TransitDb.instance.stopTypes(busIds);
+      if (!mounted || _typesFor != key) return;
+      setState(() => _types = map);
+    } catch (_) {
+      // Tür bilinmezse rozet gösterilmez.
+    }
   }
 
   /// Durak künyesini aç: yaklaşan otobüsler + duraktan geçen hatlar.
@@ -182,6 +223,7 @@ class _StopSearchViewState extends ConsumerState<_StopSearchView> {
     // Ray/vapur durakları ayrı kaynakta — aktif şehrin listesi.
     final norm = transitNorm(q);
     final rail = <(Stop, TransitCity)>[];
+    final railTypes = <String, String>{};
     if (q.length >= 2) {
       final seen = <String>{};
       for (final l in ref.read(linesProvider).valueOrNull ??
@@ -190,6 +232,7 @@ class _StopSearchViewState extends ConsumerState<_StopSearchView> {
           if (!transitNorm(s.name).contains(norm)) continue;
           if (!seen.add('${s.name}|${s.direction}')) continue;
           rail.add((s, active));
+          railTypes[s.id] = l.type.name;
         }
       }
     }
@@ -198,6 +241,13 @@ class _StopSearchViewState extends ConsumerState<_StopSearchView> {
       for (final s in bus.stops) (s.stop, s.city),
       ...rail,
     ];
+
+    // Otobüs paketinden gelen durakların türünü tek sorguda çek.
+    if (results.isNotEmpty) {
+      final key = '$q|${results.length}';
+      WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _ensureTypes([for (final r in results) r.$1], key));
+    }
 
     return ColoredBox(
       color: VigilantColors.background,
@@ -219,7 +269,10 @@ class _StopSearchViewState extends ConsumerState<_StopSearchView> {
                     child: TextField(
                       controller: _controller,
                       focusNode: _focus,
-                      onChanged: (v) => setState(() => _query = v),
+                      onChanged: (v) {
+                        setState(() => _query = v);
+                        _refreshHints(v.trim());
+                      },
                       textInputAction: TextInputAction.search,
                       decoration: InputDecoration(
                         isDense: true,
@@ -249,7 +302,8 @@ class _StopSearchViewState extends ConsumerState<_StopSearchView> {
               ),
             ),
             Expanded(
-              child: _body(text, q, results, busAsync.isLoading, active),
+              child: _body(text, q, results, busAsync.isLoading, active,
+          {..._types, ...railTypes}),
             ),
           ],
         ),
@@ -263,6 +317,7 @@ class _StopSearchViewState extends ConsumerState<_StopSearchView> {
     List<(Stop, TransitCity)> results,
     bool loading,
     TransitCity active,
+    Map<String, String> types,
   ) {
     if (q.length < 2) {
       return Center(
@@ -297,16 +352,32 @@ class _StopSearchViewState extends ConsumerState<_StopSearchView> {
               ),
             );
     }
+    // HAT KODU İPUCU: kullanıcı Duraklar'da "147" aradıysa aradığı şey
+    // burada değil, Hatlar'da. Boş sonuç göstermek yerine yolu gösteriyoruz.
+    final hint = _looksLikeLine ? 1 : 0;
     return ListView.separated(
       padding: EdgeInsets.fromLTRB(20, 0, 20, AppInsets.listBottom(context)),
-      itemCount: results.length,
+      itemCount: results.length + hint,
       separatorBuilder: (_, __) => const SizedBox(height: 10),
       itemBuilder: (context, i) {
-        final (stop, city) = results[i];
+        if (hint == 1 && i == 0) {
+          return _LineHintCard(
+            query: q,
+            onTap: () {
+              Haptics.light();
+              // Sorguyu Hatlar sekmesine taşı ve oraya geç.
+              ref.read(pendingLineQueryProvider.notifier).state = q;
+              ref.read(bottomNavIndexProvider.notifier).state = NavTab.lines;
+              widget.onClose();
+            },
+          );
+        }
+        final (stop, city) = results[i - hint];
         return _StopResultTile(
           stop: stop,
           city: city,
           isActiveCity: city.id == active.id,
+          typeName: types[stop.id],
           onTap: () => _open(stop, city),
         );
       },
@@ -320,12 +391,16 @@ class _StopResultTile extends StatelessWidget {
     required this.city,
     required this.isActiveCity,
     required this.onTap,
+    this.typeName,
   });
 
   final Stop stop;
   final TransitCity city;
   final bool isActiveCity;
   final VoidCallback onTap;
+
+  /// Durağın baskın hat türü ("marmaray", "metro"…). Bilinmiyorsa null.
+  final String? typeName;
 
   @override
   Widget build(BuildContext context) {
@@ -340,16 +415,29 @@ class _StopResultTile extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
           child: Row(
             children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: VigilantColors.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.location_on_outlined,
-                    size: 20, color: VigilantColors.primary),
-              ),
+              Builder(builder: (context) {
+                final t = typeName == null
+                    ? null
+                    : LineType.values
+                        .where((x) => x.name == typeName)
+                        .firstOrNull;
+                final color =
+                    t == null ? VigilantColors.primary : lineTypeColor(t);
+                return Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: VigilantColors.surfaceContainerHigh,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                      t == null
+                          ? Icons.location_on_outlined
+                          : lineTypeIcon(t),
+                      size: 20,
+                      color: color),
+                );
+              }),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -360,14 +448,24 @@ class _StopResultTile extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: text.titleSmall),
-                    if (stop.contextLabel.isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text(stop.contextLabel,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: text.labelSmall?.copyWith(
-                              color: VigilantColors.onSurfaceVariant)),
-                    ],
+                    const SizedBox(height: 2),
+                    Text(
+                      [
+                        // TÜR ÖNCE: kullanıcı "Marmaray mı otobüs mü"
+                        // sorusunu ilk soruyor.
+                        if (typeName != null)
+                          LineType.values
+                                  .where((x) => x.name == typeName)
+                                  .firstOrNull
+                                  ?.label ??
+                              '',
+                        if (stop.contextLabel.isNotEmpty) stop.contextLabel,
+                      ].where((x) => x.isNotEmpty).join(' · '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: text.labelSmall
+                          ?.copyWith(color: VigilantColors.onSurfaceVariant),
+                    ),
                   ],
                 ),
               ),
@@ -394,6 +492,59 @@ class _StopResultTile extends StatelessWidget {
                   ),
                 ),
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// "Aradığın bir HAT olabilir" ipucu — Duraklar'da hat kodu arandığında.
+class _LineHintCard extends StatelessWidget {
+  const _LineHintCard({required this.query, required this.onTap});
+
+  final String query;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return Material(
+      color: VigilantColors.primary.withValues(alpha: 0.12),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+                color: VigilantColors.primary.withValues(alpha: 0.35)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.alt_route_rounded,
+                  size: 20, color: VigilantColors.primary),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('"$query" bir hat olabilir',
+                        style: text.titleSmall
+                            ?.copyWith(color: VigilantColors.primary)),
+                    const SizedBox(height: 2),
+                    Text('Hatlar sekmesinde ara',
+                        style: text.labelSmall?.copyWith(
+                            color: VigilantColors.onSurfaceVariant)),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded,
+                  size: 20, color: VigilantColors.primary),
             ],
           ),
         ),

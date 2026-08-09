@@ -187,6 +187,10 @@ class _RootGateState extends ConsumerState<_RootGate>
     try {
       final city = await ref.read(cityProvider.future);
       await BusDataService.instance.ensureReady(city: city);
+      // ÖTEKİ kurulu şehirleri de aç. Arama ve yakındaki duraklar aktif
+      // şehirle sınırlı değil: ayarı İstanbul'da kalmış bir kullanıcı
+      // Kocaeli'ye gittiğinde çevresini görebilmeli.
+      await BusDataService.instance.openAllForLookup();
     } catch (_) {
       // Paket yoksa/açılamazsa ray-vapur ile devam edilir.
     }

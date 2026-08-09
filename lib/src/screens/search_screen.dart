@@ -168,6 +168,16 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     final lines = ref.watch(linesProvider).valueOrNull ?? const <TransitLine>[];
+    // Duraklar sekmesinden taşınan sorgu (ör. orada "147" arandı).
+    final pending = ref.watch(pendingLineQueryProvider);
+    if (pending != null && pending.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _controller.text = pending;
+        setState(() => _query = pending);
+        ref.read(pendingLineQueryProvider.notifier).state = null;
+      });
+    }
     final q = _query.trim().toLowerCase();
     // Süzgeç AYARLARDAN gelir: uygulama kapanıp açılınca seçim korunur.
     final filter = (ref.watch(settingsProvider).valueOrNull ??
@@ -286,6 +296,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                       onRecentTap: _openRecent,
                     )
                   : _ResultsView(
+                      railLines: _railLines(q, filter),
                       transitResults: results,
                       busAsync: ref.watch(busSearchProvider(_query.trim())),
                       activeCity: ref.watch(activeCityProvider),
@@ -293,6 +304,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                       onTransitStop: (line, stop) =>
                           _openAlarmSetup(stop.name, line: line, stop: stop),
                       onBusLine: _openBusLine,
+                      onRailLine: _openRailLine,
                       onBusStop: _openBusStop,
                     ),
             ),
@@ -300,6 +312,44 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         ),
       ),
     );
+  }
+
+  /// Ray/vapur hattını aç (hat sayfası: yön, duraklar, alarm).
+  void _openRailLine(TransitLine line) {
+    Haptics.light();
+    ref.read(recentSearchesProvider.notifier).add(RecentSearch(
+          stopName: line.name,
+          stopId: '',
+          lineId: line.id,
+          lineCode: line.code,
+          lineTypeName: line.type.name,
+          cityId: ref.read(activeCityProvider).id,
+        ));
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => LineDetailScreen(code: line.code),
+    ));
+  }
+
+  /// Sorguya uyan RAY/VAPUR hatları.
+  ///
+  /// Bunlar indirilen SQLite paketinde DEĞİL, ayrı listede (lines.json) —
+  /// bu yüzden Hatlar aramasında Marmaray/metro hiç çıkmıyordu.
+  List<TransitLine> _railLines(String q, SearchFilter filter) {
+    if (q.isEmpty) return const [];
+    final n = transitNorm(q);
+    final compact = compactLineCode(q);
+    final out = <TransitLine>[];
+    final seen = <String>{};
+    for (final l in ref.read(linesProvider).valueOrNull ??
+        const <TransitLine>[]) {
+      if (!filter.accepts(l.type)) continue;
+      final hit = compactLineCode(l.code).contains(compact) ||
+          transitNorm(l.name).contains(n);
+      if (!hit || !seen.add(l.code)) continue;
+      out.add(l);
+    }
+    out.sort((a, b) => a.code.compareTo(b.code));
+    return out;
   }
 
   /// [cityId] verilmezse aktif şehir damgalanır. Son arama kaydından gelen
@@ -514,14 +564,19 @@ class _SuggestionsView extends ConsumerWidget {
 
 class _ResultsView extends StatelessWidget {
   const _ResultsView({
+    required this.railLines,
     required this.transitResults,
     required this.busAsync,
     required this.activeCity,
     required this.filter,
     required this.onTransitStop,
     required this.onBusLine,
+    required this.onRailLine,
     required this.onBusStop,
   });
+
+  /// Ray/vapur HATLARI (lines.json) — otobüs paketinde bulunmazlar.
+  final List<TransitLine> railLines;
 
   final List<(TransitLine, Stop)> transitResults;
   final AsyncValue<BusSearchResults> busAsync;
@@ -533,6 +588,9 @@ class _ResultsView extends StatelessWidget {
   final SearchFilter filter;
   final void Function(TransitLine line, Stop stop) onTransitStop;
   final void Function(TransitLineBrief brief, TransitCity city) onBusLine;
+
+  /// Ray/vapur hattı seçildi — hat sayfası açılır.
+  final void Function(TransitLine line) onRailLine;
   final void Function(Stop stop, TransitCity city) onBusStop;
 
   @override
@@ -552,7 +610,8 @@ class _ResultsView extends StatelessWidget {
       for (final b in bus.lines)
         if (!b.line.isMetrobus && filter.accepts(LineType.bus)) b,
     ];
-    final nothing = metrobus.isEmpty && busOnly.isEmpty && !busLoading;
+    final nothing =
+        metrobus.isEmpty && busOnly.isEmpty && railLines.isEmpty && !busLoading;
 
     if (nothing) {
       return Center(
@@ -603,6 +662,18 @@ class _ResultsView extends StatelessWidget {
             city: b.city,
             showCity: b.city.id != activeCity.id,
             onTap: () => onBusLine(b.line, b.city)));
+        children.add(const SizedBox(height: 12));
+      }
+      children.add(const SizedBox(height: 20));
+    }
+
+    // RAY & VAPUR hatları (Marmaray, metro, tramvay, vapur).
+    if (railLines.isNotEmpty) {
+      children.add(const _SectionLabel(
+          icon: Icons.directions_transit_rounded, label: 'RAY & VAPUR'));
+      children.add(const SizedBox(height: 12));
+      for (final l in railLines) {
+        children.add(_RailLineTile(line: l, onTap: () => onRailLine(l)));
         children.add(const SizedBox(height: 12));
       }
       children.add(const SizedBox(height: 20));
@@ -888,6 +959,56 @@ class _FilterChips extends StatelessWidget {
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+/// Ray/vapur hat sonucu (kod + güzergâh adı).
+class _RailLineTile extends StatelessWidget {
+  const _RailLineTile({required this.line, required this.onTap});
+
+  final TransitLine line;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final color = lineColorOf(line.color, line.type);
+    return GlassPanel(
+      borderRadius: 24,
+      padding: const EdgeInsets.all(16),
+      onTap: onTap,
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: VigilantColors.surfaceContainerHigh,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Icon(lineTypeIcon(line.type), color: color),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(line.code, style: text.titleSmall),
+                const SizedBox(height: 2),
+                Text('${line.type.label} · ${line.name}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: text.labelMedium
+                        ?.copyWith(color: VigilantColors.onSurfaceVariant)),
+              ],
+            ),
+          ),
+          const Icon(Icons.arrow_forward,
+              size: 18, color: VigilantColors.onSurfaceVariant),
+        ],
       ),
     );
   }

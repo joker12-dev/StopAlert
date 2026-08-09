@@ -143,9 +143,10 @@ final nearbyStopsProvider = FutureProvider<List<NearbyStopHit>>((ref) async {
   // otobüs durağı 100 m ötedeyken 2 km uzaktaki Marmaray "en yakın durak"
   // olarak listeleniyordu.
   if (TransitDb.instance.isReady) {
-    final busStops =
-        await TransitDb.instance.nearbyStops(loc.latitude, loc.longitude, 900,
-            limit: 120);
+    // TÜM kurulu şehirlerde: aktif şehir ayarı kullanıcının bulunduğu yeri
+    // değiştirmiyor; çevresindeki duraklar her hâlükârda görünmeli.
+    final busStops = await TransitDb.instance
+        .nearbyStopsAllCities(loc.latitude, loc.longitude, 900, limit: 120);
     for (final stop in busStops) {
       final d = distance.as(LengthUnit.Meter, loc, LatLng(stop.lat, stop.lon));
       // Aynı adlı durağın yön varyantları tek satıra iner.
@@ -373,3 +374,9 @@ class JourneyDraftNotifier extends Notifier<JourneyDraft> {
 
   void reset() => state = const JourneyDraft();
 }
+
+/// Duraklar sekmesinden Hatlar sekmesine TAŞINAN arama sorgusu.
+///
+/// Kullanıcı Duraklar'da "147" arayıp ipucuna dokunduğunda, Hatlar sekmesi
+/// aramayı hazır dolu açsın diye. Okuyan taraf tüketip null'a çeker.
+final pendingLineQueryProvider = StateProvider<String?>((ref) => null);
