@@ -1,6 +1,11 @@
 import 'dart:typed_data';
 
+import 'dart:convert';
+
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../data/alarm_sound.dart';
 
 import '../util/platform_check.dart';
 
@@ -37,12 +42,37 @@ class AlarmNotifications {
   static final _plugin = FlutterLocalNotificationsPlugin();
   static bool _initialized = false;
 
+  /// Kullanıcının seçtiği alarm sesinin kaynağı.
+  ///
+  /// Ayarlardan okunur (arka plan izolatında Riverpod yok, doğrudan
+  /// SharedPreferences). Okunamazsa varsayılana düşer — alarm asla sessiz
+  /// kalmamalı.
+  static String _soundResource = AlarmSound.fallback;
+
+  /// ANDROID KANALI SESİ DONDURUR: ses değişince kanal kimliği de değişmeli,
+  /// yoksa sistem eski sesi çalmaya devam eder.
+  static String get _soundChannelId => '${_channelId}_$_soundResource';
+
+  static Future<void> _loadSoundChoice() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString('app_settings_v1');
+      if (raw == null || raw.isEmpty) return;
+      final map = jsonDecode(raw) as Map<String, dynamic>;
+      _soundResource =
+          AlarmSound.byLabel(map['alarmSound'] as String?).resource;
+    } catch (_) {
+      // Bozuk ayar: varsayılan ses.
+    }
+  }
+
   static Future<void> init() async {
     if (!isAndroidDevice || _initialized) return;
     const settings = InitializationSettings(
       android: AndroidInitializationSettings('@mipmap/ic_launcher'),
     );
     await _plugin.initialize(settings: settings);
+    await _loadSoundChoice();
     // Donmuş eski kanalları temizle; kullanıcı kanal ayarını kaybeder ama
     // alarmın gerçekten çalması bundan önemlidir.
     try {
@@ -55,9 +85,12 @@ class AlarmNotifications {
     _initialized = true;
   }
 
-  static AndroidNotificationDetails _details({required bool customSound}) {
+  static AndroidNotificationDetails _details({
+    required bool customSound,
+    String soundResource = AlarmSound.fallback,
+  }) {
     return AndroidNotificationDetails(
-      customSound ? _channelId : _fallbackChannelId,
+      customSound ? _soundChannelId : _fallbackChannelId,
       'Durak Alarmı',
       channelDescription:
           'İneceğin durağa yaklaşınca çalan yüksek öncelikli alarm',
@@ -66,8 +99,10 @@ class AlarmNotifications {
       category: AndroidNotificationCategory.alarm,
       fullScreenIntent: true,
       playSound: true,
+      // Kullanıcının SEÇTİĞİ ses. Eskiden seçim hiç okunmuyordu ve dört
+      // seçenek de aynı kaynağı çalıyordu (bkz. AlarmSound).
       sound: customSound
-          ? const RawResourceAndroidNotificationSound('stopalert_alarm')
+          ? RawResourceAndroidNotificationSound(soundResource)
           : null,
       audioAttributesUsage: AudioAttributesUsage.alarm,
       // Titreşim KANAL düzeyinde kapalı: uygulama içinde (AlarmRingingScreen)
@@ -98,7 +133,9 @@ class AlarmNotifications {
         title: 'DURAĞINA YAKLAŞTIN',
         body: '$stopName — $body',
         notificationDetails:
-            NotificationDetails(android: _details(customSound: true)),
+            NotificationDetails(
+                android: _details(
+                    customSound: true, soundResource: _soundResource)),
       );
     } catch (_) {
       try {

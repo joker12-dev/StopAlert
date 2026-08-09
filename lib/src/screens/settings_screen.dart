@@ -12,6 +12,9 @@ import '../state/journey_provider.dart';
 import '../state/settings_provider.dart';
 import '../theme/app_theme.dart';
 import '../util/insets.dart';
+import '../data/alarm_sound.dart';
+import '../services/alarm_sound_preview.dart';
+import '../services/journey_reminder.dart';
 import '../util/haptics.dart';
 import '../util/platform_check.dart';
 import 'data_packages_screen.dart';
@@ -207,16 +210,14 @@ class SettingsScreen extends ConsumerWidget {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (context) => _OptionSheet<String>(
-        title: 'Alarm Sesi',
-        current: s.alarmSound,
-        options: {for (final o in AppSettings.alarmSounds) o: o},
-      ),
+      builder: (context) => _AlarmSoundSheet(current: s.alarmSound),
     );
     if (choice != null) {
       Haptics.selection();
       await ref.read(settingsProvider.notifier).setAlarmSound(choice);
     }
+    // Sayfa kapanınca önizleme sürmesin.
+    await AlarmSoundPreview.stop();
   }
 
   Future<void> _pickDefaultTrigger(
@@ -537,6 +538,9 @@ class SettingsScreen extends ConsumerWidget {
                   },
                 ),
               ),
+              // ALIŞKANLIK HATIRLATMASI — alarmın kendisi değil, "yarın da
+              // kuracak mısın?" hatırlatması.
+              const _ReminderTile(),
             ],
           ),
           // ÖĞRENME: uygulama yolculuklardan segment sürelerini öğrenir;
@@ -1123,6 +1127,131 @@ class _SettingsTile extends StatelessWidget {
             trailing,
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Alarm sesi seçici — her satırda DİNLE tuşu.
+class _AlarmSoundSheet extends StatelessWidget {
+  const _AlarmSoundSheet({required this.current});
+
+  final String current;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: VigilantColors.surfaceVariant,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            Text('Alarm Sesi',
+                style: text.headlineSmall?.copyWith(fontSize: 20)),
+            const SizedBox(height: 12),
+            for (final snd in AlarmSound.all)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(
+                  snd.label == current
+                      ? Icons.radio_button_checked
+                      : Icons.radio_button_off,
+                  color: snd.label == current
+                      ? VigilantColors.primary
+                      : VigilantColors.onSurfaceVariant,
+                ),
+                title: Text(snd.label, style: text.bodyMedium),
+                subtitle: snd.hasOwnFile
+                    ? null
+                    : Text('kendi sesi henüz yok — varsayılan çalar',
+                        style: text.labelSmall?.copyWith(
+                            color: VigilantColors.onSurfaceVariant)),
+                trailing: IconButton(
+                  tooltip: 'Dinle',
+                  icon: const Icon(Icons.play_circle_outline,
+                      color: VigilantColors.primary),
+                  onPressed: () {
+                    Haptics.light();
+                    AlarmSoundPreview.play(snd);
+                  },
+                ),
+                onTap: () => Navigator.of(context).pop(snd.label),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// "Yolculuk hatırlatması" anahtarı + son kaydedilen rota özeti.
+///
+/// Durumu SharedPreferences'ta (JourneyReminder); ayarlar modelinde değil —
+/// bildirim zamanlaması arka plan izolatından da okunabilmeli.
+class _ReminderTile extends StatefulWidget {
+  const _ReminderTile();
+
+  @override
+  State<_ReminderTile> createState() => _ReminderTileState();
+}
+
+class _ReminderTileState extends State<_ReminderTile> {
+  bool _enabled = true;
+  String _summary = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final on = await JourneyReminder.isEnabled();
+    final rec = await JourneyReminder.saved();
+    if (!mounted) return;
+    setState(() {
+      _enabled = on;
+      if (rec == null) {
+        _summary = 'İlk alarmından sonra devreye girer';
+      } else {
+        final h = (rec['hour'] as num?)?.toInt() ?? 0;
+        final m = (rec['minute'] as num?)?.toInt() ?? 0;
+        final code = '${rec['lineCode'] ?? ''}';
+        final to = '${rec['targetStopName'] ?? ''}';
+        final saat =
+            '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}';
+        _summary = [saat, if (code.isNotEmpty) code, if (to.isNotEmpty) to]
+            .join(' · ');
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _SettingsTile(
+      icon: Icons.alarm_add_outlined,
+      title: 'Yolculuk hatırlatması',
+      subtitle: _summary,
+      trailing: Switch(
+        value: _enabled,
+        onChanged: (v) async {
+          Haptics.selection();
+          setState(() => _enabled = v);
+          await JourneyReminder.setEnabled(v);
+        },
       ),
     );
   }

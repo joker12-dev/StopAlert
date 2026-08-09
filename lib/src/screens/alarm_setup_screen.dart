@@ -14,6 +14,9 @@ import '../services/permission_service.dart';
 import '../state/journey_provider.dart';
 import '../state/live_location_provider.dart';
 import '../state/settings_provider.dart';
+import '../data/alarm_sound.dart';
+import '../services/alarm_sound_preview.dart';
+import '../services/journey_reminder.dart';
 import '../theme/app_theme.dart';
 import '../util/haptics.dart';
 import '../util/platform_check.dart';
@@ -217,6 +220,10 @@ class _AlarmSetupScreenState extends ConsumerState<AlarmSetupScreen> {
     // İndin ekranındaki geçiş reklamını arka planda ÖNDEN yükle (plan gereği
     // reklam yalnızca varış ekranında ve alarm akışına dokunmadan).
     AdService.instance.preloadInterstitial();
+
+    // ALIŞKANLIK HATIRLATMASI: yarın aynı saatte "bu alarmı kur" bildirimi.
+    // Alarm akışını bekletmesin diye beklenmiyor.
+    unawaited(JourneyReminder.onJourneyStarted(payload));
 
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
@@ -487,19 +494,35 @@ class _AlarmSetupScreenState extends ConsumerState<AlarmSetupScreen> {
                 Text('Alarm Sesi',
                     style: text.headlineSmall?.copyWith(fontSize: 20)),
                 const SizedBox(height: 12),
-                for (final o in AppSettings.alarmSounds)
+                for (final snd in AlarmSound.all)
                   ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: Icon(
-                      o == current
+                      snd.label == current
                           ? Icons.radio_button_checked
                           : Icons.radio_button_off,
-                      color: o == current
+                      color: snd.label == current
                           ? VigilantColors.primary
                           : VigilantColors.onSurfaceVariant,
                     ),
-                    title: Text(o, style: text.bodyMedium),
-                    onTap: () => Navigator.of(context).pop(o),
+                    title: Text(snd.label, style: text.bodyMedium),
+                    subtitle: snd.hasOwnFile
+                        ? null
+                        : Text('kendi sesi henüz yok — varsayılan çalar',
+                            style: text.labelSmall?.copyWith(
+                                color: VigilantColors.onSurfaceVariant)),
+                    // DİNLE: seçmeden önce duymak, seçtikten sonra pişman
+                    // olmaktan iyidir.
+                    trailing: IconButton(
+                      tooltip: 'Dinle',
+                      icon: const Icon(Icons.play_circle_outline,
+                          color: VigilantColors.primary),
+                      onPressed: () {
+                        Haptics.light();
+                        AlarmSoundPreview.play(snd);
+                      },
+                    ),
+                    onTap: () => Navigator.of(context).pop(snd.label),
                   ),
               ],
             ),

@@ -33,6 +33,9 @@ dependencies:
   home_widget: ^0.9.3
   in_app_review: ^2.0.12
   google_sign_in: ^7.2.0
+  audioplayers: ^6.8.1
+  timezone: ^0.11.1
+  flutter_timezone: ^5.1.0
 
 dev_dependencies:
   flutter_test:
@@ -60,6 +63,7 @@ flutter:
     - assets/images/
     - assets/images/hero/day/
     - assets/images/hero/night/
+    - assets/sounds/
 
   fonts:
     - family: Inter
