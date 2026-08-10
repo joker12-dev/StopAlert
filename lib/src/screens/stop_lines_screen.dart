@@ -260,10 +260,14 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
           const Icon(Icons.schedule_rounded,
               size: 16, color: VigilantColors.tertiaryContainer),
           const SizedBox(width: 8),
-          Text('TARİFEYE GÖRE SIRADAKİ',
-              style: text.labelSmall?.copyWith(
-                  color: VigilantColors.onSurfaceVariant, letterSpacing: 1.2)),
-          const Spacer(),
+          Expanded(
+            child: Text('TARİFEYE GÖRE YAKLAŞANLAR',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: text.labelSmall?.copyWith(
+                    color: VigilantColors.onSurfaceVariant,
+                    letterSpacing: 1.2)),
+          ),
           if (_loadingArrivals)
             const SizedBox(
               width: 14,
@@ -291,8 +295,8 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
         Padding(
           padding: const EdgeInsets.only(top: 2, bottom: 4),
           child: Text(
-            'Bu şehirde canlı otobüs konumu yayınlanmıyor; saatler TARİFEDEN '
-            'hesaplanır ve trafiği hesaba katmaz.',
+            'Metro, Marmaray, tramvay ve vapurun canlı konumu yayınlanmıyor; '
+            'saatler TARİFEDEN hesaplanır.',
             style: text.labelSmall
                 ?.copyWith(color: VigilantColors.onSurfaceVariant),
           ),
@@ -313,10 +317,24 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
     ));
   }
 
-  /// "Yaklaşan otobüsler" bloğu — hiç canlı veri yoksa hiç çizilmez.
+  /// "Yaklaşan araçlar" bloğu.
+  ///
+  /// İKİSİ BİRDEN ÇİZİLİR: bir durakta hem otobüs hem metro/Marmaray olabilir.
+  /// Eskiden yalnızca şehre bakılıyordu; İstanbul'da canlı otobüs var diye
+  /// Marmaray duraklarında boş bir "yaklaşan otobüs yok" yazısı çıkıyordu.
   List<Widget> _arrivalsSection(TextTheme text) {
     final TransitCity lineCity = city ?? ref.read(activeCityProvider);
-    if (!lineCity.hasLiveBus) return _scheduledSection(text, lineCity);
+    final rail = lines.any((b) => !_isRubberTyred(b.type));
+    final rubber = lineCity.hasLiveBus &&
+        lines.any((b) => _isRubberTyred(b.type));
+    return [
+      if (rubber) ..._liveSection(text),
+      if (rail || !lineCity.hasLiveBus) ..._scheduledSection(text, lineCity),
+    ];
+  }
+
+  /// Canlı filodan yaklaşanlar (yalnızca lastikli hatlar).
+  List<Widget> _liveSection(TextTheme text) {
     if (!_loadingArrivals && _arrivals.isEmpty && _arrivalsAt == null) {
       return const [];
     }
@@ -326,10 +344,14 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
           const Icon(Icons.directions_bus_filled_rounded,
               size: 16, color: VigilantColors.secondary),
           const SizedBox(width: 8),
-          Text('YAKLAŞAN OTOBÜSLER',
-              style: text.labelSmall?.copyWith(
-                  color: VigilantColors.onSurfaceVariant, letterSpacing: 1.2)),
-          const Spacer(),
+          Expanded(
+            child: Text('YAKLAŞAN ARAÇLAR',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: text.labelSmall?.copyWith(
+                    color: VigilantColors.onSurfaceVariant,
+                    letterSpacing: 1.2)),
+          ),
           if (_loadingArrivals)
             const SizedBox(
               width: 14,
@@ -356,7 +378,7 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
         Padding(
           padding: const EdgeInsets.only(bottom: 6),
           child: Text(
-            'Şu an bu durağa yaklaşan otobüs görünmüyor.',
+            'Şu an bu durağa yaklaşan araç görünmüyor.',
             style:
                 text.labelMedium?.copyWith(color: VigilantColors.onSurfaceVariant),
           ),

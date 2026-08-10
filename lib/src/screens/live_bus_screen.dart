@@ -122,7 +122,12 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen> {
   }
 
   /// Güzergâhı gerçek yollara oturt (OSRM). Ağ yoksa düz çizgiye düşülür.
+  ///
+  /// YALNIZCA lastikli hatlarda: metro/Marmaray/tramvay kendi rayında, vapur
+  /// denizde gider. OSRM onları karayoluna oturtunca Marmaray sahil yolundan,
+  /// vapur da karadan geçiyor gibi çiziliyordu.
   Future<void> _loadRoad() async {
+    if (_scheduledOnly) return;
     final pts = _routePoints;
     if (pts.length < 2) return;
     final road = await RoutingService.instance.route(pts);

@@ -5,8 +5,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/models.dart';
 import '../data/recent_search.dart';
 import '../data/transit_city.dart';
+import '../data/timetable.dart';
 import '../data/transit_db.dart';
+import '../engine/scheduled_vehicles.dart';
+import '../services/iett_service.dart';
 import '../services/live_bus_service.dart';
+import '../services/timetable_service.dart';
 import '../state/city_provider.dart';
 import '../state/journey_provider.dart';
 import '../theme/app_theme.dart';
@@ -65,6 +69,9 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
   /// İETT filo servisi her araç için `yakinDurakKodu` veriyor; seçili YÖNÜN
   /// araçları sayılır (gidiş/dönüş karışmasın diye `guzergahkodu` süzülür).
   Map<String, int> _busesAtStop = const {};
+
+  /// Yukarıdaki sayılar tarifeden mi üretildi (ray hatları).
+  bool _busesScheduled = false;
 
   @override
   void initState() {
@@ -176,22 +183,31 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
     _selectedId = id;
     _filter = '';
     _busesAtStop = const {};        // yön değişti: eski konumlar geçersiz
-    _loadSelected();
-    _loadLiveBuses();
+    // SIRALI: ray yolunda araç konumu hattın TÜRÜNDEN ve duraklarından
+    // üretiliyor; _line dolmadan çağırmak sessizce boş liste veriyordu.
+    _loadSelected().then((_) => _loadLiveBuses());
   }
 
-  /// Hattın canlı araçlarını çekip hangi durakta olduklarını işaretle.
+  /// Hattın araçlarını çekip hangi durakta olduklarını işaretle.
   ///
-  /// Yalnızca canlı filo servisi olan şehirde çalışır. Seçili yönün araçları
-  /// sayılır: aynı hattın karşı yönündeki otobüsü "bu durakta" göstermek
-  /// kullanıcıyı yanlış otobüse bindirirdi.
+  /// Seçili yönün araçları sayılır: aynı hattın karşı yönündeki otobüsü "bu
+  /// durakta" göstermek kullanıcıyı yanlış otobüse bindirirdi.
+  ///
+  /// RAY HATLARINDA konum tarifeden üretilir (bkz. `ScheduledVehicles`) —
+  /// "ineceğin durağı seç" listesinde metro/Marmaray hiç işaretlenmiyordu.
   Future<void> _loadLiveBuses() async {
-    if (!_lineCity.hasLiveBus) return;
     final id = _selectedId;
     if (id == null) return;
+    final line = _line;
+    final rail = line != null &&
+        line.type != LineType.bus &&
+        line.type != LineType.metrobus;
+    if (!rail && !_lineCity.hasLiveBus) return;
     final isGidis = id.endsWith('_G');
     try {
-      final vehicles = await LiveBusService.instance.vehicles(widget.code);
+      final vehicles = rail
+          ? await _scheduledVehicles(line)
+          : await LiveBusService.instance.vehicles(widget.code);
       if (!mounted || _selectedId != id) return;
       final counts = <String, int>{};
       for (final v in vehicles) {
@@ -203,10 +219,25 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
         if (!known || v.isGidis != isGidis) continue;
         counts[code] = (counts[code] ?? 0) + 1;
       }
-      setState(() => _busesAtStop = counts);
+      setState(() {
+        _busesAtStop = counts;
+        _busesScheduled = rail;
+      });
     } catch (_) {
       // Canlı veri yoksa liste sade hâliyle çalışır.
     }
+  }
+
+  /// Tarifeden üretilen araçlar — ray hatlarında canlı yayının yerini alır.
+  Future<List<BusVehicle>> _scheduledVehicles(TransitLine line) async {
+    if (!_lineCity.hasTimetable) return const [];
+    final table = await TimetableService.instance
+        .forLine(line.code, city: _lineCity, type: line.type);
+    if (table.isEmpty) return const [];
+    final rows = table.forDay(DayType.forDate(DateTime.now()),
+        outbound: line.id.contains('_G'));
+    if (rows.isEmpty) return const [];
+    return ScheduledVehicles.forLine(line: line, departures: rows);
   }
 
   bool get _selectedIsDepar => _depar.any((d) => d.id == _selectedId);
@@ -395,6 +426,8 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
                           color: lineColorOf(
                               line?.color ?? '', line?.type ?? LineType.bus),
                           busCount: _busesAtStop[raw] ?? 0,
+                          scheduled: _busesScheduled,
+                          icon: lineTypeIcon(line?.type ?? LineType.bus),
                           onTap: () => _pickTarget(stop),
                           onInfo: () => _openStopInfo(stop),
                         );
@@ -511,7 +544,7 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
             Expanded(
               child: _ActionButton(
                 icon: Icons.my_location_rounded,
-                label: rubber ? 'Canlı konum' : 'Nerede?',
+                label: 'Canlı konum',
                 filled: false,
                 onTap: () {
                   Haptics.light();
@@ -837,6 +870,8 @@ class _StopRow extends StatelessWidget {
     required this.isLast,
     required this.color,
     required this.busCount,
+    required this.scheduled,
+    required this.icon,
     required this.onTap,
     required this.onInfo,
   });
@@ -847,8 +882,14 @@ class _StopRow extends StatelessWidget {
   final bool isLast;
   final Color color;
 
-  /// Bu durakta bulunan CANLI araç sayısı (0 = bilgi yok/araç yok).
+  /// Bu durakta bulunan araç sayısı (0 = bilgi yok/araç yok).
   final int busCount;
+
+  /// Sayı TARİFEDEN üretildiyse dil değişir: "şu an" demek yanlış olurdu.
+  final bool scheduled;
+
+  /// Hattın türüne göre simge — metro satırında otobüs simgesi yanlıştı.
+  final IconData icon;
   final VoidCallback onTap;
 
   /// Durak künyesine git (yaklaşan otobüsler, geçen hatlar).
@@ -939,13 +980,16 @@ class _StopRow extends StatelessWidget {
                         padding: const EdgeInsets.only(top: 3),
                         child: Row(
                           children: [
-                            Icon(Icons.directions_bus_filled_rounded,
-                                size: 13, color: color),
+                            Icon(icon, size: 13, color: color),
                             const SizedBox(width: 5),
                             Text(
-                                busCount == 1
-                                    ? 'Şu an bu durakta'
-                                    : 'Şu an $busCount otobüs burada',
+                                scheduled
+                                    ? (busCount == 1
+                                        ? 'Tarifeye göre burada'
+                                        : 'Tarifeye göre $busCount araç burada')
+                                    : (busCount == 1
+                                        ? 'Şu an bu durakta'
+                                        : 'Şu an $busCount araç burada'),
                                 style: text.labelSmall?.copyWith(
                                     color: color, fontWeight: FontWeight.w700)),
                           ],

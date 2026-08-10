@@ -513,13 +513,22 @@ class _AlarmSetupScreenState extends ConsumerState<AlarmSetupScreen> {
                                 color: VigilantColors.onSurfaceVariant)),
                     // DİNLE: seçmeden önce duymak, seçtikten sonra pişman
                     // olmaktan iyidir.
-                    trailing: IconButton(
-                      tooltip: 'Dinle',
-                      icon: const Icon(Icons.play_circle_outline,
-                          color: VigilantColors.primary),
-                      onPressed: () {
-                        Haptics.light();
-                        AlarmSoundPreview.play(snd);
+                    trailing: ValueListenableBuilder<String?>(
+                      valueListenable: AlarmSoundPreview.playing,
+                      builder: (context, playing, _) {
+                        final on = playing == snd.label;
+                        return IconButton(
+                          tooltip: on ? 'Durdur' : 'Dinle',
+                          icon: Icon(
+                              on
+                                  ? Icons.stop_circle_outlined
+                                  : Icons.play_circle_outline,
+                              color: VigilantColors.primary),
+                          onPressed: () {
+                            Haptics.light();
+                            AlarmSoundPreview.toggle(snd);
+                          },
+                        );
                       },
                     ),
                     onTap: () => Navigator.of(context).pop(snd.label),
@@ -534,6 +543,8 @@ class _AlarmSetupScreenState extends ConsumerState<AlarmSetupScreen> {
       Haptics.selection();
       await ref.read(settingsProvider.notifier).setAlarmSound(choice);
     }
+    // Sayfa kapanınca önizleme sürmesin: alarm sesleri uzun ve tekrarlı.
+    await AlarmSoundPreview.stop();
   }
 
   Widget _buildPanel(TextTheme text, AppSettings settings) {

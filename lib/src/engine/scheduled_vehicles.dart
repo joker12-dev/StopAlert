@@ -1,4 +1,5 @@
 import '../data/models.dart';
+import '../data/transit_db.dart';
 import '../data/timetable.dart';
 import '../services/iett_service.dart';
 import 'arrival_estimator.dart';
@@ -75,7 +76,9 @@ class ScheduledVehicles {
           headingTo: stops.last.name,
           routeCode: '${line.code}_${gidis ? 'G' : 'D'}_TARIFE',
           lastSeen: _stamp(clock),
-          nearestStopCode: stops[pos.$3].id,
+          // Canlı akışla AYNI biçim: arayüz durak satırını ham kimlikle
+          // eşleştiriyor, ön ek bırakılırsa hiçbir durak eşleşmezdi.
+          nearestStopCode: _rawStopId(stops[pos.$3].id),
           scheduled: true,
         ));
         break;
@@ -106,6 +109,10 @@ class ScheduledVehicles {
     final last = stops.length - 1;
     return (stops[last].lat, stops[last].lon, last);
   }
+
+  /// Durak kimliğinden paket ön ekini ayıklar (`bus:12345` → `12345`).
+  static String _rawStopId(String id) =>
+      id.startsWith(kBusPrefix) ? id.substring(kBusPrefix.length) : id;
 
   static (int, int)? _parseClock(String time) {
     final parts = time.split(':');
