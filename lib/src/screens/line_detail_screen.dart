@@ -271,8 +271,30 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
   /// Durak künyesi sayfasını aç (yaklaşan otobüsler + geçen hatlar).
   Future<void> _openStopInfo(Stop stop) async {
     Haptics.light();
-    final lines =
-        await TransitDb.instance.linesForStop(stop.id, cityId: widget.city?.id);
+    // SORGU BAŞARISIZ OLSA DA SAYFA AÇILIR.
+    //
+    // Ray hatları eski paketlerde ayrı listeden (lines.json) geliyor ve o
+    // durakların kimlikleri paket biçiminde değil; `linesForStop` onlarda
+    // hata veriyor ve "i" tuşu hiçbir şey yapmıyormuş gibi görünüyordu.
+    // Durak künyesi hat listesi olmadan da anlamlı: ad, yön, konum.
+    var lines = const <TransitLineBrief>[];
+    try {
+      if (isBusId(stop.id)) {
+        lines = await TransitDb.instance
+            .linesForStop(stop.id, cityId: widget.city?.id);
+      } else {
+        final rail =
+            ref.read(linesProvider).valueOrNull ?? const <TransitLine>[];
+        lines = [
+          for (final l in rail)
+            if (l.stops.any((x) => x.id == stop.id))
+              TransitLineBrief(
+                  id: l.id, code: l.code, name: l.name, type: l.type),
+        ];
+      }
+    } catch (_) {
+      // Hat listesi çözülemedi; künye yine açılır.
+    }
     if (!mounted) return;
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) =>

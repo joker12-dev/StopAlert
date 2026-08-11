@@ -317,13 +317,35 @@ final recentSearchesProvider =
   RecentSearchesNotifier.new,
 );
 
+/// DURAK aramalarının son aramaları — Hatlar sekmesinden AYRI tutulur.
+///
+/// İki sekme farklı şeyler arıyor: biri hat, öteki durak. Ortak liste,
+/// "Şişli" arayan kullanıcıya bir gün önce baktığı 34AS hattını gösteriyordu.
+final stopRecentSearchesProvider =
+    AsyncNotifierProvider<StopRecentSearchesNotifier, List<RecentSearch>>(
+  StopRecentSearchesNotifier.new,
+);
+
+/// Duraklar sekmesinin kendi geçmişi (ayrı anahtar, ayrı bulut alanı).
+class StopRecentSearchesNotifier extends RecentSearchesNotifier {
+  @override
+  String get prefsKey => 'recent_stop_searches';
+
+  @override
+  String get cloudField => 'stopRecents';
+}
+
 class RecentSearchesNotifier extends AsyncNotifier<List<RecentSearch>> {
-  static const _prefsKey = 'recent_searches';
+  /// Kayıtların tutulduğu yerel anahtar — alt sınıflar değiştirir.
+  String get prefsKey => 'recent_searches';
+
+  /// Buluttaki alan adı — alt sınıflar değiştirir.
+  String get cloudField => 'recents';
 
   @override
   Future<List<RecentSearch>> build() async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_prefsKey);
+    final raw = prefs.getString(prefsKey);
     if (raw == null || raw.isEmpty) return const [];
     try {
       final list = jsonDecode(raw) as List;
@@ -355,10 +377,12 @@ class RecentSearchesNotifier extends AsyncNotifier<List<RecentSearch>> {
   Future<void> _persist(List<RecentSearch> next) async {
     final prefs = await SharedPreferences.getInstance();
     final maps = [for (final e in next) e.toMap()];
-    await prefs.setString(_prefsKey, jsonEncode(maps));
+    await prefs.setString(prefsKey, jsonEncode(maps));
     // Buluta da yaz: kullanıcı başka telefondan hesabına girdiğinde son
     // aramaları da gelsin (favoriler zaten geliyordu).
-    await ref.read(profileRepositoryProvider).saveRecents(maps);
+    await ref
+        .read(profileRepositoryProvider)
+        .saveRecents(maps, field: cloudField);
   }
 
   /// Buluttan gelen kayıtları YEREL LİSTENİN ÜSTÜNE koyar (giriş sonrası).
@@ -379,7 +403,7 @@ class RecentSearchesNotifier extends AsyncNotifier<List<RecentSearch>> {
     state = AsyncData(next);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
-      _prefsKey,
+      prefsKey,
       jsonEncode([for (final e in next) e.toMap()]),
     );
   }
@@ -388,7 +412,7 @@ class RecentSearchesNotifier extends AsyncNotifier<List<RecentSearch>> {
   Future<void> clear() async {
     state = const AsyncData([]);
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_prefsKey);
+    await prefs.remove(prefsKey);
   }
 }
 

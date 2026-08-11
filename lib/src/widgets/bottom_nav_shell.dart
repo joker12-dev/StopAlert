@@ -99,29 +99,33 @@ class _BottomNavShellState extends ConsumerState<BottomNavShell> {
           ),
         ),
       ),
-      bottomNavigationBar: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // BANNER MENÜYE YAPIŞIK: sayfa sayfa dolaşırken reklam yerinde
-          // kalıyor, her sekmede yeniden yüklenmiyor ve içeriğin arasına
-          // girmiyor. Reklam yüklenmezse hiç yer kaplamaz.
-          BannerAdSlot(
-            onHeight: (h) {
-              if (!mounted || h == _bannerHeight) return;
-              setState(() => _bannerHeight = h);
-            },
-          ),
-          _navBar(context),
-        ],
+      // BANNER + MENÜ TEK YÜZEY. Yuvarlatma en dıştan yapılır: menünün kendi
+      // yuvarlak köşeleri kalırsa banner ile menü arasında sayfanın arka planı
+      // sızıyor ve iki ayrı kutu gibi görünüyordu.
+      bottomNavigationBar: ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Reklam MENÜYE YAPIŞIK: sayfa sayfa dolaşırken yerinde kalıyor,
+            // her sekmede yeniden yüklenmiyor ve içeriğin arasına girmiyor.
+            // Yüklenmezse hiç yer kaplamaz.
+            BannerAdSlot(
+              onHeight: (h) {
+                if (!mounted || h == _bannerHeight) return;
+                setState(() => _bannerHeight = h);
+              },
+            ),
+            _navBar(context),
+          ],
+        ),
       ),
     );
   }
 
   Widget _navBar(BuildContext context) {
     final index = ref.watch(bottomNavIndexProvider);
-    return ClipRRect(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-        child: BackdropFilter(
+    return BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
           // Yükseklik = içerik + sistem navigasyon çubuğu payı. Sabit 80 px
           // verilirse 3 tuşlu/jest çubuğu olan cihazlarda sekmelerin altı
@@ -153,7 +157,6 @@ class _BottomNavShellState extends ConsumerState<BottomNavShell> {
               ),
             );
           }),
-        ),
     );
   }
 }

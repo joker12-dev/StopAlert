@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 import '../services/ad_service.dart';
+import '../theme/app_theme.dart';
 import '../util/platform_check.dart';
 
 /// Gerçek AdMob banner reklamı yuvası.
@@ -81,10 +82,15 @@ class _BannerAdSlotState extends State<BannerAdSlot> {
   Widget build(BuildContext context) {
     final ad = _ad;
     if (ad == null || !_loaded) return const SizedBox.shrink();
+    // MENÜYE SIFIR YAPIŞIR. Reklamın kendi genişliği ekrandan dar
+    // kalabiliyor; ortalanınca yanlarda ve altında menü rengiyle uyuşmayan
+    // bir şerit kalıyor ve arada boşluk varmış gibi görünüyordu. Kutunun
+    // rengini menüyle aynı yapmak o şeridi görünmez kılar.
     return Container(
       alignment: Alignment.center,
       width: double.infinity,
       height: ad.size.height.toDouble(),
+      color: VigilantColors.surfaceContainer,
       child: SizedBox(
         width: ad.size.width.toDouble(),
         height: ad.size.height.toDouble(),

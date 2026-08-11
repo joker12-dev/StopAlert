@@ -232,8 +232,16 @@ class _TimetableScreenState extends State<TimetableScreen> {
                     // Veri geldi ama bu gün/yön boş: hat o gün çalışmıyor.
                     ? 'Bu yönde ${_day.label.toLowerCase()} seferi yok.'
                     // Hiç veri gelmedi: ağ yok ya da servis bu hattı vermiyor.
-                    : 'Sefer saati alınamadı. İnternet bağlantını kontrol edip '
-                        'tekrar dene.',
+                    // Ray hatlarının saatleri PAKETTE; ağ değil, eski paket
+                    // sorunu olabiliyor ve kullanıcı bağlantısını boş yere
+                    // kurcalıyordu.
+                    : widget.type != null &&
+                            widget.type != LineType.bus &&
+                            widget.type != LineType.metrobus
+                        ? 'Bu hattın sefer saatleri veri paketinde yok. '
+                            'Ayarlar → Veri Paketleri’nden paketi güncelle.'
+                        : 'Sefer saati alınamadı. İnternet bağlantını kontrol '
+                            'edip tekrar dene.',
                 textAlign: TextAlign.center,
                 style: text.bodyMedium
                     ?.copyWith(color: VigilantColors.onSurfaceVariant),

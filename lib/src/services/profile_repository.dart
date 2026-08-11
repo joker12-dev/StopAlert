@@ -54,13 +54,17 @@ class ProfileRepository {
   }
 
   /// Son aramaları buluta yaz.
-  Future<void> saveRecents(List<Map<String, dynamic>> recents) async {
+  ///
+  /// [field] ile hangi listeye yazılacağı belirlenir: Hatlar ve Duraklar
+  /// sekmelerinin geçmişleri ayrı tutuluyor.
+  Future<void> saveRecents(List<Map<String, dynamic>> recents,
+      {String field = 'recents'}) async {
     final doc = _doc();
     if (doc == null) return;
     try {
       await doc.set({
-        'recents': recents,
-        'recentsAt': FieldValue.serverTimestamp(),
+        field: recents,
+        '${field}At': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
     } catch (e) {
       debugPrint('[profile] son arama yazma hatası: $e');
@@ -79,16 +83,20 @@ class ProfileRepository {
       final snap = await doc.get();
       final data = snap.data();
       if (data == null) return null;
+      List<Map<String, dynamic>>? listOf(String key) {
+        final v = data[key];
+        if (v is! List) return null;
+        return [
+          for (final e in v)
+            if (e is Map<String, dynamic>) e,
+        ];
+      }
+
       final settings = data['settings'];
-      final recents = data['recents'];
       return CloudProfile(
         settings: settings is Map<String, dynamic> ? settings : null,
-        recents: recents is List
-            ? [
-                for (final e in recents)
-                  if (e is Map<String, dynamic>) e,
-              ]
-            : null,
+        recents: listOf('recents'),
+        stopRecents: listOf('stopRecents'),
       );
     } catch (e) {
       debugPrint('[profile] okuma hatası: $e');
@@ -99,10 +107,18 @@ class ProfileRepository {
 
 /// Buluttan okunan profil — alanlar ayrı ayrı boş olabilir.
 class CloudProfile {
-  const CloudProfile({this.settings, this.recents});
+  const CloudProfile({this.settings, this.recents, this.stopRecents});
 
   final Map<String, dynamic>? settings;
+
+  /// Hatlar sekmesinin geçmişi.
   final List<Map<String, dynamic>>? recents;
 
-  bool get isEmpty => settings == null && (recents == null || recents!.isEmpty);
+  /// Duraklar sekmesinin geçmişi (ayrı liste).
+  final List<Map<String, dynamic>>? stopRecents;
+
+  bool get isEmpty =>
+      settings == null &&
+      (recents == null || recents!.isEmpty) &&
+      (stopRecents == null || stopRecents!.isEmpty);
 }

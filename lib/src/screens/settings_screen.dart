@@ -149,6 +149,12 @@ class SettingsScreen extends ConsumerWidget {
     if (recents != null && recents.isNotEmpty) {
       await ref.read(recentSearchesProvider.notifier).mergeFromCloud(recents);
     }
+    final stopRecents = profile.stopRecents;
+    if (stopRecents != null && stopRecents.isNotEmpty) {
+      await ref
+          .read(stopRecentSearchesProvider.notifier)
+          .mergeFromCloud(stopRecents);
+    }
     return true;
   }
 

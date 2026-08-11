@@ -196,6 +196,17 @@ class _StopSearchViewState extends ConsumerState<_StopSearchView> {
     Haptics.light();
     final active = ref.read(activeCityProvider);
     final other = city.id == active.id ? null : city;
+    // AÇILAN DURAK GEÇMİŞE YAZILIR. Duraklar sekmesinde arama yapıp bir
+    // durağa girmek son aramalara hiç düşmüyordu; ertesi gün aynı durağı
+    // baştan aratmak gerekiyordu.
+    ref.read(stopRecentSearchesProvider.notifier).add(RecentSearch(
+          stopName: stop.name,
+          stopId: stop.id,
+          lineId: '',
+          lineCode: '',
+          lineTypeName: 'bus',
+          cityId: city.id,
+        ));
     var lines = const <TransitLineBrief>[];
     if (isBusId(stop.id)) {
       lines = await TransitDb.instance.linesForStop(stop.id, cityId: other?.id);
@@ -319,7 +330,8 @@ class _StopSearchViewState extends ConsumerState<_StopSearchView> {
   /// Arama boşken gösterilen SON ARAMALAR listesi.
   Widget _recents(TextTheme text) {
     final items =
-        ref.watch(recentSearchesProvider).valueOrNull ?? const <RecentSearch>[];
+        ref.watch(stopRecentSearchesProvider).valueOrNull ??
+            const <RecentSearch>[];
     if (items.isEmpty) {
       return Center(
         child: Padding(
@@ -348,7 +360,7 @@ class _StopSearchViewState extends ConsumerState<_StopSearchView> {
             InkResponse(
               onTap: () {
                 Haptics.light();
-                ref.read(recentSearchesProvider.notifier).clear();
+                ref.read(stopRecentSearchesProvider.notifier).clear();
               },
               radius: 20,
               child: Padding(

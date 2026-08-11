@@ -73,6 +73,13 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
   /// Bir duraktan 30 hat geçebiliyor; hepsi için ayrı çağrı yapmak hem
   /// yavaş hem de İETT'nin saatlik kotasına yüklenmek olurdu. Kullanıcı
   /// pratikte ilk birkaç hatla ilgileniyor.
+  /// Bundan uzaktaki varışlar LİSTELENMEZ.
+  ///
+  /// Yarım saat sonrasını "yaklaşan araç" saymak listeyi şişiriyor ve asıl
+  /// binilecek aracı gözden kaçırtıyor. Bu kadar uzaktaki bir sefer için
+  /// bakılacak yer sefer saatleri sayfası.
+  static const _maxArrivalSeconds = 30 * 60;
+
   static const _maxLinesQueried = 10;
 
   @override
@@ -127,6 +134,8 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
           learner: learner,
         );
         for (final e in ests) {
+          // Yarım saatten uzaktaki araç "yaklaşıyor" değildir.
+          if (e.seconds > _maxArrivalSeconds) continue;
           found.add(_Arrival(brief: brief, line: line, estimate: e));
         }
       } catch (_) {
@@ -174,6 +183,7 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
           limit: 2,
         );
         for (final n in next) {
+          if (n.secondsAway > _maxArrivalSeconds) continue;
           found.add(_Scheduled(brief: brief, line: line, arrival: n));
         }
       } catch (_) {

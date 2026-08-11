@@ -99,8 +99,18 @@ class TimetableService {
   /// İndirilen paketteki `departures` tablosundan takvim kurar.
   static Future<Timetable> _fromPackage(String code, TransitCity city,
       {LineType? type}) async {
-    final rows = await TransitDb.instance
+    var rows = await TransitDb.instance
         .departuresForCode(code, cityId: city.id, type: type?.name);
+    // TÜR SÜZGECİ BOŞ DÖNERSE SÜZGEÇSİZ DENE.
+    //
+    // Eski paketlerde ray hatlarının `type` sütunu doldurulmamış olabiliyor;
+    // süzgeç o durumda hiçbir satır bulamıyor ve ekran "sefer saati
+    // alınamadı" diyor. Kodun kendisi zaten hattı tekilleştiriyor, süzgeçsiz
+    // sonuç yanlış hat getirmez — yalnızca aynı kodlu iki tür varsa
+    // ayrıştırma yapılamaz, o da hiç saat göstermemekten iyidir.
+    if (rows.isEmpty && type != null) {
+      rows = await TransitDb.instance.departuresForCode(code, cityId: city.id);
+    }
     final out = <Departure>[];
     for (final (lineId, day, time) in rows) {
       final d = DayType.fromCode(day);

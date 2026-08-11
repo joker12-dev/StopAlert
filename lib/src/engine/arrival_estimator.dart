@@ -4,6 +4,7 @@ import '../data/transit_db.dart';
 import '../services/iett_service.dart';
 import 'geo.dart';
 import 'segment_learner.dart';
+import '../util/duration_label.dart';
 import 'time_bucket.dart';
 
 /// Bir otobüsün belirli bir durağa tahmini varışı.
@@ -302,8 +303,7 @@ class ScheduledArrival {
   String get awayLabel {
     final m = (secondsAway / 60).round();
     if (m <= 0) return 'şimdi';
-    if (m < 60) return '$m dk';
-    return '${m ~/ 60} sa ${m % 60} dk';
+    return minutesLabel(m);
   }
 }
 

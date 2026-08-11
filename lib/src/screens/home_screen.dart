@@ -16,6 +16,7 @@ import '../state/settings_provider.dart';
 import '../state/weather_provider.dart';
 import '../theme/app_theme.dart';
 import '../util/insets.dart';
+import '../util/duration_label.dart';
 import '../util/greeting.dart';
 import '../util/haptics.dart';
 import '../widgets/anim.dart';
@@ -1450,68 +1451,46 @@ class _JourneyCard extends StatelessWidget {
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
+        // ESKİ KOYU KART. Hattın rengiyle gradyan denenmişti ve otobüslerde
+        // sarıya boğuluyordu — kart içeriğinden çok kendini gösteriyordu.
+        // Renk artık yalnızca rozette ve durak noktalarında.
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          // Hattın RENGİNDEN doğan yumuşak bir geçiş: kartlar düz gri
-          // kutulardı ve hangi hatla gidildiği ancak yazıdan anlaşılıyordu.
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              color.withValues(alpha: 0.18),
-              HomeScreen._cardDark,
-            ],
-          ),
-          border: Border.all(color: color.withValues(alpha: 0.28)),
+          color: HomeScreen._cardDark,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+              color: VigilantColors.surfaceVariant.withValues(alpha: 0.3)),
         ),
-        clipBehavior: Clip.antiAlias,
-        child: Stack(
+        child: Row(
           children: [
-            // Arka planda soluk bir hat simgesi — kart bir "bilet" gibi dursun.
-            Positioned(
-              right: -10,
-              bottom: -12,
-              child: Icon(lineTypeIcon(record.lineType),
-                  size: 96, color: color.withValues(alpha: 0.09)),
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(lineTypeIcon(record.lineType), size: 15, color: color),
+                  const SizedBox(height: 2),
+                  Text(record.lineCode,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: text.labelSmall?.copyWith(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w800,
+                          color: color)),
+                ],
+              ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+            const SizedBox(width: 12),
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: color.withValues(alpha: 0.22),
-                          borderRadius: BorderRadius.circular(8),
-                          border:
-                              Border.all(color: color.withValues(alpha: 0.45)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(lineTypeIcon(record.lineType),
-                                size: 14, color: color),
-                            const SizedBox(width: 6),
-                            Text(record.lineCode,
-                                style: text.labelMedium?.copyWith(
-                                    fontWeight: FontWeight.w800, color: color)),
-                          ],
-                        ),
-                      ),
-                      const Spacer(),
-                      Text(relative,
-                          style: text.labelMedium?.copyWith(
-                              color: VigilantColors.onSurfaceVariant)),
-                    ],
-                  ),
-                  const SizedBox(height: 18),
-                  // Biniş → iniş, KALKIŞ-VARIŞ çizgisiyle: iki durak adını
-                  // düz bir ok ile yazmak hangisinin nereye ait olduğunu
-                  // okumayı zorlaştırıyordu.
                   _JourneyLeg(
                     color: color,
                     label: record.boardingStopName,
@@ -1522,47 +1501,17 @@ class _JourneyCard extends StatelessWidget {
                     label: record.targetStopName,
                     first: false,
                   ),
-                  const SizedBox(height: 16),
-                  Divider(
-                      height: 1,
-                      color: VigilantColors.surfaceVariant
-                          .withValues(alpha: 0.35)),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      const Icon(Icons.schedule_rounded,
-                          size: 15, color: VigilantColors.onSurfaceVariant),
-                      const SizedBox(width: 6),
-                      Text('${mins < 1 ? '<1' : mins} dk sürdü',
-                          style: text.labelMedium?.copyWith(
-                              color: VigilantColors.onSurfaceVariant)),
-                      const Spacer(),
-                      // Kartın ne işe yaradığını SÖYLE: dokununca aynı
-                      // yolculuk yeniden kuruluyor, bir tuş gibi dursun.
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 7),
-                        decoration: BoxDecoration(
-                          color: color.withValues(alpha: 0.16),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.replay_rounded, size: 15, color: color),
-                            const SizedBox(width: 6),
-                            Text('Tekrarla',
-                                style: text.labelMedium?.copyWith(
-                                    color: color,
-                                    fontWeight: FontWeight.w700)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+                  const SizedBox(height: 6),
+                  Text('${minutesLabel(mins < 1 ? 1 : mins)} · $relative',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: text.labelSmall
+                          ?.copyWith(color: VigilantColors.onSurfaceVariant)),
                 ],
               ),
             ),
+            const SizedBox(width: 6),
+            Icon(Icons.replay_rounded, size: 18, color: color),
           ],
         ),
       ),
@@ -1594,19 +1543,19 @@ class _JourneyLeg extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SizedBox(
-          width: 16,
+          width: 14,
           child: Column(
             children: [
               if (!first)
                 Container(
                   width: 2,
-                  height: 10,
+                  height: 6,
                   color: color.withValues(alpha: 0.45),
                 ),
               Container(
-                width: first ? 10 : 11,
-                height: first ? 10 : 11,
-                margin: const EdgeInsets.symmetric(vertical: 3),
+                width: first ? 8 : 9,
+                height: first ? 8 : 9,
+                margin: const EdgeInsets.symmetric(vertical: 2),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: first ? Colors.transparent : color,
@@ -1616,24 +1565,22 @@ class _JourneyLeg extends StatelessWidget {
               if (first)
                 Container(
                   width: 2,
-                  height: 10,
+                  height: 6,
                   color: color.withValues(alpha: 0.45),
                 ),
             ],
           ),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: 8),
         Expanded(
           child: Padding(
             padding: const EdgeInsets.only(top: 1),
             child: Text(
               label,
-              // TAM GENİŞLİKTE iki satır sığıyor: uzun durak adları artık
-              // ortasından kesilmiyor.
-              maxLines: 2,
+              maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: text.bodyMedium?.copyWith(
-                  height: 1.25,
+              style: text.labelMedium?.copyWith(
+                  height: 1.2,
                   fontWeight: first ? FontWeight.w500 : FontWeight.w700,
                   color: first ? VigilantColors.onSurfaceVariant : null),
             ),
