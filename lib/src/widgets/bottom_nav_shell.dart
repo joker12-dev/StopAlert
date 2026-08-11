@@ -9,7 +9,9 @@ import '../screens/profile_screen.dart';
 import '../screens/search_screen.dart';
 import '../screens/stops_screen.dart';
 import '../theme/app_theme.dart';
+import 'ad_insets.dart';
 import 'anim.dart';
+import 'banner_ad_slot.dart';
 
 /// Sekme indeksleri — ÇAĞIRAN TARAF BU ADLARI KULLANIR.
 ///
@@ -57,6 +59,13 @@ class _BottomNavShellState extends ConsumerState<BottomNavShell> {
   // gereksiz sorgu açmaz. Ziyaret sonrası IndexedStack durumu korunur.
   final Set<int> _visited = {0};
 
+  /// Menüye yapışık banner reklamın yüksekliği (yüklenmediyse 0).
+  ///
+  /// Her sayfada ayrı banner yerine TEK banner var ve menüye yapışık duruyor;
+  /// bu değer [AdInsets] ile alt ağaca dağıtılıyor ki liste boşlukları onu
+  /// hesaba katsın.
+  double _bannerHeight = 0;
+
   Widget _screenFor(int i) => switch (i) {
         NavTab.home => const HomeScreen(),
         NavTab.lines => const SearchScreen(),
@@ -77,17 +86,40 @@ class _BottomNavShellState extends ConsumerState<BottomNavShell> {
     _visited.add(index);
     return Scaffold(
       extendBody: true,
-      body: TabSwitchTransition(
-        index: index,
-        child: IndexedStack(
+      body: AdInsets(
+        bannerHeight: _bannerHeight,
+        child: TabSwitchTransition(
           index: index,
-          children: [
-            for (var i = 0; i < _tabs.length; i++)
-              _visited.contains(i) ? _screenFor(i) : const SizedBox.shrink(),
-          ],
+          child: IndexedStack(
+            index: index,
+            children: [
+              for (var i = 0; i < _tabs.length; i++)
+                _visited.contains(i) ? _screenFor(i) : const SizedBox.shrink(),
+            ],
+          ),
         ),
       ),
-      bottomNavigationBar: ClipRRect(
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // BANNER MENÜYE YAPIŞIK: sayfa sayfa dolaşırken reklam yerinde
+          // kalıyor, her sekmede yeniden yüklenmiyor ve içeriğin arasına
+          // girmiyor. Reklam yüklenmezse hiç yer kaplamaz.
+          BannerAdSlot(
+            onHeight: (h) {
+              if (!mounted || h == _bannerHeight) return;
+              setState(() => _bannerHeight = h);
+            },
+          ),
+          _navBar(context),
+        ],
+      ),
+    );
+  }
+
+  Widget _navBar(BuildContext context) {
+    final index = ref.watch(bottomNavIndexProvider);
+    return ClipRRect(
         borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
@@ -122,7 +154,6 @@ class _BottomNavShellState extends ConsumerState<BottomNavShell> {
             );
           }),
         ),
-      ),
     );
   }
 }

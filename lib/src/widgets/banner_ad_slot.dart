@@ -11,7 +11,13 @@ import '../util/platform_check.dart';
 /// - Reklam yüklenene kadar yer kaplamaz (yükleyince görünür) — böylece
 ///   yükleme başarısız olursa ekranda boş bir kutu kalmaz.
 class BannerAdSlot extends StatefulWidget {
-  const BannerAdSlot({super.key});
+  const BannerAdSlot({super.key, this.onHeight});
+
+  /// Yüklenen reklamın yüksekliği (yüklenmediyse 0).
+  ///
+  /// Alt menüye yapışık banner sayfaların üstünü örtüyor; bütün liste
+  /// boşlukları bu yüksekliği bilmek zorunda (bkz. [AdInsets]).
+  final ValueChanged<double>? onHeight;
 
   @override
   State<BannerAdSlot> createState() => _BannerAdSlotState();
@@ -51,9 +57,14 @@ class _BannerAdSlotState extends State<BannerAdSlot> {
       request: const AdRequest(),
       listener: BannerAdListener(
         onAdLoaded: (_) {
-          if (mounted) setState(() => _loaded = true);
+          if (!mounted) return;
+          setState(() => _loaded = true);
+          widget.onHeight?.call(size.height.toDouble());
         },
-        onAdFailedToLoad: (ad, _) => ad.dispose(),
+        onAdFailedToLoad: (ad, _) {
+          ad.dispose();
+          widget.onHeight?.call(0);
+        },
       ),
     );
     _ad = ad;

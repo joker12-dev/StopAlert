@@ -176,6 +176,41 @@ class _TimetableScreenState extends State<TimetableScreen> {
     );
   }
 
+  /// Gece yarısını aşan seferlerin başlığı.
+  ///
+  /// Bunlar bugünün gecesine ait: cuma gecesi 01:28'de kalkan tren cuma
+  /// sayfasında durur, cumartesi sayfasının ilk treni DEĞİLDİR.
+  Widget _nextDayHeader(TextTheme text) => Padding(
+        padding: const EdgeInsets.fromLTRB(0, 6, 0, 12),
+        child: Row(
+          children: [
+            const Expanded(child: Divider(color: VigilantColors.surfaceVariant)),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.bedtime_outlined,
+                      size: 14, color: VigilantColors.onSurfaceVariant),
+                  const SizedBox(width: 6),
+                  Text(
+                    _day == DayType.weekday
+                        // Cuma ayrı bir gün tipi değil; uzatma yalnızca cuma
+                        // gecesi işliyor ve bunu söylemek zorundayız.
+                        ? 'GECE SEFERLERİ · ERTESİ GÜN (cuma geceleri)'
+                        : 'GECE SEFERLERİ · ERTESİ GÜN',
+                    style: text.labelSmall?.copyWith(
+                        color: VigilantColors.onSurfaceVariant,
+                        letterSpacing: 0.8),
+                  ),
+                ],
+              ),
+            ),
+            const Expanded(child: Divider(color: VigilantColors.surfaceVariant)),
+          ],
+        ),
+      );
+
   Widget _body(List<Departure> rows, Departure? next) {
     final text = Theme.of(context).textTheme;
     if (_loading) {
@@ -221,17 +256,32 @@ class _TimetableScreenState extends State<TimetableScreen> {
     }
 
     // Saatler saat başına gruplanır: 60+ kalkışlık düz bir liste okunmuyor.
+    //
+    // GECE YARISINI AŞAN seferler ayrı bir kümede toplanır ve listenin SONUNA
+    // konur: cuma gecesi 01:28'de kalkan tren cumaya aittir, cumartesinin ilk
+    // treni değildir. Saat başı anahtarı 24+ değerini koruduğu için sıralama
+    // kendiliğinden doğru çıkıyor ("24", "25" > "23").
     final byHour = <String, List<Departure>>{};
     for (final d in rows) {
-      byHour.putIfAbsent(d.time.split(':').first.padLeft(2, '0'), () => [])
-          .add(d);
+      final h = (d.minuteOfDay ~/ 60).toString().padLeft(2, '0');
+      byHour.putIfAbsent(h, () => []).add(d);
     }
     final hours = byHour.keys.toList()..sort();
+    final nextDayCount = rows.where((d) => d.isNextDay).length;
 
     return ListView.builder(
       padding: EdgeInsets.fromLTRB(16, 0, 16, AppInsets.listBottom(context)),
-      itemCount: hours.length,
+      // +1 satır: gece bloğunun başlığı (varsa).
+      itemCount: hours.length + (nextDayCount > 0 ? 1 : 0),
       itemBuilder: (context, i) {
+        // GECE BLOĞU AYRACI: ilk 24+ saatinden hemen önce.
+        if (nextDayCount > 0) {
+          final firstLate = hours.indexWhere((h) => (int.tryParse(h) ?? 0) >= 24);
+          if (firstLate != -1) {
+            if (i == firstLate) return _nextDayHeader(text);
+            if (i > firstLate) i -= 1;
+          }
+        }
         final hour = hours[i];
         final items = byHour[hour]!;
         return Padding(
@@ -244,7 +294,8 @@ class _TimetableScreenState extends State<TimetableScreen> {
                 child: Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: Text(
-                    hour,
+                    // 24+ saat başlığı normal saate çevrilir ("24" → "00").
+                    ((int.tryParse(hour) ?? 0) % 24).toString().padLeft(2, '0'),
                     style: text.titleMedium?.copyWith(
                       color: VigilantColors.onSurfaceVariant,
                       fontFeatures: const [FontFeature.tabularFigures()],
@@ -296,7 +347,8 @@ class _TimePill extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            departure.time,
+            // 24+ biçimi kullanıcıya normal saat olarak yazılır.
+            departure.displayTime,
             style: text.titleSmall?.copyWith(
               color: highlight ? VigilantColors.secondary : null,
               fontFeatures: const [FontFeature.tabularFigures()],

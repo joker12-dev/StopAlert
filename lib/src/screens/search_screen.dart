@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart' show TemplateType;
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 import '../data/models.dart';
@@ -11,6 +12,7 @@ import '../state/city_provider.dart';
 import '../state/journey_provider.dart';
 import '../state/settings_provider.dart';
 import '../theme/app_theme.dart';
+import '../widgets/native_ad_slot.dart';
 import '../util/insets.dart';
 import '../util/haptics.dart';
 import '../widgets/glass_panel.dart';
@@ -693,6 +695,16 @@ class _ResultsView extends StatelessWidget {
         SizedBox(height: 12),
         SkeletonTile(),
       ]);
+    }
+
+    // ARAMA SONUÇLARININ SONUNDA yerel reklam. Sonuçların ARASINA koymak
+    // kullanıcının aradığı hattı kaçırmasına yol açardı; aradığını bulduktan
+    // sonra karşısına çıkması hem daha az rahatsız hem daha çok tıklanıyor.
+    if (children.isNotEmpty && !busLoading) {
+      children.add(const NativeAdSlot(
+        margin: EdgeInsets.only(top: 18),
+        template: TemplateType.small,
+      ));
     }
 
     return ListView(

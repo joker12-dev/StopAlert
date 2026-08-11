@@ -7,7 +7,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../data/models.dart';
+import '../data/transit_city.dart';
 import '../data/transit_db.dart';
+import '../services/bus_data_service.dart';
 import '../state/city_provider.dart';
 import '../state/journey_provider.dart';
 import '../state/live_location_provider.dart';
@@ -443,7 +445,15 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
     List<TransitLineBrief> found = const [];
     if (isBusId(stop.id)) {
       try {
-        found = await TransitDb.instance.linesForStop(stop.id);
+        // KURULU PAKETLERİ AÇ VE HEPSİNDE ARA: harita bütün illerin
+        // duraklarını gösteriyor; İstanbul seçiliyken Kocaeli'deki bir durağa
+        // dokunulduğunda sorgu aktif pakete gidip boş dönüyordu.
+        await BusDataService.instance.openAllForLookup();
+        found = await TransitDb.instance.linesForStopAnyCity(stop.id);
+        final cityId = await TransitDb.instance.cityOfStop(stop.id);
+        if (mounted && cityId != null && cityId != _selectedCityId) {
+          setState(() => _selectedCityId = cityId);
+        }
       } catch (_) {
         found = const [];
       }
@@ -459,6 +469,9 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
     if (!mounted || _selected?.stop.id != stop.id) return;
     setState(() => _selectedLines = found);
   }
+
+  /// Seçili durağın ait olduğu şehir (aktif şehirden farklı olabilir).
+  String? _selectedCityId;
 
   /// Çizilecek işaretler: görünen alandakiler + (listede yoksa) seçili durak.
   List<MapStop> _markerStops(List<MapStop> visible) {
@@ -800,6 +813,12 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
                 key: ValueKey(sel.stop.id),
                 stop: sel.stop,
                 lines: _selectedLines,
+                // Durak BAŞKA ŞEHİRDEYSE taşınır: yaklaşan araç ve sefer
+                // saati sorguları doğru pakete gitsin.
+                city: _selectedCityId == null ||
+                        _selectedCityId == ref.read(activeCityProvider).id
+                    ? null
+                    : TransitCities.byId(_selectedCityId!),
                 embedded: true,
               ),
             ),

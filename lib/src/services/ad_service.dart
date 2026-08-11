@@ -49,6 +49,32 @@ abstract final class AdConfig {
         : _testInterstitialAndroid;
   }
 
+  // Google resmi TEST yerel (native advanced) birimleri.
+  static const _testNativeAndroid = 'ca-app-pub-3940256099942544/2247696110';
+  static const _testNativeIos = 'ca-app-pub-3940256099942544/3986624511';
+
+  // ---- GERÇEK yerel reklam kimlikleri ----
+  //
+  // AdMob konsolunda "Yerel gelişmiş" (Native advanced) türünde bir birim
+  // açıp buraya yapıştır. BOŞ BIRAKILIRSA test reklamı gösterilir — gerçek
+  // kimlik yokken canlı reklam istemek hesap askıya alınmasına yol açar.
+  static const _realNativeAndroid = '';
+  static const _realNativeIos = '';
+
+  /// Aktif platformun yerel reklam birimi kimliği (gerçek yoksa TEST).
+  static String get nativeUnitId {
+    if (isIosDevice) {
+      return _realNativeIos.isNotEmpty ? _realNativeIos : _testNativeIos;
+    }
+    return _realNativeAndroid.isNotEmpty
+        ? _realNativeAndroid
+        : _testNativeAndroid;
+  }
+
+  /// Yerel reklam GERÇEK kimlikle mi çalışıyor (arayüz test rozeti gösterir).
+  static bool get nativeIsTest =>
+      isIosDevice ? _realNativeIos.isEmpty : _realNativeAndroid.isEmpty;
+
   /// Aktif platformun banner reklam birimi kimliği (gerçek yoksa TEST).
   static String get bannerUnitId {
     if (isIosDevice) {

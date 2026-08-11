@@ -19,7 +19,6 @@ import '../util/insets.dart';
 import '../util/greeting.dart';
 import '../util/haptics.dart';
 import '../widgets/anim.dart';
-import '../widgets/banner_ad_slot.dart';
 import '../widgets/bottom_nav_shell.dart';
 import '../widgets/glass_panel.dart';
 import '../widgets/mascot.dart';
@@ -131,8 +130,7 @@ class HomeScreen extends ConsumerWidget {
             ..._buildFavoritesSection(context, ref, text),
             ..._buildRecentSection(context, ref, text, goToRoutes),
                 const SizedBox(height: 16),
-                const BannerAdSlot(),
-              ],
+                  ],
             ),
           ),
         ],
@@ -1462,50 +1460,169 @@ class _JourneyCard extends StatelessWidget {
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
-        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: HomeScreen._cardDark,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-              color: VigilantColors.surfaceVariant.withValues(alpha: 0.3)),
+          // Hattın RENGİNDEN doğan yumuşak bir geçiş: kartlar düz gri
+          // kutulardı ve hangi hatla gidildiği ancak yazıdan anlaşılıyordu.
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              color.withValues(alpha: 0.18),
+              HomeScreen._cardDark,
+            ],
+          ),
+          border: Border.all(color: color.withValues(alpha: 0.28)),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        clipBehavior: Clip.antiAlias,
+        child: Stack(
           children: [
-            Row(
-              children: [
-                Container(
-                  width: 30,
-                  height: 30,
-                  decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: color.withValues(alpha: 0.15)),
-                  child: Icon(lineTypeIcon(record.lineType), size: 16, color: color),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(record.lineCode,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: text.labelMedium?.copyWith(
-                          fontWeight: FontWeight.w700, color: color)),
-                ),
-              ],
+            // Arka planda soluk bir hat simgesi — kart bir "bilet" gibi dursun.
+            Positioned(
+              right: -10,
+              bottom: -12,
+              child: Icon(lineTypeIcon(record.lineType),
+                  size: 74, color: color.withValues(alpha: 0.10)),
             ),
-            const SizedBox(height: 12),
-            Text('${record.boardingStopName} → ${record.targetStopName}',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: text.labelLarge?.copyWith(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 6),
-            Text('${mins < 1 ? '<1' : mins} dk · $relative',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: text.labelMedium
-                    ?.copyWith(color: VigilantColors.onSurfaceVariant)),
+            Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: color.withValues(alpha: 0.22),
+                          borderRadius: BorderRadius.circular(8),
+                          border:
+                              Border.all(color: color.withValues(alpha: 0.45)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(lineTypeIcon(record.lineType),
+                                size: 12, color: color),
+                            const SizedBox(width: 5),
+                            Text(record.lineCode,
+                                style: text.labelSmall?.copyWith(
+                                    fontWeight: FontWeight.w800, color: color)),
+                          ],
+                        ),
+                      ),
+                      const Spacer(),
+                      Text(relative,
+                          style: text.labelSmall?.copyWith(
+                              color: VigilantColors.onSurfaceVariant)),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  // Biniş → iniş, KALKIŞ-VARIŞ çizgisiyle: iki durak adını
+                  // düz bir ok ile yazmak hangisinin nereye ait olduğunu
+                  // okumayı zorlaştırıyordu.
+                  _JourneyLeg(
+                    color: color,
+                    label: record.boardingStopName,
+                    first: true,
+                  ),
+                  _JourneyLeg(
+                    color: color,
+                    label: record.targetStopName,
+                    first: false,
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      const Icon(Icons.schedule_rounded,
+                          size: 13, color: VigilantColors.onSurfaceVariant),
+                      const SizedBox(width: 5),
+                      Text('${mins < 1 ? '<1' : mins} dk sürdü',
+                          style: text.labelSmall?.copyWith(
+                              color: VigilantColors.onSurfaceVariant)),
+                      const Spacer(),
+                      Icon(Icons.replay_rounded, size: 14, color: color),
+                      const SizedBox(width: 4),
+                      Text('Tekrarla',
+                          style: text.labelSmall?.copyWith(
+                              color: color, fontWeight: FontWeight.w700)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
+    );
+  }
+}
+
+
+/// Son yolculuk kartındaki tek durak satırı (kalkış ya da varış).
+///
+/// Nokta + çizgi düzeni, iki durak adının hangisinin biniş hangisinin iniş
+/// olduğunu bakar bakmaz gösteriyor; düz bir "A → B" satırı uzun durak
+/// adlarında okunmuyordu.
+class _JourneyLeg extends StatelessWidget {
+  const _JourneyLeg({
+    required this.color,
+    required this.label,
+    required this.first,
+  });
+
+  final Color color;
+  final String label;
+  final bool first;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 14,
+          child: Column(
+            children: [
+              if (!first)
+                Container(
+                  width: 2,
+                  height: 6,
+                  color: color.withValues(alpha: 0.45),
+                ),
+              Container(
+                width: first ? 8 : 9,
+                height: first ? 8 : 9,
+                margin: const EdgeInsets.symmetric(vertical: 2),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: first ? Colors.transparent : color,
+                  border: Border.all(color: color, width: 2),
+                ),
+              ),
+              if (first)
+                Container(
+                  width: 2,
+                  height: 6,
+                  color: color.withValues(alpha: 0.45),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: text.labelMedium?.copyWith(
+                fontWeight: first ? FontWeight.w500 : FontWeight.w700,
+                color: first ? VigilantColors.onSurfaceVariant : null),
+          ),
+        ),
+      ],
     );
   }
 }

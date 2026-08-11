@@ -21,8 +21,13 @@ TEK durak dizisi var ve kalkışlar ilk duraktan sayılıyor. Kısa seferi tam h
 kalkışı gibi yazmak, Halkalı'da olmayan bir treni varmış gibi gösterirdi.
 Eksik göstermek, olmayanı vaat etmekten iyidir.
 
-Gece yarısını aşan kalkışlar ERTESİ GÜNE yazılır: cumartesi sabahı 01:28'de
-kalkan tren, uygulamanın gün modelinde cumartesiye aittir.
+GECE YARISINI AŞAN SEFERLER, KALKTIKLARI GÜNE YAZILIR. Cuma gecesi 01:28'de
+kalkan tren cumartesiye değil CUMAYA aittir — yolcu onu cuma akşamı planlar.
+Bunlar 24'ü aşan saatlerle kodlanır (00:28 → "24:28", 01:28 → "25:28"): GTFS'in
+kendi yöntemi bu, doğal sıralamada listenin sonuna düşüyorlar ve arayüz
+"ertesi gün" rozetiyle gösteriyor. Ertesi günün sayfasında TEKRAR görünmezler;
+cumartesi sabahına ait olmayan bir treni cumartesi listesinin başına koymak
+yolcuya yanlış ilk tren gösterirdi.
 """
 
 # Yön varyantı -> (ilk kalkış, hafta içi son, hafta sonu gecesi son)
@@ -37,6 +42,13 @@ LATE_HEADWAY_MIN = 30
 # Bu saatten sonrası hafta sonu gecelerinde seyrekleşir (TCDD dipnotu).
 LATE_AFTER = '22:50'
 
+# Gece uzatması HANGİ GÜNLERİN GECESİNDE var (TCDD: cuma→cmt, cmt→pazar).
+#
+# Uygulamanın gün modeli üç değerli: I (hafta içi), C (cumartesi), P (pazar).
+# Cuma ayrı bir değer değil; bu yüzden uzatma hafta içi sayfasında da yer alır
+# ama "yalnızca cuma gecesi" notuyla. Pazar gecesinin uzatması yoktur.
+LATE_NIGHT_DAYS = {'I', 'C'}
+
 
 def _mins(hhmm):
     h, m = hhmm.split(':')
@@ -44,7 +56,7 @@ def _mins(hhmm):
 
 
 def _clock(total):
-    total %= 24 * 60
+    """Dakikayı saate çevirir; 24'ü AŞAN değerler korunur ("25:28")."""
     return f'{total // 60:02d}:{total % 60:02d}'
 
 
@@ -61,11 +73,12 @@ def departures(line_id, day):
     start = _mins(first)
     late_from = _mins(LATE_AFTER)
 
-    if day == 'I':
+    # Gece uzatması olmayan gün (pazar ve pazartesi-perşembe temeli).
+    if day not in LATE_NIGHT_DAYS:
         end = _mins(last_weekday)
         return [_clock(t) for t in range(start, end + 1, HEADWAY_MIN)]
 
-    # Hafta sonu: son trenden GERİYE doğru 30'ar dakika, 22:50'ye kadar.
+    # Gece uzatması: son trenden GERİYE doğru 30'ar dakika, 22:50'ye kadar.
     # İleriye doğru kurmak son treni 01:28'e denk getirmiyordu.
     end = _mins(last_weekend) + 24 * 60
     late = []
@@ -77,8 +90,9 @@ def departures(line_id, day):
     late.reverse()
 
     # Seyrek servisin başladığı andan geriye 15'er dakika.
-    dense = list(range(late[0] % (24 * 60), start - 1, -HEADWAY_MIN))
+    dense = list(range(late[0], start - 1, -HEADWAY_MIN))
     dense.reverse()
+    # `late[0]` yoğun dizinin son üyesiyle aynı; tekrar yazılmaz.
     return [_clock(x) for x in dense] + [_clock(x) for x in late[1:]]
 
 

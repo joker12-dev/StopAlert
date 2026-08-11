@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart' show TemplateType;
 
 import '../data/models.dart';
 import '../data/recent_search.dart';
@@ -12,6 +13,7 @@ import '../theme/app_theme.dart';
 import '../util/haptics.dart';
 import '../util/insets.dart';
 import '../widgets/bottom_nav_shell.dart';
+import '../widgets/native_ad_slot.dart';
 import '../widgets/skeleton.dart';
 import 'line_detail_screen.dart';
 import 'nearby_map_screen.dart';
@@ -431,9 +433,17 @@ class _StopSearchViewState extends ConsumerState<_StopSearchView> {
     final hint = _looksLikeLine ? 1 : 0;
     return ListView.separated(
       padding: EdgeInsets.fromLTRB(20, 0, 20, AppInsets.listBottom(context)),
-      itemCount: results.length + hint,
+      // +1: sonuçların SONUNDA yerel reklam. Araya koymak kullanıcının
+      // aradığı durağı kaçırmasına yol açardı.
+      itemCount: results.length + hint + 1,
       separatorBuilder: (_, __) => const SizedBox(height: 10),
       itemBuilder: (context, i) {
+        if (i == results.length + hint) {
+          return const NativeAdSlot(
+            margin: EdgeInsets.only(top: 8),
+            template: TemplateType.small,
+          );
+        }
         if (hint == 1 && i == 0) {
           return _LineHintCard(
             query: q,

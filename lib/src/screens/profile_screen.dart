@@ -6,9 +6,9 @@ import '../data/journey_stats.dart';
 import '../state/journey_provider.dart';
 import '../state/settings_provider.dart';
 import '../theme/app_theme.dart';
+import '../widgets/native_ad_slot.dart';
 import '../util/insets.dart';
 import '../util/haptics.dart';
-import '../widgets/banner_ad_slot.dart';
 import 'history_screen.dart';
 import 'settings_screen.dart';
 
@@ -172,7 +172,9 @@ class ProfileScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 16),
-            const BannerAdSlot(),
+            // Liste sonunda YEREL reklam: içeriği bölmüyor, kullanıcı
+            // aradığını bulduktan sonra karşısına çıkıyor.
+            const NativeAdSlot(margin: EdgeInsets.only(top: 20)),
           ],
         ),
       ),

@@ -333,7 +333,23 @@ extension ScheduledArrivals on ArrivalEstimator {
       final h = int.tryParse(parts[0]);
       final m = int.tryParse(parts[1]);
       if (h == null || m == null) continue;
-      final departAt = DateTime(clock.year, clock.month, clock.day, h, m);
+
+      // İKİ GÜN DENENİR. Gece seferleri 24'ü aşan saatle yazılıyor ("24:28" =
+      // ertesi gün 00:28) ve saat 00:30'da bu sefer BUGÜNE aittir, yarına
+      // değil — tek gün denemek onu 24 saat ileri atıyordu.
+      // ÖNCE DÜNKÜ ÇAPA denenir: "24:28" bugünün 00:28'i demek ve saat
+      // 00:20'de o sefer 8 dakika sonra kalkıyor. Bugünün çapasıyla başlamak
+      // aynı seferi 24 saat ileriye atıyordu.
+      DateTime? departAt;
+      for (final dayShift in const [-1, 0]) {
+        final candidate = DateTime(clock.year, clock.month, clock.day)
+            .add(Duration(days: dayShift, hours: h, minutes: m));
+        if (!candidate.isBefore(clock)) {
+          departAt = candidate;
+          break;
+        }
+      }
+      if (departAt == null) continue;   // her iki gün de geçmişte
 
       // İlk duraktan hedefe yol süresi — öğrenilmiş süre varsa o kullanılır.
       var travel = 0.0;
@@ -351,7 +367,7 @@ extension ScheduledArrivals on ArrivalEstimator {
       out.add(ScheduledArrival(
         at: arriveAt,
         secondsAway: away,
-        departureTime: d.time,
+        departureTime: d.displayTime,
       ));
     }
 

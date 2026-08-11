@@ -54,14 +54,31 @@ class Departure {
   final String serviceNote;
 
   /// Dakika cinsinden gün içi konum — sıralama ve "sıradaki sefer" için.
+  ///
+  /// 24'ü AŞABİLİR: gece yarısını geçen seferler "24:28"/"25:28" olarak
+  /// yazılıyor (GTFS'in yöntemi). Bu sayede listenin sonuna düşüyorlar ve
+  /// "cuma gecesi 01:28 treni" cuma sayfasında kalıyor.
   int get minuteOfDay {
     final parts = time.split(':');
     if (parts.length < 2) return 0;
     final h = int.tryParse(parts[0]) ?? 0;
     final m = int.tryParse(parts[1]) ?? 0;
-    // İETT gece seferlerini 24'ü aşan saatle vermiyor; 00:xx ertesi gün
-    // demek ama listede kendi yerinde durması doğru.
     return h * 60 + m;
+  }
+
+  /// Kalkış GECE YARISINDAN SONRA mı (yani takvim gününün ertesi sabahı).
+  bool get isNextDay => minuteOfDay >= 24 * 60;
+
+  /// Kullanıcıya gösterilecek saat — 24+ biçimi normale çevrilir.
+  ///
+  /// "25:28" kimseye bir şey anlatmıyor; ekranda "01:28" yazıp yanına
+  /// "ertesi gün" rozeti koymak doğru olanı.
+  String get displayTime {
+    if (!isNextDay) return time;
+    final total = minuteOfDay % (24 * 60);
+    final h = (total ~/ 60).toString().padLeft(2, '0');
+    final m = (total % 60).toString().padLeft(2, '0');
+    return '$h:$m';
   }
 }
 
@@ -90,7 +107,12 @@ class Timetable {
   /// [now]'dan sonraki ilk kalkış — "sıradaki sefer" rozeti için.
   /// Gün bitmişse null (yarının ilk seferi ayrı bir bilgi, burada verilmez).
   Departure? next(List<Departure> ofDay, DateTime now) {
-    final nowMin = now.hour * 60 + now.minute;
+    var nowMin = now.hour * 60 + now.minute;
+    // GECE YARISINDAN SONRA, gün hâlâ DÜNÜN takvim günü sayılır: saat 00:40'ta
+    // "sıradaki sefer" dünkü listenin 24:58 kaydıdır. Saati de aynı ölçeğe
+    // taşımazsak 00:40 listenin en başına düşer ve ilk sabah seferini
+    // "sıradaki" sanırdık.
+    if (nowMin < 3 * 60) nowMin += 24 * 60;
     for (final d in ofDay) {
       if (d.minuteOfDay >= nowMin) return d;
     }

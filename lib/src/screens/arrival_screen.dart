@@ -9,6 +9,7 @@ import '../services/ad_service.dart';
 import '../services/app_review_service.dart';
 import '../state/journey_provider.dart';
 import '../theme/app_theme.dart';
+import '../util/haptics.dart';
 import '../widgets/confetti_overlay.dart';
 import '../widgets/glass_panel.dart';
 import '../widgets/mascot.dart';
@@ -236,6 +237,38 @@ class _ArrivalScreenState extends ConsumerState<ArrivalScreen> {
                     ],
                   ),
                 ],
+              ),
+            ),
+            // PUAN VER — mağazanın yerli akışını açar.
+            //
+            // İlk yolculuktan sonra kendiliğinden çıkan istem sıklık kotasına
+            // takılıp hiç görünmeyebiliyor; memnun kullanıcının kendi
+            // isteğiyle basabileceği bir yer de olmalı. Tam burası: yolculuk
+            // yeni bitti, kullanıcı alarmın işe yaradığını yeni gördü.
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
+              child: SizedBox(
+                height: 46,
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: VigilantColors.tertiaryContainer,
+                    side: BorderSide(
+                        color: VigilantColors.tertiaryContainer
+                            .withValues(alpha: 0.5)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  onPressed: () async {
+                    Haptics.light();
+                    // İstem bir daha kendiliğinden çıkmasın: kullanıcı zaten
+                    // kendi isteğiyle geldi.
+                    await AppReviewService.consumePending();
+                    await AppReviewService.request();
+                  },
+                  icon: const Icon(Icons.star_rounded, size: 18),
+                  label: const Text('Uygulamaya puan ver'),
+                ),
               ),
             ),
             Padding(

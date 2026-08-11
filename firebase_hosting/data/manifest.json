@@ -1,8 +1,8 @@
 {
-  "version": "20260810",
-  "file": "bus_20260810.sqlite",
+  "version": "20260811",
+  "file": "bus_20260811.sqlite",
   "bytes": 8159232,
-  "sha256": "927005520f5d5ad14e7439a0fc6995a1033189d526149058d88dd3636fb1e068",
+  "sha256": "c88a2dc9a42a1f708f6e403eb2243c8d702193e4475ad3b16455545edfe2cbdc",
   "lines": 2621,
   "stops": 13813,
   "source": "IETT resmi web servisi (api.ibb.gov.tr) + GTFS depar + IBB GTFS rayli/deniz",

@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 import '../util/haptics.dart';
-import '../widgets/mascot.dart';
 import '../widgets/slide_to_action.dart';
 
 /// Alarm Çalıyor — telefonun yerleşik çalar saati gibi tam ekran, çıkışsız
@@ -155,10 +154,40 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
                             ),
                           ],
                         ),
-                        // STOPİ uyuyan yolcuyu uyandırıyor (paket pozu);
-                        // sallanma animasyonu çerçeveyi canlı tutar.
-                        child: const Mascot(MascotAssets.poseUyandiran,
-                            height: 158),
+                        // ÇALAR SAAT SİMGESİ, maskot fotoğrafı değil.
+                        //
+                        // Bu ekran uykudan uyandırmak için var ve yarım
+                        // saniyede anlaşılmalı; bir çizim, ne olduğunu
+                        // anlamak için bakmayı gerektiriyordu. İç içe iki
+                        // halka ve marka kırmızısı, sallanan bir zil.
+                        child: Container(
+                          width: 168,
+                          height: 168,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color:
+                                VigilantColors.primary.withValues(alpha: 0.12),
+                            border: Border.all(
+                                color: VigilantColors.primary
+                                    .withValues(alpha: 0.45),
+                                width: 2),
+                          ),
+                          child: Center(
+                            child: Container(
+                              width: 118,
+                              height: 118,
+                              decoration: const BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: VigilantColors.primary,
+                              ),
+                              child: const Icon(
+                                Icons.alarm_on_rounded,
+                                size: 66,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 32),

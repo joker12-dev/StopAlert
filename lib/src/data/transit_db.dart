@@ -483,6 +483,32 @@ class TransitDb {
     return null;
   }
 
+  /// Durağın hatlarını ÖNCE aktif şehirde, bulunamazsa açık diğer şehirlerde
+  /// arar.
+  ///
+  /// Harita bütün illerin duraklarını gösteriyor: İstanbul seçiliyken
+  /// haritadan Kocaeli'deki bir durağa dokunulduğunda sorgu aktif pakete
+  /// gidiyor, orada o durak olmadığı için "hat yok" çıkıyordu.
+  Future<List<TransitLineBrief>> linesForStopAnyCity(
+      String externalStopId) async {
+    final direct = await linesForStop(externalStopId);
+    if (direct.isNotEmpty) return direct;
+    for (final cityId in _aux.keys) {
+      final found = await linesForStop(externalStopId, cityId: cityId);
+      if (found.isNotEmpty) return found;
+    }
+    return const [];
+  }
+
+  /// Durağın HANGİ ŞEHRİN paketinde olduğunu bulur (yoksa null).
+  Future<String?> cityOfStop(String externalStopId) async {
+    if (await stopById(externalStopId) != null) return _activeCityId;
+    for (final cityId in _aux.keys) {
+      if (await stopById(externalStopId, cityId: cityId) != null) return cityId;
+    }
+    return null;
+  }
+
   Stop _stop(Map<String, Object?> r) => Stop(
         id: kBusPrefix + r['id'].toString(),
         name: r['name'] as String,

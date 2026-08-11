@@ -7,7 +7,7 @@ import '../data/models.dart';
 import '../state/journey_provider.dart';
 import '../theme/app_theme.dart';
 import '../util/insets.dart';
-import '../widgets/banner_ad_slot.dart';
+import '../widgets/native_ad_slot.dart';
 import '../widgets/glass_panel.dart';
 import '../widgets/mascot.dart';
 import 'live_tracking_screen.dart';
@@ -93,7 +93,9 @@ class FavoritesScreen extends ConsumerWidget {
                 const SizedBox(height: 12),
               ],
             const SizedBox(height: 8),
-            const BannerAdSlot(),
+            // Liste sonunda YEREL reklam: içeriği bölmüyor, kullanıcı
+            // aradığını bulduktan sonra karşısına çıkıyor.
+            const NativeAdSlot(margin: EdgeInsets.only(top: 20)),
           ],
         ),
       ),

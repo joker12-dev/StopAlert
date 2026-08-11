@@ -475,13 +475,28 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    // "Konuma git" — durağı haritada, yürüme rotasıyla açar.
+                    // PANELDE "Konuma git" YOK: kullanıcı durağı zaten
+                    // haritadan seçti, onu haritaya götürmenin bir anlamı
+                    // kalmıyor. Onun yerine oradan devam edeceği şey duruyor:
+                    // yol tarifi.
                     InkWell(
                       onTap: () {
                         Haptics.light();
-                        Navigator.of(context).push(MaterialPageRoute(
-                          builder: (_) => NearbyMapScreen(focusStop: stop),
-                        ));
+                        if (widget.embedded) {
+                          // TAM EKRAN AÇ: panel dar, hatların ve yaklaşan
+                          // araçların tamamı sığmıyor.
+                          Navigator.of(context).push(MaterialPageRoute(
+                            builder: (_) => StopLinesScreen(
+                              stop: stop,
+                              lines: lines,
+                              city: city,
+                            ),
+                          ));
+                        } else {
+                          Navigator.of(context).push(MaterialPageRoute(
+                            builder: (_) => NearbyMapScreen(focusStop: stop),
+                          ));
+                        }
                       },
                       borderRadius: BorderRadius.circular(16),
                       child: Container(
@@ -494,10 +509,14 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.route_rounded,
-                                color: VigilantColors.onPrimary, size: 22),
+                            Icon(
+                                widget.embedded
+                                    ? Icons.open_in_full_rounded
+                                    : Icons.route_rounded,
+                                color: VigilantColors.onPrimary,
+                                size: 22),
                             const SizedBox(height: 4),
-                            Text('Konuma git',
+                            Text(widget.embedded ? 'Tam ekran' : 'Konuma git',
                                 textAlign: TextAlign.center,
                                 style: text.labelSmall?.copyWith(
                                     color: VigilantColors.onPrimary,
@@ -529,7 +548,15 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
             Expanded(
               child: ListView(
                 padding: EdgeInsets.fromLTRB(
-                    20, 0, 20, AppInsets.pageBottom(context)),
+                    20,
+                    0,
+                    20,
+                    // PANELDE alt menü + reklam da işin içinde: panelin kendi
+                    // alt kenarı ekranın altına yapışık ve son satır menünün
+                    // altında kalıyordu.
+                    widget.embedded
+                        ? AppInsets.listBottom(context)
+                        : AppInsets.pageBottom(context)),
                 children: [
                   ..._arrivalsSection(text),
                   // Başlık BÖLÜMLERDEN BAĞIMSIZ: yaklaşan otobüs / tarife
