@@ -8,12 +8,21 @@ import '../theme/app_theme.dart';
 import '../util/insets.dart';
 import '../util/haptics.dart';
 import '../widgets/mascot.dart';
+import '../widgets/offline_notice.dart';
+
+/// Yenile'ye her basışta artar — sağlayıcıya "önbelleği atla" der.
+///
+/// ŞART: servis yanıtı 5 dakika bellekte tutuluyor. Yalnızca sağlayıcıyı
+/// tazelemek aynı listeyi geri veriyordu; kullanıcı yenile'ye bassa da hep
+/// aynı duyuruları görüyordu.
+final announcementsRefreshProvider = StateProvider<int>((_) => 0);
 
 /// İETT duyuruları (sefer iptali, güzergâh değişikliği). Kaynak: İBB Açık Veri
 /// — lisans gereği ekranda atıf gösterilir.
 final announcementsProvider =
     FutureProvider.autoDispose<List<IettAnnouncement>>((ref) async {
-  return IettService.instance.announcements();
+  final n = ref.watch(announcementsRefreshProvider);
+  return IettService.instance.announcements(force: n > 0);
 });
 
 /// Bildirim merkezi — hat duyurularını listeler, hat adına göre filtrelenir.
@@ -68,14 +77,26 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen> {
                         color: VigilantColors.onSurfaceVariant),
                   ),
                   Expanded(
-                    child: Text('Duyurular',
-                        style: text.headlineSmall?.copyWith(fontSize: 20)),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('Duyurular',
+                            style: text.headlineSmall?.copyWith(fontSize: 20)),
+                        // Yayında TARİH yok, yalnızca saat var. Verinin ne
+                        // zaman çekildiğini söylemezsek liste bayat sanılıyor.
+                        if (_fetchedLabel(async) case final s?)
+                          Text(s,
+                              style: text.labelSmall?.copyWith(
+                                  color: VigilantColors.onSurfaceVariant)),
+                      ],
+                    ),
                   ),
                   IconButton(
                     tooltip: 'Yenile',
                     onPressed: () {
                       Haptics.light();
-                      ref.invalidate(announcementsProvider);
+                      ref.read(announcementsRefreshProvider.notifier).state++;
                     },
                     icon: const Icon(Icons.refresh_rounded,
                         color: VigilantColors.onSurfaceVariant),
@@ -141,16 +162,28 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen> {
                   ? const Center(
                       child: CircularProgressIndicator(
                           color: VigilantColors.primary))
-                  : items.isEmpty
-                      ? _empty(text, all.isEmpty)
-                      : ListView.separated(
-                          padding: EdgeInsets.fromLTRB(20, 0, 20, AppInsets.pageBottom(context)),
-                          itemCount: items.length,
-                          separatorBuilder: (_, __) =>
-                              const SizedBox(height: 10),
-                          itemBuilder: (context, i) =>
-                              _AnnouncementCard(item: items[i]),
-                        ),
+                  : all.isEmpty
+                      // Veri hiç gelmedi: boş liste "duyuru yok" gibi
+                      // okunuyordu, oysa çoğu zaman ağ sorunu.
+                      ? OfflineNotice(
+                          title: 'Duyurular alınamadı',
+                          detail: 'İETT duyuru servisine ulaşılamadı. '
+                              'Bağlantını kontrol edip tekrar dene.',
+                          onRetry: () => ref
+                              .read(announcementsRefreshProvider.notifier)
+                              .state++,
+                        )
+                      : items.isEmpty
+                          ? _empty(text, all.isEmpty)
+                          : ListView.separated(
+                              padding: EdgeInsets.fromLTRB(
+                                  20, 0, 20, AppInsets.pageBottom(context)),
+                              itemCount: items.length,
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(height: 10),
+                              itemBuilder: (context, i) =>
+                                  _AnnouncementCard(item: items[i]),
+                            ),
             ),
             // Lisans gereği kaynak atfı (İBB Açık Veri Lisansı / CC BY 4.0).
             Padding(
@@ -166,6 +199,19 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen> {
         ),
       ),
     );
+  }
+
+  /// "Güncellendi: az önce" — veri gerçekten tazelendi mi, görünsün.
+  String? _fetchedLabel(AsyncValue<List<IettAnnouncement>> async) {
+    if (async.isLoading) return 'Yenileniyor…';
+    final at = IettService.instance.lastFetchedAt;
+    if (at == null) return null;
+    final s = DateTime.now().difference(at).inSeconds;
+    if (s < 10) return 'Güncellendi: az önce';
+    if (s < 60) return 'Güncellendi: $s sn önce';
+    final m = s ~/ 60;
+    if (m < 60) return 'Güncellendi: $m dk önce';
+    return 'Güncellendi: ${m ~/ 60} sa önce';
   }
 
   /// Şehrin duyuru beslemesi yok (İETT'nin karşılığı Kocaeli'de bulunmuyor).

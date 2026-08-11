@@ -7,6 +7,7 @@ import '../data/recent_search.dart';
 import '../data/transit_city.dart';
 import '../data/timetable.dart';
 import '../data/transit_db.dart';
+import '../services/bus_data_service.dart';
 import '../engine/scheduled_vehicles.dart';
 import '../services/iett_service.dart';
 import '../services/live_bus_service.dart';
@@ -95,8 +96,26 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
   bool _railReversed = false;
 
   Future<void> _load() async {
-    final v = await TransitDb.instance.directionsForCode(widget.code,
+    var v = await TransitDb.instance.directionsForCode(widget.code,
         cityId: widget.city?.id, type: widget.type?.name);
+    // BOŞ ÇIKTIYSA PAKETLERİ AÇIP BİR KEZ DAHA DENE.
+    //
+    // Başka şehrin paketi yalnızca arama yapıldığında açılıyordu. Uygulama
+    // yeniden başlatılıp "son aramalar"dan doğrudan bir hatta girildiğinde o
+    // paket kapalı oluyor ve sayfa bomboş açılıyordu — kullanıcı aynı hattın
+    // bir önceki oturumda çalıştığını, şimdi çalışmadığını görüyordu.
+    if (v.isEmpty) {
+      await BusDataService.instance.openAllForLookup();
+      if (!mounted) return;
+      v = await TransitDb.instance.directionsForCode(widget.code,
+          cityId: widget.city?.id, type: widget.type?.name);
+      // Tür süzgeci kaydı eskiyse (tür değişmiş/eksik yazılmış) süzgeçsiz dene:
+      // yanlış türle hiç sonuç bulamamaktansa doğru hattı açmak yeğdir.
+      if (v.isEmpty && widget.type != null) {
+        v = await TransitDb.instance
+            .directionsForCode(widget.code, cityId: widget.city?.id);
+      }
+    }
     if (!mounted) return;
 
     if (v.isEmpty) {

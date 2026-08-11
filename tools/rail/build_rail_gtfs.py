@@ -36,11 +36,15 @@ Kullanım:
 """
 import argparse
 import csv
+import hashlib
 import json
 import math
 import os
 import sqlite3
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import marmaray_tcdd  # noqa: E402
 
 # GTFS route_type -> StopAlert türü. (2 = ağır raylı; bu beslemede Marmaray
 # tip 1 geliyor, adından yakalanıyor.)
@@ -116,6 +120,41 @@ def meters(a, b):
          math.cos(math.radians(a[0])) * math.cos(math.radians(b[0])) *
          math.sin(dlon / 2) ** 2)
     return 2 * r * math.asin(min(1.0, math.sqrt(h)))
+
+
+class StopIds:
+    """Ada göre durak kimliği — AMA aynı ad her zaman aynı durak DEĞİL.
+
+    Ölçüldü: eski ray dosyasında 12 ad iki ayrı istasyona ait. M9'un
+    BAHARİYE'si Başakşehir'de, T3'ünki Kadıköy'de — arası 20 km. Kimlik
+    yalnızca addan üretilince ikisi tek durağa çöküyor ve M9'un durağı
+    haritada Anadolu yakasına düşüyordu (GÖZTEPE 20 km, YENİMAHALLE 13 km
+    aynı şekilde).
+
+    Bu yüzden ad + KONUM kümesi birlikte kimlik üretir: 400 metreden yakın
+    aynı adlı duraklar tek sayılır (gerçek aktarma istasyonu), uzaktakiler
+    ayrı kimlik alır.
+
+    Kimlik `hashlib` ile üretilir; Python'un `hash()`'i çalıştırmadan
+    çalıştırmaya değiştiği için paketi her derlemede durak kimlikleri
+    kayıyordu.
+    """
+
+    NEAR_METERS = 400
+
+    def __init__(self):
+        self._clusters = {}          # ad -> [(lat, lon, sid)]
+
+    def of(self, name, lat, lon):
+        key = name.strip().upper()
+        for c_lat, c_lon, sid in self._clusters.get(key, ()):
+            if meters((c_lat, c_lon), (lat, lon)) <= self.NEAR_METERS:
+                return sid
+        idx = len(self._clusters.get(key, ()))
+        digest = hashlib.md5(f'{key}#{idx}'.encode('utf-8')).hexdigest()
+        sid = RAIL_ID_OFFSET + int(digest[:8], 16) % 9_000_000
+        self._clusters.setdefault(key, []).append((lat, lon, sid))
+        return sid
 
 
 def legacy_lines(path):
@@ -306,6 +345,7 @@ def build(gtfs, target, rail_json=None):
         for lid, code, *_ in line_rows:
             gtfs_best[code] = max(gtfs_best.get(code, 0), stop_count.get(lid, 0))
 
+        stop_ids = StopIds()
         drop, add_lines, add_ls = set(), [], []
         kept = []
         for code, (leg, stops_l) in legacy.items():
@@ -330,7 +370,7 @@ def build(gtfs, target, rail_json=None):
                 add_lines.append((lid, code, lname, norm(lname), yon, 0, kind,
                                   leg.get('color') or '', 'Metro İstanbul'))
                 for i, st in enumerate(seq):
-                    sid = RAIL_ID_OFFSET + (abs(hash(st['name'])) % 9_000_000)
+                    sid = stop_ids.of(st['name'], st['lat'], st['lon'])
                     used_stops[sid] = (st['name'], st['lat'], st['lon'])
                     if i == 0:
                         add_ls.append((lid, 0, sid, 0))
@@ -345,6 +385,19 @@ def build(gtfs, target, rail_json=None):
         if kept:
             print(f'  eski dosyadan korunan hat ({len(kept)}): '
                   f'{", ".join(sorted(kept)[:12])}')
+
+    # ---- Marmaray: GTFS yerine TCDD'nin resmi çizelgesi ----
+    #
+    # GTFS'te Marmaray tek servis takvimine bağlı ve hafta içi/cumartesi/pazar
+    # birebir aynı çıkıyor; TCDD ise hafta sonu gecelerinde servisi 01:20'ye
+    # kadar uzatıyor. Ölçüldü: GTFS o seferlerin hiçbirini bilmiyor.
+    tcdd = marmaray_tcdd.rows()
+    if tcdd:
+        override = {lid for lid, _, _ in tcdd}
+        before = len(dep_rows)
+        dep_rows = [r for r in dep_rows if r[0] not in override] + tcdd
+        print(f'  Marmaray TCDD çizelgesi: {before - len(dep_rows) + len(tcdd)}'
+              f' kalkış GTFS yerine resmi veriden')
 
     print(f'yön varyantı: {len(line_rows)}  durak: {len(used_stops)}  '
           f'kalkış: {len(dep_rows)}')

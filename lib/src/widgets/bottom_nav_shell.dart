@@ -9,6 +9,7 @@ import '../screens/profile_screen.dart';
 import '../screens/search_screen.dart';
 import '../screens/stops_screen.dart';
 import '../theme/app_theme.dart';
+import 'anim.dart';
 
 /// Sekme indeksleri — ÇAĞIRAN TARAF BU ADLARI KULLANIR.
 ///
@@ -76,12 +77,15 @@ class _BottomNavShellState extends ConsumerState<BottomNavShell> {
     _visited.add(index);
     return Scaffold(
       extendBody: true,
-      body: IndexedStack(
+      body: TabSwitchTransition(
         index: index,
-        children: [
-          for (var i = 0; i < _tabs.length; i++)
-            _visited.contains(i) ? _screenFor(i) : const SizedBox.shrink(),
-        ],
+        child: IndexedStack(
+          index: index,
+          children: [
+            for (var i = 0; i < _tabs.length; i++)
+              _visited.contains(i) ? _screenFor(i) : const SizedBox.shrink(),
+          ],
+        ),
       ),
       bottomNavigationBar: ClipRRect(
         borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),

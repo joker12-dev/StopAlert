@@ -1,10 +1,10 @@
 {
-  "version": "20260809",
-  "file": "bus_20260809.sqlite",
+  "version": "20260810",
+  "file": "bus_20260810.sqlite",
   "bytes": 8159232,
-  "sha256": "366ecef7c24fea641eeb0e7b6c01a4f862b4b89ef7d94ad335cb9e1ea0f93921",
+  "sha256": "927005520f5d5ad14e7439a0fc6995a1033189d526149058d88dd3636fb1e068",
   "lines": 2621,
-  "stops": 13811,
+  "stops": 13813,
   "source": "IETT resmi web servisi (api.ibb.gov.tr) + GTFS depar + IBB GTFS rayli/deniz",
   "rail": {
     "version": "20260802",

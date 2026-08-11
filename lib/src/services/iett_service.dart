@@ -21,6 +21,13 @@ class IettService {
   List<IettAnnouncement>? _cache;
   DateTime? _cachedAt;
 
+  /// Duyuruların servisten EN SON ne zaman çekildiği.
+  ///
+  /// Yayında tarih alanı yok — yalnızca "Kayit Saati: 04:06" gibi bir saat
+  /// geliyor. Kullanıcı listeye bakınca güncel mi bayat mı ayırt edemiyordu;
+  /// ekran bu damgayı gösteriyor.
+  DateTime? get lastFetchedAt => _cachedAt;
+
   /// Hat duyuruları (sefer iptali, güzergâh değişikliği vb.).
   /// 5 dakika bellek önbelleği — servise gereksiz yük bindirmez.
   Future<List<IettAnnouncement>> announcements({bool force = false}) async {

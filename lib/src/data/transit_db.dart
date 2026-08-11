@@ -368,6 +368,37 @@ class TransitDb {
     ];
   }
 
+  /// Tek bir durağı kimliğinden getirir (`bus:12345` ya da `12345`).
+  ///
+  /// Son aramalar yalnızca durak KİMLİĞİNİ saklıyor; kayıt tekrar açılırken
+  /// durağın adı ve konumu buradan çözülür.
+  Future<Stop?> stopById(String externalStopId, {String? cityId}) async {
+    final db = _dbFor(cityId);
+    if (db == null) return null;
+    final raw = externalStopId.startsWith(kBusPrefix)
+        ? externalStopId.substring(kBusPrefix.length)
+        : externalStopId;
+    final id = int.tryParse(raw);
+    if (id == null) return null;
+    try {
+      final rows = await db.rawQuery(
+        'SELECT id, name, lat, lon, dir FROM stops WHERE id = ? LIMIT 1',
+        [id],
+      );
+      if (rows.isEmpty) return null;
+      final r = rows.first;
+      return Stop(
+        id: '$kBusPrefix${r['id']}',
+        name: (r['name'] as String? ?? '').trim(),
+        lat: (r['lat'] as num?)?.toDouble() ?? 0,
+        lon: (r['lon'] as num?)?.toDouble() ?? 0,
+        direction: (r['dir'] as String? ?? '').trim(),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Bir durağın (dış id) geçtiği otobüs hatları — hat NO başına TEK (aynı
   /// numara/depar'lar birleşir). Temsilci: bu durağı içeren, NORMAL (depar=0)
   /// ve en çok duraklı varyant. İETT'deki gibi durakta her numara bir kez çıkar.

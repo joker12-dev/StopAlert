@@ -16,6 +16,7 @@ import '../state/settings_provider.dart';
 import '../state/weather_provider.dart';
 import '../theme/app_theme.dart';
 import '../util/insets.dart';
+import '../util/greeting.dart';
 import '../util/haptics.dart';
 import '../widgets/anim.dart';
 import '../widgets/banner_ad_slot.dart';
@@ -558,7 +559,7 @@ class _TopBar extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Merhaba, $nickname!',
+              Text('${greetingForHour(DateTime.now().hour)}, $nickname!',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: text.headlineSmall),

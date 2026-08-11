@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../state/journey_provider.dart';
+
 import '../util/haptics.dart';
 import '../data/search_filter.dart';
 import '../util/map_style.dart';
@@ -168,6 +170,22 @@ class SettingsNotifier extends AsyncNotifier<AppSettings> {
     AppMapStyle.style = next.mapTileStyle;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_prefsKey, jsonEncode(next.toMap()));
+    // Buluta da yaz: kullanıcı ikinci telefonundan hesabına girdiğinde takma
+    // adı ve alarm ayarları da gelsin — favoriler zaten geliyordu, ayarlar
+    // gelmeyince hesabın yarısı taşınmış oluyordu.
+    await ref.read(profileRepositoryProvider).saveSettings(next.toMap());
+  }
+
+  /// Buluttaki ayarları cihaza uygula (giriş sonrası).
+  ///
+  /// Yalnızca giriş anında çağrılır; her açılışta çekmek, çevrimdışıyken
+  /// yapılan yerel değişikliği eski bulut kopyasıyla ezerdi.
+  Future<void> applyFromCloud(Map<String, dynamic> map) async {
+    try {
+      await _persist(AppSettings.fromMap(map));
+    } catch (_) {
+      // Bozuk kayıt: yerel ayarlar olduğu gibi kalır.
+    }
   }
 
   AppSettings get _current => state.valueOrNull ?? const AppSettings();

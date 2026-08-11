@@ -3,6 +3,14 @@ service cloud.firestore {
   match /databases/{database}/documents {
     // Kullanıcı verisi: herkes yalnızca kendi ağacını okur/yazar
     // (profil, yolculuklar, favoriler — PLAN.md veri modeli).
+    // AÇIKÇA YAZILDI: profil ayarları ve son aramalar users/{uid}
+    // DOKÜMANININ KENDİSİNDE tutuluyor (alt koleksiyonda değil). rules_version
+    // 2'de özyineli joker sıfır segmenti de kapsıyor ama bu kadar önemli bir
+    // izni ince bir kurala bırakmak doğru değil.
+    match /users/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
     match /users/{uid}/{document=**} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
     }

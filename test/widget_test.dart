@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:stopalert/src/util/greeting.dart';
 import 'package:stopalert/main.dart';
 import 'package:stopalert/src/util/anim_config.dart';
 
@@ -21,7 +22,10 @@ void main() {
     await tester.pumpAndSettle();
 
     // Ana Sayfa (premium) — üst bölüm öğeleri
-    expect(find.text('Merhaba, Yolcu!'), findsOneWidget);
+    // Selamlama SAATE GÖRE değişiyor; sabit metin beklemek testi günün
+    // saatine bağlı hâle getirirdi.
+    expect(find.text('${greetingForHour(DateTime.now().hour)}, Yolcu!'),
+        findsOneWidget);
     expect(find.text('Nerede ineceksin?'), findsOneWidget);
     expect(find.text('Yakındaki Duraklar'), findsOneWidget);
 

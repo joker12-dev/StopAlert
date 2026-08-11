@@ -18,6 +18,7 @@ import '../services/bus_data_service.dart';
 import 'city_provider.dart';
 import '../data/transit_city.dart';
 import '../services/journey_repository.dart';
+import '../services/profile_repository.dart';
 import '../services/location_service.dart';
 
 /// Uygulamadaki hat listesi.
@@ -63,6 +64,9 @@ final linesProvider = FutureProvider<List<TransitLine>>((ref) async {
 final authUidProvider = StreamProvider<String?>(
   (ref) => FirebaseAuth.instance.authStateChanges().map((u) => u?.uid),
 );
+
+/// Profil (ayarlar + son aramalar) bulut deposu.
+final profileRepositoryProvider = Provider((ref) => const ProfileRepository());
 
 /// Yolculuk geçmişi deposu.
 final journeyRepositoryProvider = Provider(
@@ -344,6 +348,34 @@ class RecentSearchesNotifier extends AsyncNotifier<List<RecentSearch>> {
       ...current.where(
           (e) => !(e.lineId == entry.lineId && e.stopId == entry.stopId)),
     ].take(8).toList();
+    state = AsyncData(next);
+    await _persist(next);
+  }
+
+  Future<void> _persist(List<RecentSearch> next) async {
+    final prefs = await SharedPreferences.getInstance();
+    final maps = [for (final e in next) e.toMap()];
+    await prefs.setString(_prefsKey, jsonEncode(maps));
+    // Buluta da yaz: kullanıcı başka telefondan hesabına girdiğinde son
+    // aramaları da gelsin (favoriler zaten geliyordu).
+    await ref.read(profileRepositoryProvider).saveRecents(maps);
+  }
+
+  /// Buluttan gelen kayıtları YEREL LİSTENİN ÜSTÜNE koyar (giriş sonrası).
+  ///
+  /// Yerel kayıtlar silinmez: kullanıcı bu cihazda yaptığı aramaları da
+  /// kaybetmemeli. Aynı hat+durak ikilisi tekilleşir.
+  Future<void> mergeFromCloud(List<Map<String, dynamic>> maps) async {
+    if (maps.isEmpty) return;
+    final incoming = [for (final m in maps) RecentSearch.fromMap(m)];
+    final current = state.valueOrNull ?? const <RecentSearch>[];
+    final seen = <String>{};
+    final merged = <RecentSearch>[];
+    for (final e in [...incoming, ...current]) {
+      if (!seen.add('${e.lineId}|${e.stopId}')) continue;
+      merged.add(e);
+    }
+    final next = merged.take(8).toList();
     state = AsyncData(next);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(

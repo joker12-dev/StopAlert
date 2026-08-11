@@ -81,41 +81,48 @@ class SettingsScreen extends ConsumerWidget {
     // hiçbir yolu yoktu.
     if (result.alreadyLinkedElsewhere && context.mounted) {
       final cred = result.credential!;
-      final ok = await showDialog<bool>(
+      final ok = await showModalBottomSheet<bool>(
         context: context,
-        builder: (context) => AlertDialog(
-          backgroundColor: VigilantColors.surfaceContainerHigh,
-          title: const Text('Bu hesaba giriş yapılsın mı?'),
-          content: const Text(
-            'Bu Google hesabı zaten bir StopAlert kaydına bağlı. '
-            'Giriş yaparsan o kayda dönersin. '
-            'Bu cihazdaki kaydedilmemiş veriler (anonim geçmiş, favoriler) '
-            'o hesaba TAŞINMAZ.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Vazgeç'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Giriş yap',
-                  style: TextStyle(color: VigilantColors.primary)),
-            ),
-          ],
-        ),
+        backgroundColor: Colors.transparent,
+        isScrollControlled: true,
+        builder: (context) => const _SignInSheet(),
       );
       if (ok ?? false) {
-        final signed = await ref.read(authServiceProvider).signInWithCredential(cred);
+        final signed =
+            await ref.read(authServiceProvider).signInWithCredential(cred);
+        // GİRİŞ BAŞARILIYSA PROFİLİ GERİ YÜKLE: kullanıcı ikinci telefonunda
+        // hesabına döndüğünde adı, alarm ayarları ve son aramaları da gelsin.
+        final restored = signed.ok ? await _restoreProfile(ref) : false;
         messenger
           ..hideCurrentSnackBar()
           ..showSnackBar(SnackBar(
             content: Text(signed.ok
-                ? 'Hesabına giriş yapıldı.'
+                ? (restored
+                    ? 'Hesabına giriş yapıldı — ayarların ve aramaların geldi.'
+                    : 'Hesabına giriş yapıldı.')
                 : (signed.error ?? 'Giriş başarısız.')),
           ));
       }
       return;
+    }
+
+    // BAĞLAMA BAŞARILIYSA AYARLARI HEMEN BULUTA YAZ. Yalnızca "değişiklikte
+    // yaz" kuralına bırakılırsa, bağladıktan sonra hiçbir ayarı
+    // değiştirmeyen kullanıcının bulutta profili hiç oluşmuyor ve ikinci
+    // cihazda geri gelecek bir şey bulunmuyordu.
+    if (result.ok) {
+      final current = ref.read(settingsProvider).valueOrNull;
+      if (current != null) {
+        await ref
+            .read(profileRepositoryProvider)
+            .saveSettings(current.toMap());
+      }
+      final recents = ref.read(recentSearchesProvider).valueOrNull;
+      if (recents != null && recents.isNotEmpty) {
+        await ref
+            .read(profileRepositoryProvider)
+            .saveRecents([for (final e in recents) e.toMap()]);
+      }
     }
 
     messenger
@@ -125,6 +132,24 @@ class SettingsScreen extends ConsumerWidget {
             ? 'Hesap bağlandı — verilerin artık kalıcı.'
             : (result.error ?? 'Bağlama başarısız.')),
       ));
+  }
+
+  /// Buluttaki profili cihaza uygula. Kayıt yoksa `false` döner.
+  ///
+  /// Favoriler ve yolculuk geçmişi zaten canlı akışla geliyor (Firestore
+  /// koleksiyonları); burada eksik olan ikisi taşınır: AYARLAR ve SON ARAMALAR.
+  Future<bool> _restoreProfile(WidgetRef ref) async {
+    final profile = await ref.read(profileRepositoryProvider).load();
+    if (profile == null || profile.isEmpty) return false;
+    final settings = profile.settings;
+    if (settings != null) {
+      await ref.read(settingsProvider.notifier).applyFromCloud(settings);
+    }
+    final recents = profile.recents;
+    if (recents != null && recents.isNotEmpty) {
+      await ref.read(recentSearchesProvider.notifier).mergeFromCloud(recents);
+    }
+    return true;
   }
 
   Future<void> _signOut(BuildContext context, WidgetRef ref) async {
@@ -1261,6 +1286,160 @@ class _ReminderTileState extends State<_ReminderTile> {
           setState(() => _enabled = v);
           await JourneyReminder.setEnabled(v);
         },
+      ),
+    );
+  }
+}
+
+
+/// "Bu hesaba giriş yapılsın mı?" — ikinci cihazda hesaba dönüş.
+///
+/// Düz bir uyarı kutusuydu; kullanıcının kayıtlı hayatını (favoriler, geçmiş,
+/// ayarlar) geri getiren bir adım için fazla sönük duruyordu. Kazanılanı ve
+/// kaybedileni AYRI AYRI göstermek kararı da kolaylaştırıyor.
+class _SignInSheet extends StatelessWidget {
+  const _SignInSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return SafeArea(
+      child: Container(
+        margin: const EdgeInsets.all(12),
+        padding: const EdgeInsets.fromLTRB(22, 18, 22, 20),
+        decoration: BoxDecoration(
+          color: VigilantColors.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(
+              color: VigilantColors.surfaceVariant.withValues(alpha: 0.5)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(
+                  color: VigilantColors.surfaceVariant,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            Center(
+              child: Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: VigilantColors.primary.withValues(alpha: 0.14),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.account_circle_rounded,
+                    size: 34, color: VigilantColors.primary),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text('Hesabına dön',
+                textAlign: TextAlign.center,
+                style: text.headlineSmall?.copyWith(fontSize: 22)),
+            const SizedBox(height: 8),
+            Text(
+              'Bu Google hesabı zaten bir StopAlert kaydına bağlı. '
+              'Giriş yaparsan o kayda dönersin.',
+              textAlign: TextAlign.center,
+              style: text.bodyMedium
+                  ?.copyWith(color: VigilantColors.onSurfaceVariant),
+            ),
+            const SizedBox(height: 18),
+            const _SheetRow(
+              icon: Icons.cloud_download_rounded,
+              color: VigilantColors.accentBlue,
+              title: 'Geri gelenler',
+              detail: 'Favori rotaların, son aramaların, yolculuk geçmişin '
+                  've profil ayarların',
+            ),
+            const SizedBox(height: 10),
+            const _SheetRow(
+              icon: Icons.info_outline_rounded,
+              color: VigilantColors.tertiaryContainer,
+              title: 'Bu cihazda kalanlar',
+              detail: 'Şu anki anonim kayıttaki veriler o hesaba taşınmaz',
+            ),
+            const SizedBox(height: 22),
+            FilledButton(
+              onPressed: () {
+                Haptics.light();
+                Navigator.pop(context, true);
+              },
+              style: FilledButton.styleFrom(
+                backgroundColor: VigilantColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 15),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16)),
+              ),
+              child: const Text('Giriş yap',
+                  style: TextStyle(fontWeight: FontWeight.w700)),
+            ),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text('Vazgeç',
+                  style: TextStyle(color: VigilantColors.onSurfaceVariant)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Giriş sayfasındaki tek satırlık bilgi kutusu.
+class _SheetRow extends StatelessWidget {
+  const _SheetRow({
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.detail,
+  });
+
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String detail;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.28)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style: text.labelLarge
+                        ?.copyWith(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 2),
+                Text(detail,
+                    style: text.labelSmall
+                        ?.copyWith(color: VigilantColors.onSurfaceVariant)),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

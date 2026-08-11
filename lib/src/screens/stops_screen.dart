@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/models.dart';
+import '../data/recent_search.dart';
 import '../data/transit_city.dart';
 import '../data/transit_db.dart';
+import '../services/bus_data_service.dart';
 import '../state/city_provider.dart';
 import '../state/journey_provider.dart';
 import '../theme/app_theme.dart';
@@ -11,6 +13,7 @@ import '../util/haptics.dart';
 import '../util/insets.dart';
 import '../widgets/bottom_nav_shell.dart';
 import '../widgets/skeleton.dart';
+import 'line_detail_screen.dart';
 import 'nearby_map_screen.dart';
 import 'stop_lines_screen.dart';
 
@@ -311,15 +314,11 @@ class _StopSearchViewState extends ConsumerState<_StopSearchView> {
     );
   }
 
-  Widget _body(
-    TextTheme text,
-    String q,
-    List<(Stop, TransitCity)> results,
-    bool loading,
-    TransitCity active,
-    Map<String, String> types,
-  ) {
-    if (q.length < 2) {
+  /// Arama boşken gösterilen SON ARAMALAR listesi.
+  Widget _recents(TextTheme text) {
+    final items =
+        ref.watch(recentSearchesProvider).valueOrNull ?? const <RecentSearch>[];
+    if (items.isEmpty) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(32),
@@ -333,6 +332,81 @@ class _StopSearchViewState extends ConsumerState<_StopSearchView> {
         ),
       );
     }
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text('SON ARAMALAR',
+                  style: text.labelSmall?.copyWith(
+                      color: VigilantColors.onSurfaceVariant,
+                      letterSpacing: 1.2)),
+            ),
+            InkResponse(
+              onTap: () {
+                Haptics.light();
+                ref.read(recentSearchesProvider.notifier).clear();
+              },
+              radius: 20,
+              child: Padding(
+                padding: const EdgeInsets.all(4),
+                child: Text('Temizle',
+                    style: text.labelSmall
+                        ?.copyWith(color: VigilantColors.primary)),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        for (final e in items) ...[
+          _RecentTile(entry: e, onTap: () => _openRecent(e)),
+          const SizedBox(height: 8),
+        ],
+      ],
+    );
+  }
+
+  /// Son arama kaydını aç: durak varsa durak künyesi, yoksa hat sayfası.
+  Future<void> _openRecent(RecentSearch e) async {
+    Haptics.light();
+    final active = ref.read(activeCityProvider);
+    final city = e.cityId.isEmpty ? active : TransitCities.byId(e.cityId);
+    final other = city.id == active.id ? null : city;
+
+    if (e.stopId.isNotEmpty) {
+      // KURULU PAKETLERİ AÇ: kayıt başka şehirden olabilir ve o paket
+      // yalnızca arama yapılınca açılıyor.
+      await BusDataService.instance.openAllForLookup();
+      final stop =
+          await TransitDb.instance.stopById(e.stopId, cityId: other?.id);
+      if (!mounted) return;
+      if (stop != null) {
+        await _open(stop, city);
+        return;
+      }
+    }
+    if (!mounted) return;
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => LineDetailScreen(
+        code: e.lineCode,
+        city: other,
+        type: e.lineType,
+      ),
+    ));
+  }
+
+  Widget _body(
+    TextTheme text,
+    String q,
+    List<(Stop, TransitCity)> results,
+    bool loading,
+    TransitCity active,
+    Map<String, String> types,
+  ) {
+    // ARAMA BOŞKEN SON ARAMALAR. Boş bir yönerge yazısı ekranın tamamını
+    // harcıyordu; kullanıcının aradığı durak çoğu zaman zaten listede.
+    if (q.length < 2) return _recents(text);
     if (results.isEmpty) {
       return loading
           ? ListView(
@@ -545,6 +619,58 @@ class _LineHintCard extends StatelessWidget {
               ),
               const Icon(Icons.chevron_right_rounded,
                   size: 20, color: VigilantColors.primary),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Son arama satırı — hat rozeti + durak/hat adı.
+class _RecentTile extends StatelessWidget {
+  const _RecentTile({required this.entry, required this.onTap});
+
+  final RecentSearch entry;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final hasStop = entry.stopName.trim().isNotEmpty;
+    return Material(
+      color: VigilantColors.surfaceContainer,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: [
+              Icon(Icons.history_rounded,
+                  size: 18, color: VigilantColors.onSurfaceVariant),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(hasStop ? entry.stopName : entry.lineCode,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: text.bodyMedium
+                            ?.copyWith(fontWeight: FontWeight.w600)),
+                    if (hasStop && entry.lineCode.isNotEmpty)
+                      Text('${entry.lineCode} hattı',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: text.labelSmall?.copyWith(
+                              color: VigilantColors.onSurfaceVariant)),
+                  ],
+                ),
+              ),
+              Icon(lineTypeIcon(entry.lineType),
+                  size: 18, color: lineTypeColor(entry.lineType)),
             ],
           ),
         ),

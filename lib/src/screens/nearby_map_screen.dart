@@ -8,7 +8,6 @@ import 'package:latlong2/latlong.dart';
 
 import '../data/models.dart';
 import '../data/transit_db.dart';
-import '../services/routing_service.dart';
 import '../state/city_provider.dart';
 import '../state/journey_provider.dart';
 import '../state/live_location_provider.dart';
@@ -50,7 +49,6 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
   bool _mapReady = false;
 
   MapStop? _selected;
-  List<LatLng> _walk = const [];
 
   /// Seçili otobüs durağından geçen hatlar (panelde rozet olarak listelenir).
 
@@ -143,7 +141,12 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
     final point = safeLatLng(m.stop.lat, m.stop.lon);
     if (point == null) return null;   // bozuk koordinat: çizme
     final selected = _isSelected(m);
-    final showLabel = _zoom >= _labelZoom;
+    // ETİKET KURALI: bir durak seçiliyse YALNIZCA onun adı yazılır, ötekiler
+    // sade kırmızı çember kalır — seçtiğin durağı kalabalıkta kaybetmeyesin.
+    // Seçim yokken adlar ancak epey yakınlaşınca çıkar; daha uzakta 200
+    // etiket üst üste binip haritayı okunmaz yapıyordu.
+    final showLabel =
+        _selected != null ? selected : _zoom >= _labelZoom;
     final dotBox = selected ? 38.0 : 20.0;
     final height = showLabel ? dotBox + 34 : dotBox;
     return Marker(
@@ -197,7 +200,10 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
   }
 
   /// Durak adlarının yazıldığı yakınlaşma eşiği.
-  static const _labelZoom = 15.0;
+  ///
+  /// 15.0'da bir mahalledeki bütün duraklar aynı anda etiketleniyor ve
+  /// karmaşa oluyordu; 16.2'de ancak birkaç sokak görünür.
+  static const _labelZoom = 16.2;
 
   /// [point]'i ekranın değil, GÖRÜNEN harita alanının (panelin üstünde kalan
   /// kısım) ortasına getirir.
@@ -392,7 +398,6 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
     Haptics.light();
     setState(() {
       _selected = m;
-      _walk = const [];
       _selectedLines = const [];
     });
     unawaited(_loadSelectedLines(m.stop));
@@ -403,9 +408,10 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
         // Kamera hesabı başarısızsa haritayı bozma; seçim yine de geçerli.
       }
     }
-    // YÜRÜME ROTASI kendiliğinden çizilir. Eskiden paneldeki bir düğmeye
-    // bağlıydı; panel artık durak sayfasını gösteriyor ve o düğme yok.
-    unawaited(_drawWalk(m));
+    // YOL TARİFİ ÇİZİLMEZ. Çizildiğinde iki sorun oluyordu: harita kullanıcı
+    // ile durağı birlikte sığdırmak için geri çekiliyor ("konuma git" seçili
+    // durağa gitmiyor gibi görünüyordu) ve kimsenin istemediği bir mavi
+    // çizgi haritayı dolduruyordu. Mesafe/yürüme süresi panelde zaten yazıyor.
   }
 
   /// Seçimi temizle: harita işaretleri ve panel eski hâline döner.
@@ -413,32 +419,8 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
     Haptics.light();
     setState(() {
       _selected = null;
-      _walk = const [];
       _selectedLines = const [];
     });
-  }
-
-  /// Kullanıcının konumundan seçili durağa YÜRÜME rotası.
-  ///
-  /// Durak seçilince kendiliğinden çizilir. Konum yoksa SESSİZCE geçer:
-  /// kullanıcı rota istemedi, durağa dokundu — uyarı gürültü olurdu.
-  Future<void> _drawWalk(MapStop m) async {
-    final user = _userLoc;
-    if (user == null) return;
-    final target = LatLng(m.stop.lat, m.stop.lon);
-    final walk = await RoutingService.instance.walk(user, target);
-    if (!mounted || _selected?.stop.id != m.stop.id) return;
-    setState(() => _walk = walk);
-    // Rota çizildiyse ikisini birlikte sığdır (çok yakınsa zoom bozulmasın).
-    const d = Distance();
-    if (_mapReady && d.as(LengthUnit.Meter, user, target) > 60) {
-      try {
-        _map.fitCamera(CameraFit.bounds(
-          bounds: LatLngBounds.fromPoints([user, target]),
-          padding: EdgeInsets.fromLTRB(60, 90, 60, _panelHeight + 20),
-        ));
-      } catch (_) {}
-    }
   }
 
   String _walkMinutes(double meters) {
@@ -642,17 +624,6 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
                         ),
                       ]),
                     ),
-                    // Yürüme rotası (yollardan)
-                    if (_walk.length >= 2)
-                      PolylineLayer(polylines: [
-                        Polyline(
-                          points: _walk,
-                          strokeWidth: 5,
-                          color: VigilantColors.accentBlue,
-                          borderStrokeWidth: 1.5,
-                          borderColor: Colors.white.withValues(alpha: 0.4),
-                        ),
-                      ]),
                     // Durak işaretleri (yalnızca görünen alandakiler). Seçili
                     // durak listede olmasa da (kaydırıldıysa) işaretli kalır.
                     // Liste hazır kurulmuş gelir — bkz. _buildMarkers.

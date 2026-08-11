@@ -171,3 +171,74 @@ class _PulseDotState extends State<PulseDot>
     );
   }
 }
+
+/// Alt menü sekmeleri arasında geçiş hissi.
+///
+/// [IndexedStack] durumu koruyor ama sekme bir anda takla atmış gibi
+/// değişiyordu. Çocukları değiştirmek (AnimatedSwitcher) durumu yok ederdi —
+/// harita kamerası, kaydırma konumu, açık paneller sıfırlanırdı. Bu yüzden
+/// yığının KENDİSİ kısa bir sönümle içeri giriyor: durum korunuyor, geçiş
+/// yumuşuyor.
+class TabSwitchTransition extends StatefulWidget {
+  const TabSwitchTransition({
+    super.key,
+    required this.index,
+    required this.child,
+  });
+
+  /// Değiştiğinde geçiş oynatılır.
+  final int index;
+  final Widget child;
+
+  @override
+  State<TabSwitchTransition> createState() => _TabSwitchTransitionState();
+}
+
+class _TabSwitchTransitionState extends State<TabSwitchTransition>
+    with SingleTickerProviderStateMixin {
+  // initState'TE KURULUR, `late final` ile DEĞİL. Tembel alan, animasyon
+  // kapalıyken (testler) build sırasında hiç okunmuyor; dispose onu o anda
+  // kurmaya çalışınca ağaçtan çıkmış bir öğeden TickerMode aranıyor ve
+  // çöküyordu.
+  late final AnimationController _c;
+
+  @override
+  void initState() {
+    super.initState();
+    _c = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 260),
+      value: 1,
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant TabSwitchTransition old) {
+    super.didUpdateWidget(old);
+    if (old.index != widget.index && AppAnim.enabled) _c.forward(from: 0);
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!AppAnim.enabled) return widget.child;
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (context, child) {
+        final t = Curves.easeOutCubic.transform(_c.value);
+        return Opacity(
+          opacity: 0.35 + 0.65 * t,
+          // Yalnızca birkaç piksel: sekme değişimi fark edilsin ama sayfa
+          // "kayıyor" hissi vermesin.
+          child: Transform.translate(offset: Offset(0, 10 * (1 - t)), child: child),
+        );
+      },
+      child: widget.child,
+    );
+  }
+}
