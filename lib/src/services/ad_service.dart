@@ -53,13 +53,12 @@ abstract final class AdConfig {
   static const _testNativeAndroid = 'ca-app-pub-3940256099942544/2247696110';
   static const _testNativeIos = 'ca-app-pub-3940256099942544/3986624511';
 
-  // ---- GERÇEK yerel reklam kimlikleri ----
+  // ---- GERÇEK yerel (native advanced) kimlikleri (AdMob konsolu) ----
   //
-  // AdMob konsolunda "Yerel gelişmiş" (Native advanced) türünde bir birim
-  // açıp buraya yapıştır. BOŞ BIRAKILIRSA test reklamı gösterilir — gerçek
-  // kimlik yokken canlı reklam istemek hesap askıya alınmasına yol açar.
-  static const _realNativeAndroid = '';
-  static const _realNativeIos = '';
+  // BOŞ BIRAKILIRSA test reklamı gösterilir — gerçek kimlik yokken canlı
+  // reklam istemek hesap askıya alınmasına yol açar.
+  static const _realNativeAndroid = 'ca-app-pub-6579751877708140/3567479950';
+  static const _realNativeIos = 'ca-app-pub-6579751877708140/8059001105';
 
   /// Aktif platformun yerel reklam birimi kimliği (gerçek yoksa TEST).
   static String get nativeUnitId {
