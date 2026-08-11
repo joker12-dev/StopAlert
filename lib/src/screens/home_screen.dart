@@ -208,28 +208,18 @@ class HomeScreen extends ConsumerWidget {
           },
         ),
         const SizedBox(height: 12),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _JourneyCard(
-                record: latest[0],
-                relative: _relativeTime(latest[0].createdAt),
-                onTap: () => _repeatJourney(context, ref, latest[0]),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: latest.length > 1
-                  ? _JourneyCard(
-                      record: latest[1],
-                      relative: _relativeTime(latest[1].createdAt),
-                      onTap: () => _repeatJourney(context, ref, latest[1]),
-                    )
-                  : const SizedBox.shrink(),
-            ),
-          ],
-        ),
+        // TAM GENİŞLİK, ALT ALTA. Yan yana iki kart 390 px'lik ekranda kart
+        // başına ~145 px içerik alanı bırakıyordu: durak adları ortasından
+        // kesiliyor, satırlar birbirine yapışıyordu. Bu kartın tek işi hangi
+        // yolculuk olduğunu okutmak.
+        for (var i = 0; i < latest.length; i++) ...[
+          if (i > 0) const SizedBox(height: 12),
+          _JourneyCard(
+            record: latest[i],
+            relative: _relativeTime(latest[i].createdAt),
+            onTap: () => _repeatJourney(context, ref, latest[i]),
+          ),
+        ],
       ];
     }
 
@@ -1482,10 +1472,10 @@ class _JourneyCard extends StatelessWidget {
               right: -10,
               bottom: -12,
               child: Icon(lineTypeIcon(record.lineType),
-                  size: 74, color: color.withValues(alpha: 0.10)),
+                  size: 96, color: color.withValues(alpha: 0.09)),
             ),
             Padding(
-              padding: const EdgeInsets.all(14),
+              padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1493,7 +1483,7 @@ class _JourneyCard extends StatelessWidget {
                     children: [
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
+                            horizontal: 10, vertical: 6),
                         decoration: BoxDecoration(
                           color: color.withValues(alpha: 0.22),
                           borderRadius: BorderRadius.circular(8),
@@ -1504,21 +1494,21 @@ class _JourneyCard extends StatelessWidget {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(lineTypeIcon(record.lineType),
-                                size: 12, color: color),
-                            const SizedBox(width: 5),
+                                size: 14, color: color),
+                            const SizedBox(width: 6),
                             Text(record.lineCode,
-                                style: text.labelSmall?.copyWith(
+                                style: text.labelMedium?.copyWith(
                                     fontWeight: FontWeight.w800, color: color)),
                           ],
                         ),
                       ),
                       const Spacer(),
                       Text(relative,
-                          style: text.labelSmall?.copyWith(
+                          style: text.labelMedium?.copyWith(
                               color: VigilantColors.onSurfaceVariant)),
                     ],
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 18),
                   // Biniş → iniş, KALKIŞ-VARIŞ çizgisiyle: iki durak adını
                   // düz bir ok ile yazmak hangisinin nereye ait olduğunu
                   // okumayı zorlaştırıyordu.
@@ -1532,21 +1522,42 @@ class _JourneyCard extends StatelessWidget {
                     label: record.targetStopName,
                     first: false,
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 16),
+                  Divider(
+                      height: 1,
+                      color: VigilantColors.surfaceVariant
+                          .withValues(alpha: 0.35)),
+                  const SizedBox(height: 12),
                   Row(
                     children: [
                       const Icon(Icons.schedule_rounded,
-                          size: 13, color: VigilantColors.onSurfaceVariant),
-                      const SizedBox(width: 5),
+                          size: 15, color: VigilantColors.onSurfaceVariant),
+                      const SizedBox(width: 6),
                       Text('${mins < 1 ? '<1' : mins} dk sürdü',
-                          style: text.labelSmall?.copyWith(
+                          style: text.labelMedium?.copyWith(
                               color: VigilantColors.onSurfaceVariant)),
                       const Spacer(),
-                      Icon(Icons.replay_rounded, size: 14, color: color),
-                      const SizedBox(width: 4),
-                      Text('Tekrarla',
-                          style: text.labelSmall?.copyWith(
-                              color: color, fontWeight: FontWeight.w700)),
+                      // Kartın ne işe yaradığını SÖYLE: dokununca aynı
+                      // yolculuk yeniden kuruluyor, bir tuş gibi dursun.
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: color.withValues(alpha: 0.16),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.replay_rounded, size: 15, color: color),
+                            const SizedBox(width: 6),
+                            Text('Tekrarla',
+                                style: text.labelMedium?.copyWith(
+                                    color: color,
+                                    fontWeight: FontWeight.w700)),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 ],
@@ -1583,19 +1594,19 @@ class _JourneyLeg extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SizedBox(
-          width: 14,
+          width: 16,
           child: Column(
             children: [
               if (!first)
                 Container(
                   width: 2,
-                  height: 6,
+                  height: 10,
                   color: color.withValues(alpha: 0.45),
                 ),
               Container(
-                width: first ? 8 : 9,
-                height: first ? 8 : 9,
-                margin: const EdgeInsets.symmetric(vertical: 2),
+                width: first ? 10 : 11,
+                height: first ? 10 : 11,
+                margin: const EdgeInsets.symmetric(vertical: 3),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: first ? Colors.transparent : color,
@@ -1605,21 +1616,27 @@ class _JourneyLeg extends StatelessWidget {
               if (first)
                 Container(
                   width: 2,
-                  height: 6,
+                  height: 10,
                   color: color.withValues(alpha: 0.45),
                 ),
             ],
           ),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 12),
         Expanded(
-          child: Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: text.labelMedium?.copyWith(
-                fontWeight: first ? FontWeight.w500 : FontWeight.w700,
-                color: first ? VigilantColors.onSurfaceVariant : null),
+          child: Padding(
+            padding: const EdgeInsets.only(top: 1),
+            child: Text(
+              label,
+              // TAM GENİŞLİKTE iki satır sığıyor: uzun durak adları artık
+              // ortasından kesilmiyor.
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: text.bodyMedium?.copyWith(
+                  height: 1.25,
+                  fontWeight: first ? FontWeight.w500 : FontWeight.w700,
+                  color: first ? VigilantColors.onSurfaceVariant : null),
+            ),
           ),
         ),
       ],
