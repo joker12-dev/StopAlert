@@ -47,11 +47,32 @@ class AlarmNotifications {
   /// Ayarlardan okunur (arka plan izolatında Riverpod yok, doğrudan
   /// SharedPreferences). Okunamazsa varsayılana düşer — alarm asla sessiz
   /// kalmamalı.
-  static String _soundResource = AlarmSound.fallback;
+  static AlarmSound _sound = AlarmSound.all.first;
+
+  static String get _soundResource => _sound.resource;
 
   /// ANDROID KANALI SESİ DONDURUR: ses değişince kanal kimliği de değişmeli,
   /// yoksa sistem eski sesi çalmaya devam eder.
-  static String get _soundChannelId => '${_channelId}_$_soundResource';
+  ///
+  /// Sistem sesleri için kimlik ADRESTEN türetilir; iki sistem seçeneği de
+  /// aynı `resource` değerini taşıyor ve tek kimlikte toplanırlarsa kanal
+  /// ilk seçilen sesi dondurup ötekine geçmiyordu.
+  static String get _soundChannelId {
+    final key = _sound.source == AlarmSoundSource.system
+        ? 'sys_${_sound.systemUri.split('/').last}'
+        : _sound.resource;
+    return '${_channelId}_$key';
+  }
+
+  /// Bildirim kanalının çalacağı ses.
+  static AndroidNotificationSound? _androidSound(String resource) {
+    if (_sound.source == AlarmSoundSource.system &&
+        _sound.systemUri.isNotEmpty) {
+      // CİHAZIN KENDİ SESİ: dosya taşımıyoruz, sistemin adresini veriyoruz.
+      return UriAndroidNotificationSound(_sound.systemUri);
+    }
+    return RawResourceAndroidNotificationSound(resource);
+  }
 
   static Future<void> _loadSoundChoice() async {
     try {
@@ -59,8 +80,7 @@ class AlarmNotifications {
       final raw = prefs.getString('app_settings_v1');
       if (raw == null || raw.isEmpty) return;
       final map = jsonDecode(raw) as Map<String, dynamic>;
-      _soundResource =
-          AlarmSound.byLabel(map['alarmSound'] as String?).resource;
+      _sound = AlarmSound.byLabel(map['alarmSound'] as String?);
     } catch (_) {
       // Bozuk ayar: varsayılan ses.
     }
@@ -101,9 +121,7 @@ class AlarmNotifications {
       playSound: true,
       // Kullanıcının SEÇTİĞİ ses. Eskiden seçim hiç okunmuyordu ve dört
       // seçenek de aynı kaynağı çalıyordu (bkz. AlarmSound).
-      sound: customSound
-          ? RawResourceAndroidNotificationSound(soundResource)
-          : null,
+      sound: customSound ? _androidSound(soundResource) : null,
       audioAttributesUsage: AudioAttributesUsage.alarm,
       // Titreşim KANAL düzeyinde kapalı: uygulama içinde (AlarmRingingScreen)
       // yönetilir — böylece ayar anında etkiler ve durdurunca anında kesilir.

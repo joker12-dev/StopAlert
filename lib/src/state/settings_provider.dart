@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../data/alarm_sound.dart';
+
 import '../state/journey_provider.dart';
 
 import '../util/haptics.dart';
@@ -63,7 +65,12 @@ class AppSettings {
   final int defaultStopsIndex;
 
   /// Seçilebilir alarm sesleri (isimler; res/raw eşlemesi Faz 2'de genişler).
-  static const alarmSounds = ['Radar', 'Klasik Zil', 'Dalga', 'Sinyal'];
+  /// Seçilebilir alarm sesleri — TEK KAYNAK [AlarmSound.all].
+  ///
+  /// Burada ayrı bir liste tutmak iki yerin ayrışmasına yol açıyordu:
+  /// ayarlarda görünen "Dalga" ve "Sinyal" seçeneklerinin dosyası yoktu.
+  static List<String> get alarmSounds =>
+      [for (final s in AlarmSound.all) s.label];
 
   /// Seçilebilir erteleme süreleri (dakika).
   static const snoozeOptions = [3, 5, 10];

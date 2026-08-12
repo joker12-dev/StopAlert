@@ -13,6 +13,7 @@ import '../data/alarm_sound.dart';
 import '../services/alarm_sound_preview.dart';
 import '../services/journey_reminder.dart';
 import '../util/haptics.dart';
+import '../util/legal_links.dart';
 import '../util/platform_check.dart';
 import 'data_packages_screen.dart';
 import 'help_screen.dart';
@@ -556,6 +557,21 @@ class SettingsScreen extends ConsumerWidget {
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const PrivacyScreen()),
                 ),
+              ),
+              _SettingsTile(
+                icon: Icons.description_outlined,
+                title: 'Gizlilik Politikası (web)',
+                subtitle: 'Yayındaki tam metin',
+                trailing: const Icon(Icons.open_in_new_rounded,
+                    size: 18, color: VigilantColors.onSurfaceVariant),
+                onTap: () => LegalLinks.open(context, LegalLinks.privacy),
+              ),
+              _SettingsTile(
+                icon: Icons.gavel_rounded,
+                title: 'Kullanım Koşulları',
+                trailing: const Icon(Icons.open_in_new_rounded,
+                    size: 18, color: VigilantColors.onSurfaceVariant),
+                onTap: () => LegalLinks.open(context, LegalLinks.terms),
               ),
               _SettingsTile(
                 icon: Icons.delete_forever_outlined,

@@ -105,5 +105,12 @@
         <intent>
             <action android:name="android.speech.RecognitionService"/>
         </intent>
+        <!-- Gizlilik/kullanım metinlerini tarayıcıda açabilmek için.
+             Android 11+ paket görünürlüğü bu bildirim olmadan tarayıcıyı
+             bulamıyor ve bağlantı sessizce açılmıyor. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
+        </intent>
     </queries>
 </manifest>

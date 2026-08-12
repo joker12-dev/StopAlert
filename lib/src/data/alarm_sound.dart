@@ -2,17 +2,43 @@
 ///
 /// ÖNEMLİ: seçim eskiden hiçbir yere BAĞLI DEĞİLDİ — dört ad da bildirimde
 /// aynı `stopalert_alarm` kaynağını çalıyordu, yani ayar tamamen görseldi.
-/// Burada ad → dosya eşlemesi kuruldu; henüz dosyası olmayan seçenekler
-/// varsayılana düşüyor ve bu, [hasOwnFile] ile görünür kılınıyor.
+/// Burada ad → kaynak eşlemesi kuruldu.
 ///
-/// YENİ SES EKLEMEK: aynı adlı dosyayı İKİ yere koy —
-///   `android/app/src/main/res/raw/<resource>.wav`   (bildirim çalar)
-///   `assets/sounds/<resource>.wav`                  (uygulama içi önizleme)
-/// sonra buradaki [resource] alanını doldur.
+/// NEDEN "SES PAKETİ" İNDİRMİYORUZ: bir alarm uygulaması için en iyi ses
+/// zaten telefonun kendi alarm sesidir — kullanıcı onu tanıyor, uyandırıcı
+/// olduğu denenmiş, lisansı yok ve APK'yı büyütmüyor. Bu yüzden listede
+/// CİHAZIN kendi alarm/zil sesleri var; paketle gelen sesler yalnızca marka
+/// sesi ve tek bir dijital çalar saat.
+///
+/// YENİ PAKET SESİ EKLEMEK: aynı dosyayı İKİ yere koy —
+///   `android/app/src/main/res/raw/<resource>.<ext>`  (bildirim çalar)
+///   `assets/sounds/<resource>.<ext>`                 (uygulama içi önizleme)
+/// sonra buraya bir [AlarmSound] satırı ekle.
 library;
 
+/// Sesin nereden geldiği.
+enum AlarmSoundSource {
+  /// Uygulamayla gelen dosya (res/raw + assets).
+  bundled,
+
+  /// Cihazın sistem sesi (content:// URI). Dosya taşınmaz.
+  system,
+}
+
 class AlarmSound {
-  const AlarmSound(this.label, this.resource, {this.hasOwnFile = true});
+  const AlarmSound(
+    this.label,
+    this.resource, {
+    this.extension = 'wav',
+    this.source = AlarmSoundSource.bundled,
+    this.systemUri = '',
+  });
+
+  /// Cihazın kendi sesini kullanan seçenek.
+  const AlarmSound.system(this.label, this.systemUri)
+      : resource = fallback,
+        extension = 'wav',
+        source = AlarmSoundSource.system;
 
   /// Kullanıcıya görünen ad.
   final String label;
@@ -20,20 +46,37 @@ class AlarmSound {
   /// Android raw kaynağı / asset adı (uzantısız).
   final String resource;
 
-  /// Kendi dosyası var mı? false ise varsayılan ses çalar.
-  final bool hasOwnFile;
+  /// Dosya uzantısı — raw kaynağında uzantı yok ama asset yolunda gerekli.
+  final String extension;
 
-  String get assetPath => 'sounds/$resource.wav';
+  final AlarmSoundSource source;
+
+  /// Sistem sesinin içerik adresi (yalnızca [AlarmSoundSource.system]).
+  ///
+  /// Android bu adresleri sabit tutuyor:
+  ///   `content://settings/system/alarm_alert`        → varsayılan ALARM
+  ///   `content://settings/system/ringtone`           → varsayılan ZİL
+  ///   `content://settings/system/notification_sound` → bildirim sesi
+  final String systemUri;
+
+  /// Uygulama içi önizlemenin çalacağı yol.
+  String get assetPath => 'sounds/$resource.$extension';
+
+  /// Kendi dosyası var mı (arayüz "varsayılan çalar" notunu buna bakıyor).
+  ///
+  /// Sistem sesleri de gerçek bir ses çalıyor; not YALNIZCA dosyası olmayan
+  /// yer tutucu seçenekler için anlamlıydı ve artık öyle bir seçenek yok.
+  bool get hasOwnFile => true;
 
   static const fallback = 'stopalert_alarm';
 
   /// Sırayı bozma: kayıtlı ayarlar ADA göre çözülüyor.
   static const all = <AlarmSound>[
     AlarmSound('Radar', fallback),
-    // Aşağıdakilerin dosyası HENÜZ YOK; varsayılana düşüyorlar.
-    AlarmSound('Klasik Zil', fallback, hasOwnFile: false),
-    AlarmSound('Dalga', fallback, hasOwnFile: false),
-    AlarmSound('Sinyal', fallback, hasOwnFile: false),
+    AlarmSound('Klasik Zil', 'klasik_zil', extension: 'mp3'),
+    // CİHAZIN KENDİ SESLERİ: kullanıcının telefonunda ne seçiliyse o çalar.
+    AlarmSound.system('Telefon Alarmı', 'content://settings/system/alarm_alert'),
+    AlarmSound.system('Telefon Zili', 'content://settings/system/ringtone'),
   ];
 
   static AlarmSound byLabel(String? label) {

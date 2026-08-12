@@ -1,7 +1,7 @@
 name: stopalert
 description: Toplu tasimada inecegin duragi asla kacirma.
 publish_to: "none"
-version: 0.1.0+1
+version: 1.0.0+1
 
 environment:
   sdk: ">=3.5.0 <4.0.0"
@@ -20,6 +20,8 @@ dependencies:
   flutter_riverpod: ^2.6.1
   geolocator: ^14.0.3
   google_mobile_ads: ^9.0.0
+  # Gizlilik/kullanım metinlerini tarayıcıda açmak için (mağaza şartı).
+  url_launcher: ^6.3.1
   http: ^1.6.0
   crypto: ^3.0.6
   latlong2: ^0.10.1

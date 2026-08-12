@@ -1,9 +1,11 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../state/consent_provider.dart';
 import '../theme/app_theme.dart';
 import '../util/haptics.dart';
+import '../util/legal_links.dart';
 
 /// Kullanım koşulları + gizlilik/KVKK onayı — uygulamanın İLK ekranı.
 ///
@@ -37,6 +39,19 @@ class _ConsentScreenState extends ConsumerState<ConsentScreen> {
     if (!mounted) return;
     widget.onAccepted();
   }
+
+  /// Metne giden tıklanabilir bağlantı parçası.
+  TextSpan _linkSpan(BuildContext context, String label, String url) => TextSpan(
+        text: label,
+        style: const TextStyle(
+          color: VigilantColors.primary,
+          decoration: TextDecoration.underline,
+          decorationColor: VigilantColors.primary,
+          fontWeight: FontWeight.w700,
+        ),
+        recognizer: TapGestureRecognizer()
+          ..onTap = () => LegalLinks.open(context, url),
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -133,10 +148,24 @@ class _ConsentScreenState extends ConsumerState<ConsentScreen> {
                           Expanded(
                             child: Padding(
                               padding: const EdgeInsets.only(top: 12),
-                              child: Text(
-                                'Kullanım Koşulları’nı ve Gizlilik/KVKK '
-                                'Aydınlatma Metni’ni okudum, kabul ediyorum.',
-                                style: text.bodySmall?.copyWith(height: 1.4),
+                              // METİNLER OKUNABİLİR OLMALI: "okudum" diyen bir
+                              // onayın yanında metne gidecek bir yol yoksa o
+                              // onay geçerli sayılmaz.
+                              child: Text.rich(
+                                TextSpan(
+                                  style: text.bodySmall?.copyWith(height: 1.4),
+                                  children: [
+                                    _linkSpan(context, 'Kullanım Koşulları',
+                                        LegalLinks.terms),
+                                    const TextSpan(text: '’nı ve '),
+                                    _linkSpan(
+                                        context,
+                                        'Gizlilik/KVKK Aydınlatma Metni',
+                                        LegalLinks.privacy),
+                                    const TextSpan(
+                                        text: '’ni okudum, kabul ediyorum.'),
+                                  ],
+                                ),
                               ),
                             ),
                           ),

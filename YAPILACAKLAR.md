@@ -11,14 +11,11 @@ Bunlar bitmeden yayına çıkılamaz. Sıra, engelleyicilikten kolaya doğru.
       anahtarıyla imzalıyor (satır 39). Play Store debug anahtarıyla imzalı APK
       kabul etmez. Upload keystore üret, `android/key.properties` oluştur
       (`.gitignore`'a ekle), `signingConfigs.release` tanımla.
-- [ ] **Sürüm numarası.** `pubspec.yaml` → `0.1.0+1`. Yayın için anlamlı bir
-      sürüm (ör. `1.0.0+1`) belirle.
-- [ ] **Gizlilik Politikası ve Kullanım Koşulları METİNLERİ.** Rıza ekranı
-      (`consent_screen.dart`) özet maddeleri gösteriyor ama tam metin YOK ve
-      bağlantı YOK. Play Console'un Veri Güvenliği formu ile App Store
-      Privacy Nutrition Label herkese açık bir URL istiyor.
-      → Metinleri yaz, Firebase Hosting'de yayınla, rıza ekranından ve
-      Ayarlar'dan bağla.
+- [x] ~~Sürüm numarası~~ → `1.0.0+1`
+- [x] ~~Gizlilik Politikası ve Kullanım Koşulları METİNLERİ~~ — yayında:
+      https://stopalert-15716.web.app/gizlilik.html
+      https://stopalert-15716.web.app/kullanim-kosullari.html
+      Rıza ekranındaki onay satırından ve Ayarlar → Gizlilik'ten bağlı.
 - [ ] **Play Console Veri Güvenliği formu.** Toplanan veriler: konum
       (yaklaşık+kesin, arka plan), hesap kimliği (Google/Apple), yolculuk
       geçmişi, reklam kimliği. Formun kodla tutarlı doldurulması gerekiyor.
@@ -35,9 +32,9 @@ Bunlar bitmeden yayına çıkılamaz. Sıra, engelleyicilikten kolaya doğru.
 
 ## ⚠️ ÇIKMADAN ÖNCE YAPILMASI ÇOK İYİ OLUR
 
-- [ ] **Eksik alarm sesi dosyaları.** `Klasik Zil`, `Dalga`, `Sinyal` seçilebiliyor
-      ama dosyaları yok; üçü de varsayılana düşüyor (arayüz bunu yazıyor).
-      Ya sesleri ekle ya seçeneklerden kaldır.
+- [x] ~~Eksik alarm sesi dosyaları~~ — `Klasik Zil` gerçek dosyasına kavuştu;
+      dosyasız `Dalga`/`Sinyal` kaldırıldı; yerine CİHAZIN kendi sesleri
+      geldi (`Telefon Alarmı`, `Telefon Zili` — sistem URI'si, lisans yok).
 - [ ] **Crashlytics + Analytics.** Kurulu değil. Yayından sonra "alarm çalmadı"
       şikâyetini veri olmadan çözmek imkânsız.
 - [ ] **Yolculuk hatırlatma bildirimine dokununca** alarm kurulumu hazır

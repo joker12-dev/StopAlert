@@ -46,7 +46,10 @@ abstract final class AlarmSoundPreview {
           ),
         ),
       );
-      await _player.play(AssetSource(sound.assetPath));
+      // SİSTEM SESİ dosya değil, bir içerik adresi; asset olarak açılamaz.
+      await _player.play(sound.source == AlarmSoundSource.system
+          ? UrlSource(sound.systemUri)
+          : AssetSource(sound.assetPath));
     } catch (_) {
       // Ses çalınamazsa sessizce geç: önizleme kritik bir akış değil.
       playing.value = null;
