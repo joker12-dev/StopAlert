@@ -9,9 +9,7 @@ import '../screens/profile_screen.dart';
 import '../screens/search_screen.dart';
 import '../screens/stops_screen.dart';
 import '../theme/app_theme.dart';
-import 'ad_insets.dart';
 import 'anim.dart';
-import 'banner_ad_slot.dart';
 
 /// Sekme indeksleri — ÇAĞIRAN TARAF BU ADLARI KULLANIR.
 ///
@@ -59,13 +57,6 @@ class _BottomNavShellState extends ConsumerState<BottomNavShell> {
   // gereksiz sorgu açmaz. Ziyaret sonrası IndexedStack durumu korunur.
   final Set<int> _visited = {0};
 
-  /// Menüye yapışık banner reklamın yüksekliği (yüklenmediyse 0).
-  ///
-  /// Her sayfada ayrı banner yerine TEK banner var ve menüye yapışık duruyor;
-  /// bu değer [AdInsets] ile alt ağaca dağıtılıyor ki liste boşlukları onu
-  /// hesaba katsın.
-  double _bannerHeight = 0;
-
   Widget _screenFor(int i) => switch (i) {
         NavTab.home => const HomeScreen(),
         NavTab.lines => const SearchScreen(),
@@ -86,39 +77,23 @@ class _BottomNavShellState extends ConsumerState<BottomNavShell> {
     _visited.add(index);
     return Scaffold(
       extendBody: true,
-      body: AdInsets(
-        bannerHeight: _bannerHeight,
-        child: TabSwitchTransition(
+      body: TabSwitchTransition(
+        index: index,
+        child: IndexedStack(
           index: index,
-          child: IndexedStack(
-            index: index,
-            children: [
-              for (var i = 0; i < _tabs.length; i++)
-                _visited.contains(i) ? _screenFor(i) : const SizedBox.shrink(),
-            ],
-          ),
-        ),
-      ),
-      // BANNER + MENÜ TEK YÜZEY. Yuvarlatma en dıştan yapılır: menünün kendi
-      // yuvarlak köşeleri kalırsa banner ile menü arasında sayfanın arka planı
-      // sızıyor ve iki ayrı kutu gibi görünüyordu.
-      bottomNavigationBar: ClipRRect(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
           children: [
-            // Reklam MENÜYE YAPIŞIK: sayfa sayfa dolaşırken yerinde kalıyor,
-            // her sekmede yeniden yüklenmiyor ve içeriğin arasına girmiyor.
-            // Yüklenmezse hiç yer kaplamaz.
-            BannerAdSlot(
-              onHeight: (h) {
-                if (!mounted || h == _bannerHeight) return;
-                setState(() => _bannerHeight = h);
-              },
-            ),
-            _navBar(context),
+            for (var i = 0; i < _tabs.length; i++)
+              _visited.contains(i) ? _screenFor(i) : const SizedBox.shrink(),
           ],
         ),
+      ),
+      // BANNER YOK. Menüye yapışık banner denendi ve kaldırıldı: alt menü
+      // uygulamanın en çok dokunulan yeri, hemen üstüne reklam koymak yanlış
+      // dokunuşa davetiye çıkarıyor. Reklam artık yalnızca sayfa içlerinde,
+      // içeriğin sonunda ve çerçeveli (bkz. `NativeAdSlot`).
+      bottomNavigationBar: ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+        child: _navBar(context),
       ),
     );
   }

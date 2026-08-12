@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../widgets/ad_insets.dart';
-
 /// Alt kenar boşlukları — alt menü ve sistem navigasyon çubuğu payı.
 ///
 /// Alt menü (BottomNavShell) 80 px + sistem çubuğu kadar yer kaplar ve
@@ -16,14 +14,8 @@ abstract final class AppInsets {
   /// Menü `extendBody: true` ile içeriğin ÜSTÜNDE durduğu için son öğe menünün
   /// altında kalıyordu. 12 ve 32 px paylar hâlâ dar geldi; 56 px ile son kart
   /// menüden açıkça ayrılır.
-  /// Banner reklam ALT MENÜYE YAPIŞIK duruyor ve içeriğin üstünü örtüyor;
-  /// yüksekliği boşluğa eklenmezse her sekmenin son öğesi reklamın altında
-  /// kalır (bkz. [AdInsets]).
   static double listBottom(BuildContext context) =>
-      navBarHeight +
-      56 +
-      AdInsets.of(context) +
-      MediaQuery.viewPaddingOf(context).bottom;
+      navBarHeight + 56 + MediaQuery.viewPaddingOf(context).bottom;
 
   /// Alt menüsü OLMAYAN tam sayfa ekranlarda (push edilmiş) liste altı.
   static double pageBottom(BuildContext context) =>
