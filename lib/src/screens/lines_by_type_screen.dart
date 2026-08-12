@@ -79,7 +79,9 @@ class LinesByTypeScreen extends ConsumerStatefulWidget {
 }
 
 class _LinesByTypeScreenState extends ConsumerState<LinesByTypeScreen> {
-  List<TransitLineBrief> _lines = const [];
+  /// Hat + AİT OLDUĞU İL. Şehir seçimi kaldırıldı; liste kurulu bütün
+  /// illerin hatlarını taşıyor ve il rozette yazıyor.
+  List<(TransitLineBrief, TransitCity)> _lines = const [];
   bool _loading = true;
   String _filter = '';
   String? _loadedForCity;
@@ -97,46 +99,43 @@ class _LinesByTypeScreenState extends ConsumerState<LinesByTypeScreen> {
       _loadedForCity = city.id;
     });
 
-    // İKİ KAYNAK: otobüs/metrobüs (ve Kocaeli'de tramvay/vapur) indirilen
-    // SQLite paketinde; İstanbul'un ray/vapur hatları ayrı JSON'da.
-    // Kod bazında tekilleştirilir.
-    final byCode = <String, TransitLineBrief>{};
-    try {
-      for (final b in await TransitDb.instance.linesByType(widget.type.name)) {
-        byCode.putIfAbsent(b.code, () => b);
+    // KURULU BÜTÜN İLLER. Şehir seçimi kaldırıldı: kullanıcı bir ilde yaşayıp
+    // öbürüne gidiyor ve hangi ilde olduğunu uygulamaya söylemek zorunda
+    // kalması gereksiz bir ödevdi. Hattın hangi ile ait olduğu satırdaki
+    // rozette yazıyor.
+    await BusDataService.instance.openAllForLookup();
+    final byKey = <String, (TransitLineBrief, TransitCity)>{};
+    for (final c in TransitCities.all) {
+      try {
+        final rows =
+            await TransitDb.instance.linesByType(widget.type.name, cityId: c.id);
+        for (final b in rows) {
+          // Aynı kod iki ilde olabiliyor (147); ikisi de listelenir.
+          byKey.putIfAbsent('${c.id}|${b.code}', () => (b, c));
+        }
+      } catch (_) {
+        // O ilin paketi kurulu değil; ötekiler yine listelenir.
       }
-    } catch (_) {
-      // Paket yok: yalnızca gömülü hatlar listelenir.
     }
     final rail = ref.read(linesProvider).valueOrNull ?? const <TransitLine>[];
     for (final l in rail) {
       if (l.type != widget.type) continue;
-      byCode.putIfAbsent(
-        l.code,
-        () => TransitLineBrief(
-            id: l.id, code: l.code, name: l.name, type: l.type),
+      byKey.putIfAbsent(
+        '${city.id}|${l.code}',
+        () => (
+          TransitLineBrief(id: l.id, code: l.code, name: l.name, type: l.type),
+          city,
+        ),
       );
     }
 
-    final all = byCode.values.toList()
-      ..sort((a, b) => compareLineCodes(a.code, b.code));
+    final all = byKey.values.toList()
+      ..sort((a, b) => compareLineCodes(a.$1.code, b.$1.code));
     if (!mounted) return;
     setState(() {
       _lines = all;
       _loading = false;
     });
-  }
-
-  Future<void> _switchCity(TransitCity city) async {
-    if (city.id == ref.read(activeCityProvider).id) return;
-    Haptics.selection();
-    // Sağ üstten şehir değiştirmek BİLİNÇLİ bir seçimdir: kalıcı sabitlenir
-    // (bkz. CityNotifier.select), konumdan otomatik belirleme susar.
-    await ref.read(cityProvider.notifier).select(city);
-    await BusDataService.instance.ensureReady(city: city);
-    if (!mounted) return;
-    ref.invalidate(linesProvider);
-    await _load();
   }
 
   @override
@@ -153,8 +152,8 @@ class _LinesByTypeScreenState extends ConsumerState<LinesByTypeScreen> {
         ? _lines
         : [
             for (final l in _lines)
-              if (compactLineCode(l.code).contains(_compactQ(q)) ||
-                  transitNorm(l.name).contains(q))
+              if (compactLineCode(l.$1.code).contains(_compactQ(q)) ||
+                  transitNorm(l.$1.name).contains(q))
                 l,
           ];
 
@@ -166,51 +165,13 @@ class _LinesByTypeScreenState extends ConsumerState<LinesByTypeScreen> {
           children: [
             Text(widget.type.label),
             Text(
-              _loading ? 'yükleniyor…' : '${_lines.length} hat · ${city.name}',
+              _loading ? 'yükleniyor…' : '${_lines.length} hat',
               style: text.labelSmall
                   ?.copyWith(color: VigilantColors.onSurfaceVariant),
             ),
           ],
         ),
-        actions: [
-          // ŞEHİR seçici — kullanıcı Ayarlar'a gitmeden öteki ilin hatlarına
-          // bakabilsin.
-          PopupMenuButton<TransitCity>(
-            tooltip: 'Şehir',
-            onSelected: _switchCity,
-            itemBuilder: (context) => [
-              for (final c in TransitCities.all)
-                PopupMenuItem(
-                  value: c,
-                  child: Row(
-                    children: [
-                      Icon(
-                        c.id == city.id
-                            ? Icons.radio_button_checked
-                            : Icons.radio_button_unchecked,
-                        size: 18,
-                        color: c.id == city.id
-                            ? VigilantColors.primary
-                            : VigilantColors.onSurfaceVariant,
-                      ),
-                      const SizedBox(width: 10),
-                      Text(c.name),
-                    ],
-                  ),
-                ),
-            ],
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Row(
-                children: [
-                  const Icon(Icons.location_city_rounded, size: 18),
-                  const SizedBox(width: 6),
-                  Text(city.name, style: text.labelLarge),
-                  const Icon(Icons.arrow_drop_down, size: 20),
-                ],
-              ),
-            ),
-          ),
+        actions: const [
         ],
       ),
       body: Column(
@@ -242,7 +203,8 @@ class _LinesByTypeScreenState extends ConsumerState<LinesByTypeScreen> {
 
   String _compactQ(String norm) => norm.replaceAll(RegExp(r'[\s\-_.]'), '');
 
-  Widget _body(TextTheme text, List<TransitLineBrief> shown) {
+  Widget _body(
+      TextTheme text, List<(TransitLineBrief, TransitCity)> shown) {
     if (_loading) {
       return ListView(
         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -277,12 +239,21 @@ class _LinesByTypeScreenState extends ConsumerState<LinesByTypeScreen> {
       itemCount: shown.length,
       separatorBuilder: (_, __) => const SizedBox(height: 10),
       itemBuilder: (context, i) => _LineTile(
-        brief: shown[i],
+        brief: shown[i].$1,
+        city: shown[i].$2,
+        // İL ROZETİ yalnızca birden çok il kuruluysa: tek ilde herkes zaten
+        // hangi ilde olduğunu biliyor, her satıra yazmak gürültü olurdu.
+        showCity: _lines.map((e) => e.$2.id).toSet().length > 1,
         onTap: () {
           Haptics.light();
           Navigator.of(context).push(MaterialPageRoute(
-            builder: (_) =>
-                LineDetailScreen(code: shown[i].code, type: shown[i].type),
+            builder: (_) => LineDetailScreen(
+              code: shown[i].$1.code,
+              type: shown[i].$1.type,
+              city: shown[i].$2.id == ref.read(activeCityProvider).id
+                  ? null
+                  : shown[i].$2,
+            ),
           ));
         },
       ),
@@ -291,9 +262,18 @@ class _LinesByTypeScreenState extends ConsumerState<LinesByTypeScreen> {
 }
 
 class _LineTile extends StatelessWidget {
-  const _LineTile({required this.brief, required this.onTap});
+  const _LineTile({
+    required this.brief,
+    required this.city,
+    required this.showCity,
+    required this.onTap,
+  });
 
   final TransitLineBrief brief;
+  final TransitCity city;
+
+  /// Birden çok il kuruluysa satırda il rozeti gösterilir.
+  final bool showCity;
   final VoidCallback onTap;
 
   @override
@@ -329,11 +309,33 @@ class _LineTile extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  brief.name,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: text.bodyMedium,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      brief.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: text.bodyMedium,
+                    ),
+                    if (showCity)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 3),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.location_city_rounded,
+                                size: 11,
+                                color: VigilantColors.onSurfaceVariant),
+                            const SizedBox(width: 4),
+                            Text(city.name,
+                                style: text.labelSmall?.copyWith(
+                                    color: VigilantColors.onSurfaceVariant)),
+                          ],
+                        ),
+                      ),
+                  ],
                 ),
               ),
               const SizedBox(width: 6),

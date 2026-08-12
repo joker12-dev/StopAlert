@@ -23,6 +23,7 @@ import '../widgets/anim.dart';
 import '../widgets/bottom_nav_shell.dart';
 import '../widgets/glass_panel.dart';
 import '../widgets/mascot.dart';
+import '../widgets/permission_required_sheet.dart';
 import '../widgets/skeleton.dart';
 import '../widgets/traffic_strip.dart';
 import 'alarm_setup_screen.dart';
@@ -60,11 +61,6 @@ class HomeScreen extends ConsumerWidget {
     final nickname =
         ref.watch(settingsProvider).valueOrNull?.nickname ?? 'Yolcu';
 
-    void goToRoutes() {
-      Haptics.light();
-      ref.read(bottomNavIndexProvider.notifier).state = NavTab.lines;
-    }
-
     /// Arama kutusu DURAKLAR'a gider, Hatlar'a değil.
     ///
     /// Kutunun vaadi "ineceğin durağı ara" — uygulamanın işi de durak alarmı.
@@ -99,7 +95,10 @@ class HomeScreen extends ConsumerWidget {
             EntranceFade(
               delayMs: 120,
               child: _NearbyCard(
-                onStart: goToRoutes,
+                // ALARM KURMANIN YOLU DURAKTAN GEÇİYOR: kullanıcı "nereye
+                // gideceğim" değil "nerede ineceğim" sorusunu çözüyor.
+                // Hat listesine düşürmek bir adım fazlaydı.
+                onStart: goToStops,
                 onOpenStop: (line, stop) => _openStop(context, ref, line, stop),
                 onMap: () {
                   Haptics.light();
@@ -119,7 +118,7 @@ class HomeScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 28),
-            EntranceFade(delayMs: 220, child: _PromoHero(onStart: goToRoutes)),
+            EntranceFade(delayMs: 220, child: _PromoHero(onStart: goToStops)),
             const SizedBox(height: 28),
             // Şehir trafik yoğunlukları (İstanbul canlı, diğerleri yer tutucu).
             // Trafik yoğunluğu İBB servisinden geliyor — yalnızca İstanbul.
@@ -129,7 +128,7 @@ class HomeScreen extends ConsumerWidget {
             ..._buildSuggestionSection(context, ref, text),
             const SizedBox(height: 28),
             ..._buildFavoritesSection(context, ref, text),
-            ..._buildRecentSection(context, ref, text, goToRoutes),
+            ..._buildRecentSection(context, ref, text, goToStops),
                 const SizedBox(height: 16),
                   ],
             ),
@@ -180,7 +179,7 @@ class HomeScreen extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
     TextTheme text,
-    VoidCallback goToRoutes,
+    VoidCallback goToStops,
   ) {
     final async = ref.watch(journeysStreamProvider);
     final journeys = async.valueOrNull;
@@ -228,7 +227,7 @@ class HomeScreen extends ConsumerWidget {
     return [
       _SectionHeader(title: 'Son Yolculuklar'),
       const SizedBox(height: 12),
-      _EmptyJourneys(onStart: goToRoutes),
+      _EmptyJourneys(onStart: goToStops),
     ];
   }
 
@@ -364,6 +363,11 @@ class HomeScreen extends ConsumerWidget {
                 'şehir paketini Ayarlar’dan indir.')));
       return;
     }
+    // FAVORİDEN BAŞLATMA DA İZİN İSTER. Bu yol alarm kurulum ekranını
+    // atlıyor ve izin kontrolü orada yapılıyordu; izinsiz başlayan yolculukta
+    // alarm sessizce hiç çalmıyordu.
+    if (!await PermissionRequiredSheet.ensure(context)) return;
+    if (!context.mounted) return;
     ref.read(journeyDraftProvider.notifier)
       ..reset()
       ..selectLine(line)
@@ -1395,9 +1399,17 @@ class _EmptyJourneys extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const SizedBox(
-            width: 58,
-            child: AnimatedMascot(MascotAssets.poseHarita, height: 64),
+          // ÇİZİM DEĞİL İKON: kart küçük ve mesaj tek satır; maskot burada
+          // ne anlatıyor belli olmuyordu.
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              color: VigilantColors.primary.withValues(alpha: 0.13),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: const Icon(Icons.route_rounded,
+                size: 26, color: VigilantColors.primary),
           ),
           const SizedBox(width: 14),
           Expanded(

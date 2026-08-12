@@ -1,13 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../data/transit_city.dart';
 import '../services/account_service.dart';
 import '../services/auth_service.dart';
-import '../services/bus_data_service.dart';
 import '../services/prediction_log.dart';
 import '../services/segment_learning_store.dart';
-import '../state/city_provider.dart';
 import '../state/journey_provider.dart';
 import '../state/settings_provider.dart';
 import '../theme/app_theme.dart';
@@ -276,87 +273,6 @@ class SettingsScreen extends ConsumerWidget {
     }
   }
 
-  /// Şehir seçimi. "Otomatik" seçeneği elle sabitlemeyi kaldırır ve şehir
-  /// yeniden konumdan belirlenir — İstanbul-Kocaeli arası gidip gelenler için.
-  Future<void> _pickCity(BuildContext context, WidgetRef ref) async {
-    Haptics.light();
-    final active = ref.read(activeCityProvider);
-    final manual = await ref.read(cityProvider.notifier).isManual();
-    if (!context.mounted) return;
-    final choice = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: VigilantColors.surfaceContainer,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) {
-        final t = Theme.of(context).textTheme;
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 18, 20, 6),
-                child: Row(
-                  children: [
-                    Text('Şehir',
-                        style: t.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w800)),
-                  ],
-                ),
-              ),
-              ListTile(
-                leading: Icon(Icons.my_location_rounded,
-                    color: manual
-                        ? VigilantColors.onSurfaceVariant
-                        : VigilantColors.primary),
-                title: const Text('Otomatik (konuma göre)'),
-                subtitle: Text('Şu an: ${active.name}',
-                    style: t.labelSmall
-                        ?.copyWith(color: VigilantColors.onSurfaceVariant)),
-                trailing: manual
-                    ? null
-                    : const Icon(Icons.check_rounded,
-                        color: VigilantColors.primary),
-                onTap: () => Navigator.pop(context, '_auto'),
-              ),
-              const Divider(height: 1),
-              for (final c in TransitCities.all)
-                ListTile(
-                  leading: Icon(Icons.location_city_rounded,
-                      color: manual && c.id == active.id
-                          ? VigilantColors.primary
-                          : VigilantColors.onSurfaceVariant),
-                  title: Text(c.name),
-                  subtitle: Text(c.attribution,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: t.labelSmall
-                          ?.copyWith(color: VigilantColors.onSurfaceVariant)),
-                  trailing: manual && c.id == active.id
-                      ? const Icon(Icons.check_rounded,
-                          color: VigilantColors.primary)
-                      : null,
-                  onTap: () => Navigator.pop(context, c.id),
-                ),
-              const SizedBox(height: 8),
-            ],
-          ),
-        );
-      },
-    );
-    if (choice == null) return;
-    final notifier = ref.read(cityProvider.notifier);
-    if (choice == '_auto') {
-      await notifier.useAutomatic();
-    } else {
-      await notifier.select(TransitCities.byId(choice));
-    }
-    // Yeni şehrin paketini aç (yoksa indirir).
-    await BusDataService.instance
-        .ensureReady(city: ref.read(activeCityProvider));
-  }
-
   Future<void> _pickMapStyle(
       BuildContext context, WidgetRef ref, AppSettings s) async {
     final choice = await showModalBottomSheet<String>(
@@ -436,10 +352,10 @@ class SettingsScreen extends ConsumerWidget {
                   height: 64,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: VigilantColors.accentBlue.withValues(alpha: 0.2),
+                    color: VigilantColors.primary.withValues(alpha: 0.2),
                   ),
                   child: const Icon(Icons.account_circle,
-                      size: 40, color: VigilantColors.accentBlue),
+                      size: 40, color: VigilantColors.primary),
                 ),
                 const SizedBox(width: 16),
                 Column(
@@ -607,23 +523,15 @@ class SettingsScreen extends ConsumerWidget {
             ],
           ),
           _Section(
-            title: 'ŞEHİR & VERİ',
+            title: 'VERİ',
             children: [
-              _SettingsTile(
-                icon: Icons.location_city_rounded,
-                title: 'Şehir',
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(ref.watch(activeCityProvider).name,
-                        style: text.labelMedium
-                            ?.copyWith(color: VigilantColors.onSurfaceVariant)),
-                    const Icon(Icons.chevron_right,
-                        color: VigilantColors.onSurfaceVariant),
-                  ],
-                ),
-                onTap: () => _pickCity(context, ref),
-              ),
+              // ŞEHİR SEÇİMİ YOK.
+              //
+              // Kullanıcı bir ilde yaşayıp öbürüne gidiyor; hangi ilde
+              // olduğunu uygulamaya söylemek zorunda kalması gereksiz bir
+              // ödevdi ve unutulduğunda arama yanlış ilde çalışıyordu. İndirilen
+              // bütün paketler her yerde geçerli; hangi ile bakıldığı sonuçların
+              // yanındaki rozette yazıyor.
               _SettingsTile(
                 icon: Icons.sim_card_download_outlined,
                 title: 'Veri Paketleri',
@@ -788,7 +696,7 @@ class _LearningSection extends ConsumerWidget {
             child: Text(
               'ÖĞRENME',
               style: text.labelLarge?.copyWith(
-                color: VigilantColors.accentBlue,
+                color: VigilantColors.primary,
                 letterSpacing: 1.2,
               ),
             ),
@@ -1083,7 +991,7 @@ class _Section extends StatelessWidget {
             child: Text(
               title,
               style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: VigilantColors.accentBlue,
+                    color: VigilantColors.primary,
                     letterSpacing: 1.2,
                   ),
             ),
@@ -1361,7 +1269,7 @@ class _SignInSheet extends StatelessWidget {
             const SizedBox(height: 18),
             const _SheetRow(
               icon: Icons.cloud_download_rounded,
-              color: VigilantColors.accentBlue,
+              color: VigilantColors.primary,
               title: 'Geri gelenler',
               detail: 'Favori rotaların, son aramaların, yolculuk geçmişin '
                   've profil ayarların',

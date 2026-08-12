@@ -19,6 +19,7 @@ import '../util/insets.dart';
 import '../util/haptics.dart';
 import '../util/turkish.dart';
 import 'alarm_setup_screen.dart';
+import 'line_detail_screen.dart';
 import 'live_bus_screen.dart';
 import 'nearby_map_screen.dart';
 
@@ -315,7 +316,19 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
     ];
   }
 
+  /// Hattın kendi sayfası (duraklar, yön, sefer saatleri).
+  void _openLinePage(TransitLineBrief brief) {
+    Haptics.light();
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) =>
+          LineDetailScreen(code: brief.code, city: city, type: brief.type),
+    ));
+  }
+
   /// Bu otobüsü haritada TEK BAŞINA göster.
+  ///
+  /// Bakılan DURAK da haritada işaretli kalır: aracın nerede olduğu tek
+  /// başına bir şey söylemiyor, asıl soru "bana ne kadar kaldı".
   void _openBusOnMap(_Arrival a) {
     Haptics.light();
     Navigator.of(context).push(MaterialPageRoute(
@@ -323,6 +336,7 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
         line: a.line,
         city: city,
         focusPlate: a.estimate.vehicle.plate,
+        highlightStopId: stop.id,
       ),
     ));
   }
@@ -397,11 +411,9 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
         for (final a in _arrivals.take(6)) ...[
           _ArrivalRow(
             arrival: a,
-            // Karta dokunmak O OTOBÜSÜ haritada açar; alarm kurmak için
-            // aşağıdaki hat listesi var. Yaklaşan bir otobüse bakan kişi
-            // önce "nerede kalmış" diye merak ediyor.
-            onTap: () => _openBusOnMap(a),
+            onLive: () => _openBusOnMap(a),
             onAlarm: () => _pick(context, ref, a.brief),
+            onInfo: () => _openLinePage(a.brief),
           ),
           const SizedBox(height: 8),
         ],
@@ -710,17 +722,21 @@ class _LineChip extends StatelessWidget {
 class _ArrivalRow extends StatelessWidget {
   const _ArrivalRow({
     required this.arrival,
-    required this.onTap,
+    required this.onLive,
     required this.onAlarm,
+    required this.onInfo,
   });
 
   final _Arrival arrival;
 
-  /// Kart gövdesi: otobüsü haritada göster.
-  final VoidCallback onTap;
+  /// Aracın canlı konumunu haritada aç.
+  final VoidCallback onLive;
 
-  /// Sağdaki düğme: bu hatla bu durağa alarm kur.
+  /// Bu hatla bu durağa alarm kur.
   final VoidCallback onAlarm;
+
+  /// Hattın kendi sayfasını aç (duraklar, yön, sefer saatleri).
+  final VoidCallback onInfo;
 
   /// Orta tahmini dakikaya çevirir.
   String get _minutes {
@@ -738,15 +754,22 @@ class _ArrivalRow extends StatelessWidget {
         imminent ? VigilantColors.secondary : VigilantColors.onSurface;
     final plate = e.vehicle.plate.trim();
 
-    return Material(
-      color: VigilantColors.surfaceContainer,
-      borderRadius: BorderRadius.circular(18),
-      child: InkWell(
-        onTap: onTap,
+    // KARTIN TAMAMI TIKLANMIYOR.
+    //
+    // Eskiden karta dokunmak doğrudan canlı konumu açıyordu; kullanıcı
+    // alarm kurmak ya da hattın sayfasına gitmek istediğinde yanlış yere
+    // düşüyordu. Üç eylem de artık kendi düğmesinde ve adı yazılı.
+    return Container(
+      decoration: BoxDecoration(
+        color: VigilantColors.surfaceContainer,
         borderRadius: BorderRadius.circular(18),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
-          child: Row(
+      ),
+      child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 12, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+          Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
@@ -805,27 +828,102 @@ class _ArrivalRow extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Otobüsün hattaki ilerleyişi: kaç durak kaldığını tek
-                  // bakışta veren dikey gösterge.
-                  _StopsAwayGauge(stopsAway: e.stopsAway, accent: accent),
-                  const SizedBox(height: 6),
-                  IconButton(
-                    onPressed: onAlarm,
-                    visualDensity: VisualDensity.compact,
-                    tooltip: 'Bu hatla alarm kur',
-                    icon: const Icon(Icons.alarm_add_rounded,
-                        size: 20, color: VigilantColors.primary),
-                  ),
-                ],
+              // Otobüsün hattaki ilerleyişi: kaç durak kaldığını tek
+              // bakışta veren dikey gösterge.
+              _StopsAwayGauge(stopsAway: e.stopsAway, accent: accent),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _ArrivalAction(
+                  icon: Icons.alarm_add_rounded,
+                  label: 'Alarm kur',
+                  filled: true,
+                  onTap: onAlarm,
+                ),
               ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _ArrivalAction(
+                  icon: Icons.my_location_rounded,
+                  label: 'Canlı konum',
+                  onTap: onLive,
+                ),
+              ),
+              const SizedBox(width: 8),
+              _ArrivalAction(
+                icon: Icons.info_outline_rounded,
+                tooltip: 'Hat sayfası',
+                onTap: onInfo,
+              ),
+            ],
+          ),
+            ],
+          ),
+      ),
+    );
+  }
+}
+
+/// Yaklaşan araç kartındaki tek eylem düğmesi.
+///
+/// [label] verilmezse yalnızca simge çizilir (dar "i" düğmesi).
+class _ArrivalAction extends StatelessWidget {
+  const _ArrivalAction({
+    required this.icon,
+    required this.onTap,
+    this.label,
+    this.tooltip,
+    this.filled = false,
+  });
+
+  final IconData icon;
+  final String? label;
+  final String? tooltip;
+  final bool filled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final fg = filled ? VigilantColors.onPrimary : VigilantColors.primary;
+    final button = Material(
+      color: filled
+          ? VigilantColors.primary
+          : VigilantColors.primary.withValues(alpha: 0.12),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: () {
+          Haptics.light();
+          onTap();
+        },
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+              horizontal: label == null ? 12 : 10, vertical: 9),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 16, color: fg),
+              if (label case final l?) ...[
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(l,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: text.labelMedium
+                          ?.copyWith(color: fg, fontWeight: FontWeight.w700)),
+                ),
+              ],
             ],
           ),
         ),
       ),
     );
+    return tooltip == null ? button : Tooltip(message: tooltip!, child: button);
   }
 }
 

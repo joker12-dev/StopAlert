@@ -29,7 +29,10 @@ Widget _app() => ProviderScope(
 void main() {
   setUp(() {
     // Onboarding'i tamamlanmış say ki testler doğrudan ana ekrana açılsın.
-    SharedPreferences.setMockInitialValues({'onboarding_done_v1': true});
+    // Rıza ekranı uygulamanın İLK kapısı; testler ana akışı denediği
+    // için onay verilmiş sayılır.
+    SharedPreferences.setMockInitialValues(
+        {'onboarding_done_v1': true, 'consent_accepted_v1': true});
     // Sürekli animasyonları kapat (pumpAndSettle kilitlenmesin).
     AppAnim.enabled = false;
   });

@@ -129,11 +129,13 @@ class _RouteMapScreenState extends ConsumerState<RouteMapScreen> {
   }
 
   Future<void> _loadRoad() async {
-    // OSRM yalnızca karayolu hatlarında anlamlı: ray kendi rayında, vapur
-    // denizde gider ve yola oturtmak absürt bir çizgi üretir.
-    if (_line.type != LineType.bus && _line.type != LineType.metrobus) {
-      return;
-    }
+    // OSRM yalnızca NORMAL otobüste anlamlı.
+    //
+    // Metrobüs de dışarıda: kendi ayrılmış yolundan gidiyor ve OSRM onu
+    // yandaki D-100 şeritlerine oturtunca güzergâh gerçekte olmadığı yerlerden
+    // geçiyor, kavşaklarda saçma sapan kıvrılıyordu. Duraklar arası düz çizgi
+    // metrobüs yolunu gerçeğe çok daha yakın veriyor.
+    if (_line.type != LineType.bus) return;
     final pts = _stopPoints;
     if (pts.length < 2) return;
     final road = await RoutingService.instance.route(pts);

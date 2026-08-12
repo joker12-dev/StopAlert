@@ -15,6 +15,7 @@ import '../state/journey_provider.dart';
 import '../state/live_location_provider.dart';
 import '../theme/app_theme.dart';
 import '../util/haptics.dart';
+import '../util/insets.dart';
 import '../util/latlng_guard.dart';
 import '../util/map_settle.dart';
 import '../util/map_style.dart';
@@ -894,7 +895,19 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
                 : stops.isEmpty
                     ? _empty(text, hasNearest)
                     : ListView.separated(
-                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+                        // ALT MENÜ PAYI: panel ekranın altına yapışık ve
+                        // menü onun üstünde duruyor; sabit 24 px ile son
+                        // durak menünün altında kalıyordu.
+                        padding: EdgeInsets.fromLTRB(
+                            16,
+                            4,
+                            16,
+                            widget.embedded
+                                ? AppInsets.navBarHeight +
+                                    24 +
+                                    MediaQuery.viewPaddingOf(context)
+                                        .bottom
+                                : 24),
                         itemCount: stops.length,
                         separatorBuilder: (_, __) => const SizedBox(height: 8),
                         itemBuilder: (context, i) {

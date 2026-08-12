@@ -30,7 +30,10 @@ Widget _app() => ProviderScope(
 
 void main() {
   setUp(() {
-    SharedPreferences.setMockInitialValues({'onboarding_done_v1': true});
+    // Rıza ekranı uygulamanın İLK kapısı; testler ana akışı denediği
+    // için onay verilmiş sayılır.
+    SharedPreferences.setMockInitialValues(
+        {'onboarding_done_v1': true, 'consent_accepted_v1': true});
     AppAnim.enabled = false;
   });
 
@@ -66,7 +69,9 @@ void main() {
     await tester.tap(find.text('Yolculuk Yap'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Nerede İneceksin?'), findsOneWidget);
+    // DURAKLAR sekmesine gider, Hatlar'a değil: alarm kurmanın yolu duraktan
+    // geçiyor ve hat listesi arada fazladan bir adımdı.
+    expect(find.text('Durak ara…'), findsOneWidget);
   });
 
   testWidgets('Yakındaki durak dokunuşu Alarm Kur açar', (tester) async {

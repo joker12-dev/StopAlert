@@ -39,7 +39,7 @@ import 'permission_gate_screen.dart';
 /// Web'de uygulama içi motoru, Android'de GERÇEK arka plan servisini sürer
 /// (bildirim + alarm + tam ekran intent dahil uçtan uca test). Mağaza
 /// sürümünde kapatmak için false yap.
-const bool kShowSimulateButton = true;
+const bool kShowSimulateButton = false;
 
 /// Canlı Takip — konum motoruyla beslenen canlı yolculuk ekranı.
 ///
@@ -799,6 +799,9 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                 Expanded(
                   child: Text('Canlı Takip', style: text.titleLarge),
                 ),
+                // SİMÜLASYON DÜĞMELERİ YAYINDA GİZLİ (kShowSimulateButton
+                // false): geliştirme aracıydı, yolcuya "yolculuğu simüle et"
+                // demek kafa karıştırıyor. Geliştirirken bayrağı açmak yeter.
                 if (kShowSimulateButton && !_simulating) ...[
                   _IconAction(
                     tooltip: 'Simüle et (test)',

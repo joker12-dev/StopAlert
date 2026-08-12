@@ -20,10 +20,11 @@ import '../services/journey_reminder.dart';
 import '../theme/app_theme.dart';
 import '../util/haptics.dart';
 import '../util/platform_check.dart';
+import '../widgets/map_style_sheet.dart';
 import '../widgets/mascot.dart';
+import '../widgets/permission_required_sheet.dart';
 import '../widgets/route_map.dart';
 import 'live_tracking_screen.dart';
-import 'permission_gate_screen.dart';
 
 /// Alarm Kur — Stitch "Alarm Kur (Harita Odaklı)" portu.
 /// Üst yarıda gerçek harita (OpenStreetMap), altta tetiklenme mesafesi ve
@@ -108,6 +109,11 @@ class _AlarmSetupScreenState extends ConsumerState<AlarmSetupScreen> {
         }
       }
     }
+  }
+
+  /// Harita görünümü seçici — ortak sayfa (bkz. widgets/map_style_sheet.dart).
+  Future<void> _pickMapStyle() async {
+    if (await pickMapStyle(context, ref) && mounted) setState(() {});
   }
 
   Future<void> _loadLocation() async {
@@ -239,17 +245,11 @@ class _AlarmSetupScreenState extends ConsumerState<AlarmSetupScreen> {
     if (report.criticalGranted) return true;
     if (!mounted) return false;
 
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => PermissionGateScreen(
-          onCompleted: () {
-            if (Navigator.of(context).canPop()) {
-              Navigator.of(context).pop();
-            }
-          },
-        ),
-      ),
-    );
+    // TAM SAYFA KAPI YERİNE SAYFA İÇİ AÇIKLAMA. Kapı ekranı bütün izinleri
+    // baştan anlatıyor; buraya gelen kullanıcı zaten alarm kurmak üzere ve
+    // yalnızca EKSİK olanı, sebebiyle birlikte görmeli.
+    await PermissionRequiredSheet.ensure(context);
+    if (!mounted) return false;
 
     report = await service.check();
     if (report.criticalGranted) return true;
@@ -258,8 +258,8 @@ class _AlarmSetupScreenState extends ConsumerState<AlarmSetupScreen> {
         ..hideCurrentSnackBar()
         ..showSnackBar(const SnackBar(
           content: Text(
-            '"Her zaman izin ver" ve tam ekran alarm izni olmadan '
-            'arka plan alarmı başlatılamaz.',
+            'İzinler tamamlanmadan alarm çalamaz — durağı kaçırmaman için '
+            'alarm kurulmadı.',
           ),
         ));
     }
@@ -327,6 +327,14 @@ class _AlarmSetupScreenState extends ConsumerState<AlarmSetupScreen> {
                                     ),
                                   ),
                                 ),
+                                // Harita görünümü — öteki haritalarda vardı,
+                                // burada yoktu ve kullanıcı uydu görünümünü
+                                // tam da durak seçerken istiyor.
+                                _CircleButton(
+                                  icon: Icons.layers_rounded,
+                                  onTap: _pickMapStyle,
+                                ),
+                                const SizedBox(width: 8),
                                 _CircleButton(
                                   icon: Icons.my_location,
                                   onTap: _loadLocation,

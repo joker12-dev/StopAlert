@@ -56,13 +56,29 @@ class FavoritesRepository {
     return _db.collection('users').doc(uid).collection('favorites');
   }
 
-  Future<void> add(FavoriteRoute route) async {
+  /// Rotayı favorilere ekler — AYNISI VARSA HİÇBİR ŞEY YAPMAZ.
+  ///
+  /// Aynı hattın aynı biniş-iniş çifti ikinci kez eklenebiliyordu: kullanıcı
+  /// aynı yolculuğu her tekrarladığında listeye bir kopya daha düşüyor ve
+  /// favoriler birkaç günde aynı rotanın kopyalarıyla doluyordu.
+  ///
+  /// Dönen değer: kayıt gerçekten eklendi mi (false = zaten vardı).
+  Future<bool> add(FavoriteRoute route) async {
     final col = _collectionFor(_auth.currentUser?.uid);
-    if (col == null) return;
+    if (col == null) return false;
     try {
+      final existing = await col
+          .where('lineId', isEqualTo: route.lineId)
+          .where('boardingStopId', isEqualTo: route.boardingStopId)
+          .where('targetStopId', isEqualTo: route.targetStopId)
+          .limit(1)
+          .get();
+      if (existing.docs.isNotEmpty) return false;
       await col.add(route.toMap());
+      return true;
     } catch (e) {
       debugPrint('[favorites] ekleme hatası: $e');
+      return false;
     }
   }
 

@@ -9,6 +9,7 @@ import 'src/data/models.dart';
 import 'src/data/transit_city.dart';
 import 'src/screens/data_bootstrap_screen.dart';
 import 'src/screens/live_tracking_screen.dart';
+import 'src/screens/consent_screen.dart';
 import 'src/screens/onboarding_screen.dart';
 import 'src/screens/permission_gate_screen.dart';
 import 'src/services/ad_service.dart';
@@ -23,6 +24,7 @@ import 'src/services/telemetry.dart';
 import 'src/services/tracking_service.dart';
 import 'src/state/city_provider.dart';
 import 'src/state/journey_provider.dart';
+import 'src/state/consent_provider.dart';
 import 'src/state/onboarding_provider.dart';
 import 'src/state/settings_provider.dart';
 import 'src/theme/app_theme.dart';
@@ -254,6 +256,17 @@ class _RootGateState extends ConsumerState<_RootGate>
 
   @override
   Widget build(BuildContext context) {
+    // RIZA HER ŞEYDEN ÖNCE. Konum izni istemeden, hesap açmadan ve reklam
+    // göstermeden önce kullanıcı verisinin nasıl işlendiğini kabul etmiş
+    // olmalı; mağazaların veri güvenliği beyanları da bunu gerektiriyor.
+    final consent = ref.watch(consentProvider);
+    if (consent.valueOrNull == false) {
+      return ConsentScreen(onAccepted: () {
+        if (mounted) setState(() {});
+      });
+    }
+    if (consent.valueOrNull == null) return const _Splash();
+
     final onboarding = ref.watch(onboardingProvider);
     return onboarding.when(
       loading: () => const _Splash(),

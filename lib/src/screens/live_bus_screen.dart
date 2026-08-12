@@ -36,7 +36,15 @@ class LiveBusScreen extends ConsumerStatefulWidget {
     required this.line,
     this.city,
     this.focusPlate,
+    this.highlightStopId,
   });
+
+  /// Haritada AYRICA vurgulanacak durak.
+  ///
+  /// Durak sayfasından "canlı konum" ile gelindiğinde kullanıcının derdi
+  /// aracın nerede olduğu değil, KENDİ DURAĞINA ne kadar kaldığı. İkisini
+  /// birlikte görmeden bu soru cevaplanmıyordu.
+  final String? highlightStopId;
 
   /// Verilirse haritada YALNIZCA bu kapı numaralı araç gösterilir.
   ///
@@ -110,6 +118,17 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen> {
   void initState() {
     super.initState();
     _line = widget.line;
+    // Durak sayfasından gelindiyse o durak SEÇİLİ açılır: haritada işaretli
+    // durur, adı yazar ve alt kartta "alarm kur" kısayolu çıkar.
+    final hid = widget.highlightStopId;
+    if (hid != null) {
+      for (final st in _line.stops) {
+        if (st.id == hid) {
+          _selectedStop = st;
+          break;
+        }
+      }
+    }
     _rebuildGeometry();
     _load();
     _loadRoad();
@@ -330,6 +349,22 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen> {
   }
 
   void _fit() {
+    // TEK ARACA ODAKLANILDIYSA çerçeve aracı ve bakılan durağı kapsar;
+    // hattın tamamını sığdırmak ikisini de nokta hâline getiriyordu.
+    final focus = widget.focusPlate?.trim();
+    if (focus != null && focus.isNotEmpty) {
+      final pts = onlyUsable([
+        for (final v in _shown) LatLng(v.lat, v.lon),
+        if (_selectedStop case final st?) LatLng(st.lat, st.lon),
+      ]);
+      if (_mapReady && pts.isNotEmpty) {
+        _map.fitCamera(CameraFit.bounds(
+          bounds: LatLngBounds.fromPoints(pts),
+          padding: const EdgeInsets.fromLTRB(70, 130, 70, 230),
+        ));
+        return;
+      }
+    }
     final pts = onlyUsable([
       ..._routePoints,
       for (final v in _shown) LatLng(v.lat, v.lon),

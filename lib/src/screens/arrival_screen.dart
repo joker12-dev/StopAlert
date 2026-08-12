@@ -66,7 +66,16 @@ class _ArrivalScreenState extends ConsumerState<ArrivalScreen> {
       return;
     }
     setState(() => _favorited = true);
-    await ref.read(favoritesRepositoryProvider).add(favorite);
+    final added = await ref.read(favoritesRepositoryProvider).add(favorite);
+    if (!mounted) return;
+    if (!added) {
+      // Sessizce yutmak "eklendi" izlenimi bırakıyordu; oysa liste değişmedi.
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(
+          content: Text('Bu rota zaten favorilerinde.'),
+        ));
+    }
     if (mounted) {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
