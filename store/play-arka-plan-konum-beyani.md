@@ -50,6 +50,18 @@ bir ekran kaydı. Play'in aradığı üç şey videoda görünmeli:
 | 20-25 | Yolculuk başlar, **ekran kilitlenir** — kilit ekranındaki takip bildirimi görünür | Arka plan erişiminin nedeni burada görünüyor |
 | 25-30 | Durağa yaklaşınca **tam ekran alarm çalar** | Özelliğin sonucu |
 
+**Alarmı otobüse binmeden çaldırmak:** kayıt derlemesinde Canlı Takip
+ekranının üstünde bir ▶ (Simüle et) düğmesi var; ona dokununca gerçek arka
+plan servisi hızlandırılmış olarak koşuyor ve alarm gerçekten çalıyor.
+Düğme yalnızca şu derlemede görünür:
+
+```
+flutter build apk --release --target-platform android-arm64 --dart-define=SIM_BUTTON=true
+```
+
+Play'e yüklenen AAB'de bu düğme YOKTUR (`flutter build appbundle --release`),
+çünkü bayrak varsayılan olarak kapalıdır.
+
 ### Video açıklamasına yazılacak metin
 
 > StopAlert, toplu taşımada ineceğiniz durakta sizi uyandıran bir alarm

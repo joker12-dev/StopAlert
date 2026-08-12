@@ -37,9 +37,18 @@ import 'permission_gate_screen.dart';
 /// Hareket testi için "Simüle et" butonunu gösterir.
 ///
 /// Web'de uygulama içi motoru, Android'de GERÇEK arka plan servisini sürer
-/// (bildirim + alarm + tam ekran intent dahil uçtan uca test). Mağaza
-/// sürümünde kapatmak için false yap.
-const bool kShowSimulateButton = false;
+/// (bildirim + alarm + tam ekran intent dahil uçtan uca test).
+///
+/// DERLEME BAYRAĞINA BAĞLI, koda gömülü değil. Varsayılan KAPALI: mağazaya
+/// giden pakette yolcuya "yolculuğu simüle et" demek kafa karıştırıyor.
+/// Test/kayıt derlemesinde açmak için:
+///
+///     flutter build apk --release --dart-define=SIM_BUTTON=true
+///
+/// Böylece alarmın çaldığını otobüse binmeden gösterebiliyoruz (Play'in
+/// arka plan konumu için istediği video), Play'e yüklenen AAB ise temiz
+/// kalıyor — bayrağı elle açıp kapatmayı unutma riski ortadan kalkıyor.
+const bool kShowSimulateButton = bool.fromEnvironment('SIM_BUTTON');
 
 /// Canlı Takip — konum motoruyla beslenen canlı yolculuk ekranı.
 ///
