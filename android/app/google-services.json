@@ -22,6 +22,14 @@
           }
         },
         {
+          "client_id": "781116536900-g5lem33s0tviauttor19k6rcgi4d7e5t.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.originstudios.stopalert",
+            "certificate_hash": "b072e9911f6c427ea4d8a4d971b33debc0b1812d"
+          }
+        },
+        {
           "client_id": "781116536900-ll7hop274oujgnmk8a3c0n4k2r2c5n34.apps.googleusercontent.com",
           "client_type": 3
         }

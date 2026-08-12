@@ -61,3 +61,8 @@ tools/gtfs/*.csv
 tools/gtfs/stop_times.txt
 tools/kocaeli/raw/
 tools/kocaeli/*.sqlite
+
+# Yayın imzalama sırları — anahtar ve parolalar depoya girmez.
+android/key.properties
+*.jks
+*.keystore

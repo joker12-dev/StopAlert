@@ -1,3 +1,16 @@
+import java.util.Properties
+
+// YAYIN İMZASI: anahtar ve parolalar `android/key.properties` dosyasında ve
+// o dosya DEPOYA GİRMEZ (.gitignore). Dosya yoksa (ör. CI ya da başka bir
+// geliştirici) release derlemesi debug anahtarına düşer; böylece `flutter run
+// --release` çalışmaya devam eder ama mağazaya yüklenebilir bir çıktı
+// üretilmez — sessizce yanlış anahtarla imzalamaktansa bu yeğdir.
+val keystoreProperties = Properties().apply {
+    val f = rootProject.file("key.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+val hasReleaseKey = keystoreProperties.getProperty("storeFile") != null
+
 plugins {
     id("com.android.application")
     // START: FlutterFire Configuration
@@ -32,11 +45,24 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (hasReleaseKey) {
+            create("release") {
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (hasReleaseKey) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
 
             // R8 kod-küçültmesini KAPAT. Açıkken (AGP 9 release varsayılanı) ve
             // proguard keep kuralları olmadan, reflection kullanan eklentiler
