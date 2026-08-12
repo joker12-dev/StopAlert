@@ -1173,12 +1173,15 @@ class _PromoHero extends ConsumerWidget {
                   ],
                 ),
               ),
-              // Maskot (küçültülmüş, kartın tamamını kaplamaz)
+              // MASKOT: %50 büyük ve SABİT.
+              //
+              // Sürekli oynayan bir çizim gözü kartın asıl işinden ("yolculuk
+              // başlat") çekiyordu; büyütünce zaten kendini gösteriyor.
               const Padding(
-                padding: EdgeInsets.only(top: 20),
+                padding: EdgeInsets.only(top: 12),
                 child: SizedBox(
-                  width: 104,
-                  child: AnimatedMascot(MascotAssets.hero, height: 120),
+                  width: 156,
+                  child: Mascot(MascotAssets.hero, height: 180),
                 ),
               ),
             ],

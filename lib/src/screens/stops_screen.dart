@@ -206,6 +206,7 @@ class _StopSearchViewState extends ConsumerState<_StopSearchView> {
           lineCode: '',
           lineTypeName: 'bus',
           cityId: city.id,
+          stopDirection: stop.direction,
         ));
     var lines = const <TransitLineBrief>[];
     if (isBusId(stop.id)) {
@@ -389,14 +390,28 @@ class _StopSearchViewState extends ConsumerState<_StopSearchView> {
     final other = city.id == active.id ? null : city;
 
     if (e.stopId.isNotEmpty) {
-      // KURULU PAKETLERİ AÇ: kayıt başka şehirden olabilir ve o paket
-      // yalnızca arama yapılınca açılıyor.
+      // KURULU PAKETLERİ AÇ ve HEPSİNDE ARA.
+      //
+      // Kayıt başka şehirden olabiliyor ve o paket yalnızca arama yapılınca
+      // açılıyordu; uygulamayı kapatıp açtıktan sonra doğrudan son aramaya
+      // dokunmak durağı bulamıyordu.
       await BusDataService.instance.openAllForLookup();
-      final stop =
-          await TransitDb.instance.stopById(e.stopId, cityId: other?.id);
+      final stop = await TransitDb.instance.stopByIdAnyCity(e.stopId);
       if (!mounted) return;
       if (stop != null) {
         await _open(stop, city);
+        return;
+      }
+      // DURAK ÇÖZÜLEMEDİ. Bu kayıtta hat kodu yok (durak araması), o yüzden
+      // hat sayfasına düşmek BOŞ bir sayfa açıyordu. Sebebini söyleyip
+      // kaydı listede bırakmak daha dürüst.
+      if (e.lineCode.trim().isEmpty) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(
+            content: Text('${e.stopName} bulunamadı — '
+                '${city.name} veri paketi yüklü mü?'),
+          ));
         return;
       }
     }
@@ -656,6 +671,14 @@ class _RecentTile extends StatelessWidget {
   final RecentSearch entry;
   final VoidCallback onTap;
 
+  /// Alt satır: önce durak yönü, yoksa hat kodu.
+  String? _recentSubtitle(RecentSearch e) {
+    final dir = e.stopDirection.trim();
+    if (dir.isNotEmpty) return '$dir yönü';
+    final code = e.lineCode.trim();
+    return code.isEmpty ? null : '$code hattı';
+  }
+
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
@@ -682,8 +705,11 @@ class _RecentTile extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: text.bodyMedium
                             ?.copyWith(fontWeight: FontWeight.w600)),
-                    if (hasStop && entry.lineCode.isNotEmpty)
-                      Text('${entry.lineCode} hattı',
+                    // ALT SATIR: durağın YÖNÜ. Aynı adlı durak yolun iki
+                    // yakasında ayrı ayrı var; yön yazmadan hangisine
+                    // bakıldığı belli olmuyordu.
+                    if (_recentSubtitle(entry) case final sub?)
+                      Text(sub,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: text.labelSmall?.copyWith(

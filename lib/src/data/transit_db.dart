@@ -483,6 +483,17 @@ class TransitDb {
     return null;
   }
 
+  /// Durağı ÖNCE aktif şehirde, bulunamazsa açık diğer şehirlerde arar.
+  Future<Stop?> stopByIdAnyCity(String externalStopId) async {
+    final direct = await stopById(externalStopId);
+    if (direct != null) return direct;
+    for (final cityId in _aux.keys) {
+      final found = await stopById(externalStopId, cityId: cityId);
+      if (found != null) return found;
+    }
+    return null;
+  }
+
   /// Durağın hatlarını ÖNCE aktif şehirde, bulunamazsa açık diğer şehirlerde
   /// arar.
   ///

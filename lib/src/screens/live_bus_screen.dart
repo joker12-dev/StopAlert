@@ -349,19 +349,17 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen> {
   }
 
   void _fit() {
-    // TEK ARACA ODAKLANILDIYSA çerçeve aracı ve bakılan durağı kapsar;
-    // hattın tamamını sığdırmak ikisini de nokta hâline getiriyordu.
+    // TEK ARACA ODAKLANILDIYSA kamera ARACA gider — ama YAKINLAŞMADAN.
+    //
+    // Araç ile durağı birlikte çerçevelemek kamerayı durağa kadar geriyordu;
+    // kullanıcı ise dokunduğu otobüsü görmek istiyor. Durak işaretli kalır,
+    // görüş alanına girerse görünür; kamera onun için esnetilmez.
     final focus = widget.focusPlate?.trim();
     if (focus != null && focus.isNotEmpty) {
-      final pts = onlyUsable([
-        for (final v in _shown) LatLng(v.lat, v.lon),
-        if (_selectedStop case final st?) LatLng(st.lat, st.lon),
-      ]);
+      final pts = onlyUsable([for (final v in _shown) LatLng(v.lat, v.lon)]);
       if (_mapReady && pts.isNotEmpty) {
-        _map.fitCamera(CameraFit.bounds(
-          bounds: LatLngBounds.fromPoints(pts),
-          padding: const EdgeInsets.fromLTRB(70, 130, 70, 230),
-        ));
+        // Geniş açı (13.5): araç noktası ortada, çevresi ve güzergâh görünür.
+        _map.move(pts.first, 13.5);
         return;
       }
     }

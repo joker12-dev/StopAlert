@@ -9,6 +9,7 @@ class RecentSearch {
     required this.lineCode,
     required this.lineTypeName,
     this.cityId = '',
+    this.stopDirection = '',
   });
 
   final String stopName;
@@ -16,6 +17,12 @@ class RecentSearch {
   final String lineId;
   final String lineCode;
   final String lineTypeName;
+
+  /// Durağın yönü ("ÜSKÜDAR yönü") — listede alt satırda yazar.
+  ///
+  /// Aynı adlı durak yolun iki yakasında ayrı ayrı bulunuyor; yön yazmadan
+  /// kullanıcı hangisine baktığını anlayamıyordu.
+  final String stopDirection;
 
   /// Kaydın HANGİ ŞEHRİN paketinden geldiği.
   ///
@@ -37,6 +44,7 @@ class RecentSearch {
         'lineCode': lineCode,
         'lineTypeName': lineTypeName,
         'cityId': cityId,
+        'stopDirection': stopDirection,
       };
 
   factory RecentSearch.fromMap(Map<String, dynamic> map) => RecentSearch(
@@ -46,5 +54,6 @@ class RecentSearch {
         lineCode: map['lineCode'] as String? ?? '',
         lineTypeName: map['lineTypeName'] as String? ?? 'bus',
         cityId: map['cityId'] as String? ?? '',
+        stopDirection: map['stopDirection'] as String? ?? '',
       );
 }

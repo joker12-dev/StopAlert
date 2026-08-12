@@ -256,23 +256,26 @@ class _RootGateState extends ConsumerState<_RootGate>
 
   @override
   Widget build(BuildContext context) {
-    // RIZA HER ŞEYDEN ÖNCE. Konum izni istemeden, hesap açmadan ve reklam
-    // göstermeden önce kullanıcı verisinin nasıl işlendiğini kabul etmiş
-    // olmalı; mağazaların veri güvenliği beyanları da bunu gerektiriyor.
-    final consent = ref.watch(consentProvider);
-    if (consent.valueOrNull == false) {
-      return ConsentScreen(onAccepted: () {
-        if (mounted) setState(() {});
-      });
-    }
-    if (consent.valueOrNull == null) return const _Splash();
-
     final onboarding = ref.watch(onboardingProvider);
     return onboarding.when(
       loading: () => const _Splash(),
       error: (_, __) => const BottomNavShell(),
       data: (done) {
+        // SIRA: TANITIM → RIZA → İZİN → VERİ.
+        //
+        // Rıza en başta duruyordu ve uygulamayı ilk açan kişi daha ne
+        // yaptığını bilmeden bir hukuk metniyle karşılaşıyordu. Tanıtımdan
+        // sonra sorulunca metin bir bağlam kazanıyor. Yine de İZİNDEN ÖNCE:
+        // konum istemeden ve hesap açmadan önce rıza alınmış olmalı.
         if (!done) return const OnboardingScreen();
+
+        final consent = ref.watch(consentProvider);
+        if (consent.valueOrNull == null) return const _Splash();
+        if (consent.valueOrNull == false) {
+          return ConsentScreen(onAccepted: () {
+            if (mounted) setState(() {});
+          });
+        }
 
         // SIRA ÖNEMLİ: önce İZİN, sonra VERİ PAKETİ.
         //

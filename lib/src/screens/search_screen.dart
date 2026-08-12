@@ -555,8 +555,15 @@ class _SuggestionsView extends ConsumerWidget {
               i++) ...[
             if (i > 0) const SizedBox(height: 12),
             _RecentTile(
-              name: recents[i].stopName,
-              subtitle: recents[i].lineCode,
+              // BAŞLIK HAT NUMARASI, alt satır güzergâh. Tersi yazılıyordu ve
+              // kullanıcı aradığı hattı listede tanıyamıyordu: hat numarası
+              // küçük gri yazıyla altta kalıyordu.
+              name: recents[i].lineCode.trim().isEmpty
+                  ? recents[i].stopName
+                  : recents[i].lineCode,
+              subtitle: recents[i].lineCode.trim().isEmpty
+                  ? null
+                  : recents[i].stopName,
               icon: lineTypeIcon(recents[i].lineType),
               onTap: () => onRecentTap(recents[i]),
             ),

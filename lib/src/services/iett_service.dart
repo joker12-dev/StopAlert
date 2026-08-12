@@ -69,6 +69,7 @@ class IettService {
         final msg = (map['MESAJ'] as String? ?? '').trim();
         if (msg.isEmpty) continue;
         out.add(IettAnnouncement(
+          lineCode: (map['HATKODU'] as String? ?? '').trim(),
           line: (map['HAT'] as String? ?? '').trim(),
           type: (map['TIP'] as String? ?? '').trim(),
           time: (map['GUNCELLEME_SAATI'] as String? ?? '')
@@ -84,6 +85,24 @@ class IettService {
       return cached ?? const [];
     }
   }
+
+  /// Yalnızca [code] hattına ait duyurular.
+  ///
+  /// Servis hat bazlı bir uç sunmuyor; tüm liste bir kez çekilip (5 dakika
+  /// önbellekli) kod eşleşmesiyle süzülüyor. Kod karşılaştırması boşluk ve
+  /// büyük/küçük harf duyarsız: "146 T" ile "146T" aynı hat.
+  Future<List<IettAnnouncement>> forLine(String code) async {
+    final want = _compactCode(code);
+    if (want.isEmpty) return const [];
+    final all = await announcements();
+    return [
+      for (final a in all)
+        if (_compactCode(a.lineCode) == want) a,
+    ];
+  }
+
+  static String _compactCode(String s) =>
+      s.replaceAll(RegExp(r'[\s\-_]'), '').toUpperCase();
 
   static const _trafficUrl =
       'https://api.ibb.gov.tr/tkmservices/api/TrafficData/v1/TrafficIndex';
@@ -262,7 +281,15 @@ class IettAnnouncement {
     required this.type,
     required this.time,
     required this.message,
+    this.lineCode = '',
   });
+
+  /// Duyurunun HAT KODU (ör. "10B", "146T").
+  ///
+  /// Serviste `HATKODU` alanı her kayıtta dolu geliyor (ölçüldü: 206/206);
+  /// hat bazlı süzme buna dayanıyor. Hat ADI ("BOSTANCI - KADIKÖY") aynı
+  /// hattın farklı yazımlarında eşleşmiyordu.
+  final String lineCode;
 
   /// Duyurunun ilgili olduğu hat (ör. "BOSTANCI - KADIKÖY").
   final String line;

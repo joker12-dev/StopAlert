@@ -19,6 +19,7 @@ import '../util/insets.dart';
 import '../util/haptics.dart';
 import '../widgets/skeleton.dart';
 import 'alarm_setup_screen.dart';
+import 'line_announcements_screen.dart';
 import 'live_bus_screen.dart';
 import 'route_map_screen.dart';
 import 'stop_lines_screen.dart';
@@ -344,6 +345,7 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
             _header(text),
             _actions(text),
             _timetableAction(text),
+            _announcementsAction(text),
             const SizedBox(height: 12),
             // Kaydırılabilir üst alan (yön seçimi + depar); durak listesi ayrı.
             Flexible(
@@ -597,6 +599,37 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
             ),
           ],
         ],
+      ),
+    );
+  }
+
+  /// Bu hattın DUYURULARI (sefer iptali, güzergâh değişikliği).
+  ///
+  /// Yalnızca İETT hatlarında: duyuru servisi İstanbul'un lastikli hatları
+  /// için yayınlanıyor, metro/Marmaray ve Kocaeli için karşılığı yok. Butonu
+  /// her yerde göstermek her seferinde boş sayfa açardı.
+  Widget _announcementsAction(TextTheme text) {
+    final line = _line;
+    if (line == null) return const SizedBox.shrink();
+    final TransitCity lineCity = widget.city ?? ref.watch(activeCityProvider);
+    final rubber =
+        line.type == LineType.bus || line.type == LineType.metrobus;
+    if (!lineCity.hasAnnouncements || !rubber) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+      child: _ActionButton(
+        icon: Icons.campaign_outlined,
+        label: 'Hat duyuruları',
+        filled: false,
+        onTap: () {
+          Haptics.light();
+          Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => LineAnnouncementsScreen(
+              lineCode: line.code,
+              lineName: line.name,
+            ),
+          ));
+        },
       ),
     );
   }
