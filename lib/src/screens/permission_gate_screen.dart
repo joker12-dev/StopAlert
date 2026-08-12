@@ -154,13 +154,22 @@ class _PermissionGateScreenState extends State<PermissionGateScreen>
                     style: text.headlineMedium,
                   ),
                   const SizedBox(height: 8),
+                  // GOOGLE PLAY "BELİRGİN AÇIKLAMA" (prominent disclosure).
+                  //
+                  // Arka plan konumu isteyen uygulamalarda Play, sistem izin
+                  // penceresinden ÖNCE şu üçünün açıkça yazılmasını istiyor:
+                  // hangi veri (konum), hangi özellik için (durak alarmı) ve
+                  // uygulama kapalıyken de toplandığı. Bu cümle o yüzden bu
+                  // kadar düz; süslenirse beyan reddediliyor.
                   Text(
-                    'StopAlert, sen uygulamadan çıksan ya da telefon '
-                    'kilitlense bile yolculuğunu takip edip seni uyandırır. '
-                    'Bunun için aşağıdaki izinler şart:',
+                    'StopAlert, ineceğin durağa yaklaştığında seni uyandırmak '
+                    'için KONUM VERİNİ, uygulama kapalıyken veya '
+                    'kullanılmıyorken de toplar.\n\n'
+                    'Bu yalnızca bir yolculuk sürerken olur; alarm kurulu '
+                    'değilken konumun okunmaz. Konumun cihazından çıkmaz.',
                     textAlign: TextAlign.center,
-                    style: text.bodyMedium
-                        ?.copyWith(color: VigilantColors.onSurfaceVariant),
+                    style: text.bodyMedium?.copyWith(
+                        color: VigilantColors.onSurfaceVariant, height: 1.4),
                   ),
                   const SizedBox(height: 28),
                   ..._buildSteps(r),
