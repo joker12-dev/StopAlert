@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "781116536900-7k5amajeeka1gkhhvdbfi74opv2ujn3d.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.originstudios.stopalert",
+            "certificate_hash": "603cd56aac9735507bda7858972e0bb8e42c0d4b"
+          }
+        },
+        {
           "client_id": "781116536900-f40ajr3t7klvbe57jl1aruqsu4mjotm8.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
@@ -27,6 +35,14 @@
           "android_info": {
             "package_name": "com.originstudios.stopalert",
             "certificate_hash": "b072e9911f6c427ea4d8a4d971b33debc0b1812d"
+          }
+        },
+        {
+          "client_id": "781116536900-ocu45d7heirc9g4k8j3qq06vgu5sl592.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.originstudios.stopalert",
+            "certificate_hash": "81929380a7cb0bcdb1e28c41511c3be6ca801011"
           }
         },
         {
