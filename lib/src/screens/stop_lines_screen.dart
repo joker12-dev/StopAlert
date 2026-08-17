@@ -639,7 +639,17 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
           ),
         const SizedBox(height: 16),
         Expanded(
-          child: ListView(
+          child: RefreshIndicator(
+            color: VigilantColors.primary,
+            // AŞAĞI ÇEK-YENİLE: yaklaşan araçları yeniden hesaplar.
+            onRefresh: () async {
+              _arrivals = const [];
+              _scheduled = const [];
+              _arrivalsAt = null;
+              await _loadArrivals();
+            },
+            child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
             padding: EdgeInsets.fromLTRB(
                 20,
                 0,
@@ -677,6 +687,7 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
                 ),
               ],
             ],
+          ),
           ),
         ),
       ],

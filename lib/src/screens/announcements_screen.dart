@@ -7,6 +7,7 @@ import '../state/city_provider.dart';
 import '../theme/app_theme.dart';
 import '../util/insets.dart';
 import '../util/haptics.dart';
+import '../widgets/offline_banner.dart';
 import '../widgets/mascot.dart';
 import '../widgets/offline_notice.dart';
 
@@ -152,6 +153,8 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen> {
                 ),
               ),
             ),
+            const OfflineBanner(
+                message: 'Bağlantı yok — duyurular güncellenemiyor.'),
             _feedNotice(text, ref.watch(activeCityProvider)),
             Expanded(
               // BESLEME ŞEHRE KİLİTLİ DEĞİL. Duyurular İETT'nin (İstanbul)
@@ -173,17 +176,34 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen> {
                               .read(announcementsRefreshProvider.notifier)
                               .state++,
                         )
-                      : items.isEmpty
-                          ? _empty(text, all.isEmpty)
-                          : ListView.separated(
-                              padding: EdgeInsets.fromLTRB(
-                                  20, 0, 20, AppInsets.pageBottom(context)),
-                              itemCount: items.length,
-                              separatorBuilder: (_, __) =>
-                                  const SizedBox(height: 10),
-                              itemBuilder: (context, i) =>
-                                  _AnnouncementCard(item: items[i]),
-                            ),
+                      : RefreshIndicator(
+                          color: VigilantColors.primary,
+                          onRefresh: () async {
+                            Haptics.light();
+                            ref
+                                .read(announcementsRefreshProvider.notifier)
+                                .state++;
+                            await Future<void>.delayed(
+                                const Duration(milliseconds: 500));
+                          },
+                          child: items.isEmpty
+                              ? ListView(
+                                  physics:
+                                      const AlwaysScrollableScrollPhysics(),
+                                  children: [_empty(text, all.isEmpty)],
+                                )
+                              : ListView.separated(
+                                  physics:
+                                      const AlwaysScrollableScrollPhysics(),
+                                  padding: EdgeInsets.fromLTRB(
+                                      20, 0, 20, AppInsets.pageBottom(context)),
+                                  itemCount: items.length,
+                                  separatorBuilder: (_, __) =>
+                                      const SizedBox(height: 10),
+                                  itemBuilder: (context, i) =>
+                                      _AnnouncementCard(item: items[i]),
+                                ),
+                        ),
             ),
             // Lisans gereği kaynak atfı (İBB Açık Veri Lisansı / CC BY 4.0).
             Padding(

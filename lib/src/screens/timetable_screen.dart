@@ -285,7 +285,14 @@ class _TimetableScreenState extends State<TimetableScreen> {
     final hours = byHour.keys.toList()..sort();
     final nextDayCount = rows.where((d) => d.isNextDay).length;
 
-    return ListView.builder(
+    return RefreshIndicator(
+      color: VigilantColors.primary,
+      onRefresh: () async {
+        setState(() => _loading = true);
+        await _load();
+      },
+      child: ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: EdgeInsets.fromLTRB(16, 0, 16, AppInsets.listBottom(context)),
       // +1 satır: gece bloğunun başlığı (varsa).
       itemCount: hours.length + (nextDayCount > 0 ? 1 : 0),
@@ -333,6 +340,7 @@ class _TimetableScreenState extends State<TimetableScreen> {
           ),
         );
       },
+      ),
     );
   }
 }

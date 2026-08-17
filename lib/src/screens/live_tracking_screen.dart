@@ -22,6 +22,7 @@ import '../services/telemetry.dart';
 import '../services/tracking_service.dart';
 import '../state/journey_provider.dart';
 import '../theme/app_theme.dart';
+import '../widgets/offline_banner.dart';
 import '../widgets/native_ad_slot.dart';
 import '../util/haptics.dart';
 import '../util/platform_check.dart';
@@ -931,6 +932,13 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
             key: ValueKey('live-tracking-native-ad'),
             margin: EdgeInsets.fromLTRB(16, 0, 16, 10),
             template: TemplateType.small,
+          ),
+          // ALARM ÇEVRİMDIŞI ÇALIŞIR: kullanıcı "internet yok, alarm çalmaz mı"
+          // diye korkmasın. Yalnızca harita döşemeleri güncellenmez.
+          const OfflineBanner(
+            message: 'Bağlantı yok — harita güncellenmeyebilir ama '
+                'alarmın çalışmaya devam eder.',
+            margin: EdgeInsets.fromLTRB(16, 0, 16, 8),
           ),
           // Kalan durak halkası + ETA/mesafe.
           Padding(

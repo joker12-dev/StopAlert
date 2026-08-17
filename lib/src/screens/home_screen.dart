@@ -27,6 +27,7 @@ import '../widgets/mascot.dart';
 import '../widgets/permission_required_sheet.dart';
 import '../widgets/skeleton.dart';
 import '../widgets/native_ad_slot.dart';
+import '../widgets/offline_banner.dart';
 import '../widgets/traffic_strip.dart';
 import 'alarm_setup_screen.dart';
 import 'announcements_screen.dart';
@@ -84,11 +85,26 @@ class HomeScreen extends ConsumerWidget {
           ),
           SafeArea(
             bottom: false,
-            child: ListView(
-              // Alt boşluk = alt menü (80) + sistem çubuğu payı + nefes.
-              padding: EdgeInsets.fromLTRB(
-                  20, 8, 20, AppInsets.listBottom(context)),
-              children: [
+            // AŞAĞI ÇEK-YENİLE: yakın duraklar, hava, trafik ve geçmişi tazeler.
+            child: RefreshIndicator(
+              color: VigilantColors.primary,
+              onRefresh: () async {
+                Haptics.light();
+                ref.invalidate(nearbyStopsProvider);
+                ref.invalidate(currentLocationProvider);
+                ref.invalidate(weatherProvider);
+                ref.invalidate(journeysStreamProvider);
+                // Kısa bir bekleme: gösterge anında kaybolup "hiç yenilenmedi"
+                // hissi vermesin.
+                await Future<void>.delayed(const Duration(milliseconds: 600));
+              },
+              child: ListView(
+                // Alt boşluk = alt menü (80) + sistem çubuğu payı + nefes.
+                // AlwaysScrollable: içerik kısa olsa da aşağı çekilebilsin.
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: EdgeInsets.fromLTRB(
+                    20, 8, 20, AppInsets.listBottom(context)),
+                children: [
                 EntranceFade(
                     child: _TopBar(nickname: nickname, dateText: _todayText)),
             const SizedBox(height: 24),
@@ -124,8 +140,14 @@ class HomeScreen extends ConsumerWidget {
             const SizedBox(height: 28),
             // Şehir trafik yoğunlukları (İstanbul canlı, diğerleri yer tutucu).
             // Trafik yoğunluğu İBB servisinden geliyor — yalnızca İstanbul.
-            if (ref.watch(activeCityProvider).hasTraffic)
+            if (ref.watch(activeCityProvider).hasTraffic) ...[
+              // Trafik yoğunluğu canlı veri; bağlantı yoksa söyle.
+              const OfflineBanner(
+                message: 'Bağlantı yok — trafik yoğunluğu güncellenemiyor.',
+                margin: EdgeInsets.only(bottom: 8),
+              ),
               const EntranceFade(delayMs: 260, child: TrafficStrip()),
+            ],
             // Trafik yoğunluğunun altında yerel reklam. Yüklenmezse hiç yer
             // kaplamaz; kalıcı key ile her rebuild'de yeni istek atmaz.
             const NativeAdSlot(
@@ -139,7 +161,8 @@ class HomeScreen extends ConsumerWidget {
             ..._buildFavoritesSection(context, ref, text),
             ..._buildRecentSection(context, ref, text, goToStops),
                 const SizedBox(height: 16),
-                  ],
+                ],
+              ),
             ),
           ),
         ],
