@@ -92,7 +92,7 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
   bool _userMovedMap = false;
 
   /// Arama yarıçapı (metre) — kullanıcı çipten değiştirir.
-  double _radius = 500;
+  double _radius = 250;
   static const _radiusOptions = [250.0, 500.0, 1000.0];
 
   // Sürüklenebilir panel (Alarm Kur ekranındaki gibi).

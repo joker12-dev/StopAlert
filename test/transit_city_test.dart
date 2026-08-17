@@ -44,7 +44,8 @@ void main() {
 
     test('çok uzak nokta bile bir şehir döndürür (asla null değil)', () {
       for (final p in [(0.0, 0.0), (60.0, 10.0), (-33.0, 151.0)]) {
-        expect(TransitCities.all, contains(TransitCities.forLocation(p.$1, p.$2)));
+        expect(
+            TransitCities.all, contains(TransitCities.forLocation(p.$1, p.$2)));
       }
     });
   });
@@ -63,10 +64,9 @@ void main() {
   });
 
   group('Özellik bayrakları', () {
-    test('canlı otobüs yalnızca İstanbul’da', () {
+    test('canlı otobüs İstanbul ve Kocaeli’de', () {
       expect(TransitCities.istanbul.hasLiveBus, isTrue);
-      // İETT açık servis veriyor, Kocaeli vermiyor — düğme gösterilmemeli.
-      expect(TransitCities.kocaeli.hasLiveBus, isFalse);
+      expect(TransitCities.kocaeli.hasLiveBus, isTrue);
     });
 
     test('trafik iki şehirde de var (ayrı servisler)', () {

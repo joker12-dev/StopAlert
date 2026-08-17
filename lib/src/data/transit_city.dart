@@ -49,7 +49,7 @@ class TransitCity {
   final double centerLat;
   final double centerLon;
 
-  /// Canlı otobüs konumu var mı (İETT açık servis veriyor, Kocaeli vermiyor).
+  /// Canlı otobüs konumu var mı.
   final bool hasLiveBus;
 
   /// Trafik yoğunluğu göstergesi var mı.
@@ -95,7 +95,7 @@ abstract final class TransitCities {
     maxLat: 41.65,
     minLon: 27.90,
     maxLon: 29.95,
-    centerLat: 41.0082,        // Sultanahmet
+    centerLat: 41.0082, // Sultanahmet
     centerLon: 28.9784,
     hasLiveBus: true,
     hasTraffic: true,
@@ -107,7 +107,8 @@ abstract final class TransitCities {
     id: 'kocaeli',
     name: 'Kocaeli',
     // CC BY lisansı atfı ZORUNLU kılıyor.
-    attribution: 'Veri: Kocaeli Büyükşehir Belediyesi Açık Veri Portalı (CC BY)',
+    attribution:
+        'Veri: Kocaeli Büyükşehir Belediyesi Açık Veri Portalı (CC BY)',
     minLat: 40.42,
     // Kuzey sınır 41,10: daha yukarısı İstanbul'un Şile kıyısı. Şile (41,175)
     // ile Kandıra (41,07) aynı boylam kuşağında olduğu için kutu buradan
@@ -116,9 +117,10 @@ abstract final class TransitCities {
     // Batı sınır Dilovası; Gebze (29,43) dahil kalır.
     minLon: 29.30,
     maxLon: 30.40,
-    centerLat: 40.7654,        // İzmit
+    centerLat: 40.7654, // İzmit
     centerLon: 29.9408,
     // Akıllı Şehir Kocaeli anlık yoğunluk servisi veriyor.
+    hasLiveBus: true,
     hasTraffic: true,
     // Kalkış saatleri PAKETE GÖMÜLÜ (belediyenin hat sayfasından derlenir).
     hasTimetable: true,

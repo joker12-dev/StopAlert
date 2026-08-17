@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:home_widget/home_widget.dart';
 
@@ -45,6 +46,11 @@ Future<void> main() async {
   await bootstrapFirebase();
   // Çökme raporlama + analitik (Firebase'den sonra; alarm güvenilirlik ölçümü).
   await Telemetry.init();
+  // DİKEY KİLİT: uygulama alarm/harita odaklı; yatay düzen tasarlanmadı ve
+  // paneller/harita yatayn bozuluyordu. Manifest + Info.plist yanında burada
+  // da kilitlenir ki her cihazda kesin olsun.
+  await SystemChrome.setPreferredOrientations(
+      const [DeviceOrientation.portraitUp]);
   runApp(const ProviderScope(child: StopAlertApp()));
 }
 

@@ -240,7 +240,9 @@ abstract final class ArrivalEstimator {
     final base = line.segmentSeconds;
     final raw = [
       for (var i = 0; i < n; i++)
-        (base != null && base.length > i) ? base[i] : line.defaultSegmentSeconds,
+        (base != null && base.length > i)
+            ? base[i]
+            : line.defaultSegmentSeconds,
     ];
 
     final meters = <double>[];
@@ -268,9 +270,9 @@ abstract final class ArrivalEstimator {
   }
 }
 
-/// TARİFEYE dayalı varış — canlı araç konumu OLMAYAN şehirler için.
+/// TARİFEYE dayalı varış — canlı araç konumu olmayan hatlar için.
 ///
-/// Kocaeli canlı araç konumu yayınlamıyor; elimizde yalnızca ilk duraktan
+/// Canlı araç konumu olmayan hatlarda elimizde yalnızca ilk duraktan
 /// kalkış saatleri (pakete gömülü) ve duraklar arası süre var. Bir seferin
 /// bu durağa ne zaman uğrayacağı = kalkış saati + ilk duraktan bu durağa
 /// kadarki yol süresi.
@@ -349,7 +351,7 @@ extension ScheduledArrivals on ArrivalEstimator {
           break;
         }
       }
-      if (departAt == null) continue;   // her iki gün de geçmişte
+      if (departAt == null) continue; // her iki gün de geçmişte
 
       // İlk duraktan hedefe yol süresi — öğrenilmiş süre varsa o kullanılır.
       var travel = 0.0;

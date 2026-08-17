@@ -1,6 +1,20 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../data/transit_city.dart';
+import 'ekomobil_service.dart';
 import 'iett_service.dart';
+
+/// e-Komobil canlı otobüs çağrısı YALNIZCA bu bayrak açıkken yapılır.
+///
+/// Varsayılan KAPALI ve bilerek öyle. e-komobil'in ucu, istemci kodundan
+/// çıkarılmış gizli anahtarla üretilen `X-Security-Token` gerektiriyor; bu
+/// bir erişim kontrolü ve onu taklit etmek onu aşmak oluyor. Kod yerinde
+/// duruyor ki UlaşımPark/Kocaeli Büyükşehir'den veri yeniden-kullanım izni
+/// alındığında (o zaman kendi erişim yöntemleri verilir) hızlıca
+/// bağlanabilsin. İzin gelene kadar açılmamalı:
+///
+///     flutter build ... --dart-define=EKOMOBIL=true
+const bool kEkomobilEnabled = bool.fromEnvironment('EKOMOBIL');
 
 /// Canlı otobüs konumları için PAYLAŞIMLI önbellek (kota koruması).
 ///
@@ -38,28 +52,37 @@ class LiveBusService {
 
   /// Hattın canlı araçları. Hata/ağ yoksa boş liste (ekran bunu boş durum
   /// olarak gösterir; alarm akışına asla dokunmaz).
-  Future<List<BusVehicle>> vehicles(String lineCode) async {
+  Future<List<BusVehicle>> vehicles(
+    String lineCode, {
+    TransitCity? city,
+    String? lineId,
+  }) async {
     final code = lineCode.trim().toUpperCase();
     if (code.isEmpty) return const [];
+    final targetCity = city ?? TransitCities.istanbul;
+    final direction = targetCity.id == TransitCities.kocaeli.id
+        ? _directionForLineId(lineId)
+        : null;
+    final cacheKey = _cacheKey(targetCity, code, direction);
 
     // 1) Aynı istemci çok sık istiyorsa yerel kopyayı ver.
-    final l = _local[code];
+    final l = _local[cacheKey];
     if (l != null && DateTime.now().difference(l.at) < _localFor) {
       return l.vehicles;
     }
 
     // 2) Paylaşımlı önbellek (Firestore).
     try {
-      final snap = await _col.doc(code).get();
+      final snap = await _col.doc(cacheKey).get();
       final data = snap.data();
       if (data != null) {
         final ts = (data['updatedAt'] as Timestamp?)?.toDate();
         if (ts != null && DateTime.now().difference(ts) < _freshFor) {
           final list = (data['vehicles'] as List? ?? const [])
-              .map((e) => BusVehicle.fromMap(
-                  Map<String, dynamic>.from(e as Map)))
+              .map((e) =>
+                  BusVehicle.fromMap(Map<String, dynamic>.from(e as Map)))
               .toList();
-          _local[code] = _Local(list, DateTime.now());
+          _local[cacheKey] = _Local(list, DateTime.now());
           return list;
         }
       }
@@ -67,12 +90,26 @@ class LiveBusService {
       // Firestore okunamadı: doğrudan servise düşülür.
     }
 
-    // 3) Önbellek bayat: İETT'den çek ve paylaşımlı önbelleği tazele.
-    final fresh = await IettService.instance.vehiclePositions(code);
-    _local[code] = _Local(fresh, DateTime.now());
+    // 3) Önbellek bayat: kaynaktan çek ve paylaşımlı önbelleği tazele.
+    final List<BusVehicle> fresh;
+    if (targetCity.id == TransitCities.kocaeli.id) {
+      // İZİN GELENE KADAR KAPALI (bkz. kEkomobilEnabled). Kapalıyken canlı
+      // araç yok; ekran boş durumu gösterir, tarife tabanlı yaklaşan araçlar
+      // yine çalışır.
+      fresh = kEkomobilEnabled
+          ? await EkomobilService.instance
+              .vehiclePositions(code, direction: direction ?? 0)
+          : const [];
+    } else {
+      fresh = await IettService.instance.vehiclePositions(code);
+    }
+    _local[cacheKey] = _Local(fresh, DateTime.now());
     if (fresh.isNotEmpty) {
       try {
-        await _col.doc(code).set({
+        await _col.doc(cacheKey).set({
+          'cityId': targetCity.id,
+          'lineCode': code,
+          if (direction != null) 'direction': direction,
           'updatedAt': FieldValue.serverTimestamp(),
           'vehicles': [for (final v in fresh) v.toMap()],
         });
@@ -81,6 +118,19 @@ class LiveBusService {
       }
     }
     return fresh;
+  }
+
+  static int _directionForLineId(String? lineId) {
+    final raw = (lineId ?? '').split(':').last.toUpperCase();
+    final suffix = raw.contains('_') ? raw.split('_').last : raw;
+    return suffix.startsWith('D') ? 1 : 0;
+  }
+
+  static String _cacheKey(TransitCity city, String code, int? direction) {
+    final key = direction == null
+        ? '${city.id}_$code'
+        : '${city.id}_${code}_$direction';
+    return key.replaceAll('/', '_');
   }
 }
 

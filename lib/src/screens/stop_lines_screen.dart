@@ -7,6 +7,7 @@ import '../data/models.dart';
 import '../data/recent_search.dart';
 import '../data/transit_city.dart';
 import '../data/transit_db.dart';
+import '../services/bus_data_service.dart';
 import '../engine/arrival_estimator.dart';
 import '../data/timetable.dart';
 import '../services/live_bus_service.dart';
@@ -57,13 +58,14 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
   TransitCity? get city => widget.city;
 
   /// Durak kodu (İETT'nin kullandığı ham numara).
-  String get _stopCode =>
-      stop.id.startsWith(kBusPrefix) ? stop.id.substring(kBusPrefix.length) : '';
+  String get _stopCode => stop.id.startsWith(kBusPrefix)
+      ? stop.id.substring(kBusPrefix.length)
+      : '';
 
   /// Bu durağa yaklaşan otobüsler — en yakın varıştan uzağa sıralı.
   List<_Arrival> _arrivals = const [];
 
-  /// Canlı konum OLMAYAN şehirlerde (Kocaeli) tarifeye göre sıradaki
+  /// Canlı konum olmayan hatlarda tarifeye göre sıradaki
   /// seferler. Canlı veriyle aynı şey değil, ayrı gösterilir.
   List<_Scheduled> _scheduled = const [];
   bool _loadingArrivals = false;
@@ -114,27 +116,45 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
   /// canlı otobüs var diye metro durakları bomboş kalıyordu.
   Future<void> _loadArrivals() async {
     final TransitCity lineCity = city ?? ref.read(activeCityProvider);
-    final live = [for (final b in lines) if (_isRubberTyred(b.type)) b];
-    final rail = [for (final b in lines) if (!_isRubberTyred(b.type)) b];
 
-    // Tarifeli hatlar: metro/Marmaray/tramvay/vapur (+ canlısı olmayan şehir).
-    final scheduled = lineCity.hasLiveBus ? rail : lines.toList();
-    if (scheduled.isNotEmpty && lineCity.hasTimetable) {
-      await _loadScheduled(lineCity, scheduled);
+    // HATLARI KENDİ ÇÖZ. Harita panelinden gelindiğinde hat listesi async
+    // yükleniyor ve ekran ilk kez boş listeyle kuruluyordu; panelin
+    // zamanlamasına bel bağlamak yerine liste boşsa burada doğrudan çözülür.
+    var briefs = lines;
+    if (briefs.isEmpty) {
+      briefs = await _resolveLines(lineCity);
+      if (!mounted || briefs.isEmpty) return;
     }
-    if (!lineCity.hasLiveBus || live.isEmpty) return;
-    setState(() => _loadingArrivals = true);
 
+    final rubber = [
+      for (final b in briefs)
+        if (_isRubberTyred(b.type)) b
+    ];
+    final rail = [
+      for (final b in briefs)
+        if (!_isRubberTyred(b.type)) b
+    ];
+
+    setState(() => _loadingArrivals = true);
     final learner = await SegmentLearningStore.load();
     final found = <_Arrival>[];
 
-    for (final brief in live.take(_maxLinesQueried)) {
+    // CANLI YOL ARTIK ŞEHİRDEN BAĞIMSIZ. Lastikli her hat için canlı araç
+    // denenir (İstanbul İETT; Kocaeli e-komobil — izinliyken). Canlı bulunmayan
+    // lastikli hatlar tarifeye düşer, ray hatları zaten tarifeden gelir.
+    final noLiveRubber = <TransitLineBrief>[];
+    for (final brief in rubber.take(_maxLinesQueried)) {
       try {
         final line =
             await TransitDb.instance.buildLine(brief.id, cityId: city?.id);
-        if (line == null || line.indexOfStop(stop.id) <= 0) continue;
-
-        final all = await LiveBusService.instance.vehicles(brief.code);
+        if (line == null || line.indexOfStop(stop.id) <= 0) {
+          continue;
+        }
+        final all = await LiveBusService.instance.vehicles(
+          brief.code,
+          city: lineCity,
+          lineId: line.id,
+        );
         // Yalnızca BU yöndeki araçlar: karşı yöndeki otobüsün varışını
         // göstermek kullanıcıyı yanlış otobüse bindirir.
         final isGidis = line.id.endsWith('_G');
@@ -143,7 +163,10 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
             if (v.routeCode.contains('_G_') || v.routeCode.contains('_D_'))
               if (v.isGidis == isGidis) v,
         ];
-        if (sameWay.isEmpty) continue;
+        if (sameWay.isEmpty) {
+          noLiveRubber.add(brief); // canlı yok: tarifeye düşecek
+          continue;
+        }
 
         final ests = ArrivalEstimator.forStop(
           line: line,
@@ -157,7 +180,7 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
           found.add(_Arrival(brief: brief, line: line, estimate: e));
         }
       } catch (_) {
-        // Tek hattın verisi alınamadıysa ötekiler yine gösterilir.
+        noLiveRubber.add(brief);
       }
     }
 
@@ -168,6 +191,30 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
       _loadingArrivals = false;
       _arrivalsAt = DateTime.now();
     });
+
+    // Tarife: ray hatları + canlısı bulunamayan lastikli hatlar.
+    final scheduled = [...rail, ...noLiveRubber];
+    if (scheduled.isNotEmpty && lineCity.hasTimetable) {
+      await _loadScheduled(lineCity, scheduled);
+    }
+  }
+
+  /// Durağın hatlarını (panel vermediyse) doğrudan çözer.
+  Future<List<TransitLineBrief>> _resolveLines(TransitCity lineCity) async {
+    try {
+      if (isBusId(stop.id)) {
+        await BusDataService.instance.openAllForLookup();
+        return await TransitDb.instance.linesForStopAnyCity(stop.id);
+      }
+      final rail = ref.read(linesProvider).valueOrNull ?? const <TransitLine>[];
+      return [
+        for (final l in rail)
+          if (l.stops.any((s) => s.id == stop.id))
+            TransitLineBrief(id: l.id, code: l.code, name: l.name, type: l.type),
+      ];
+    } catch (_) {
+      return const [];
+    }
   }
 
   /// Tarifeye göre sıradaki seferler (canlı konum olmayan şehirler).
@@ -190,8 +237,7 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
             .forLine(brief.code, city: lineCity, type: brief.type);
         if (table.isEmpty) continue;
         // Bu varyant hangi yön: kimlikte kodlu ("10_G" gidiş).
-        final rows =
-            table.forDay(today, outbound: line.id.contains('_G'));
+        final rows = table.forDay(today, outbound: line.id.contains('_G'));
         if (rows.isEmpty) continue;
         final next = ScheduledArrivals.fromSchedule(
           line: line,
@@ -209,8 +255,8 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
       }
     }
 
-    found.sort((a, b) =>
-        a.arrival.secondsAway.compareTo(b.arrival.secondsAway));
+    found
+        .sort((a, b) => a.arrival.secondsAway.compareTo(b.arrival.secondsAway));
     if (!mounted) return;
     setState(() {
       _scheduled = found;
@@ -233,8 +279,8 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
     if (isBusId(brief.id)) {
       line = await TransitDb.instance.buildLine(brief.id, cityId: city?.id);
     } else {
-      for (final l in ref.read(linesProvider).valueOrNull ??
-          const <TransitLine>[]) {
+      for (final l
+          in ref.read(linesProvider).valueOrNull ?? const <TransitLine>[]) {
         if (l.id == brief.id) {
           line = l;
           break;
@@ -245,8 +291,8 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
     if (line == null) {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
-        ..showSnackBar(
-            const SnackBar(content: Text('Hat verisi yüklenemedi — tekrar dene.')));
+        ..showSnackBar(const SnackBar(
+            content: Text('Hat verisi yüklenemedi — tekrar dene.')));
       return;
     }
     // Buradan sonra hat KESİN var (null yukarıda ele alındı); yerel bir
@@ -365,12 +411,12 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
   /// Marmaray duraklarında boş bir "yaklaşan otobüs yok" yazısı çıkıyordu.
   List<Widget> _arrivalsSection(TextTheme text) {
     final TransitCity lineCity = city ?? ref.read(activeCityProvider);
-    final rail = lines.any((b) => !_isRubberTyred(b.type));
-    final rubber = lineCity.hasLiveBus &&
-        lines.any((b) => _isRubberTyred(b.type));
+    // CANLI bölüm lastikli hat varsa gösterilir (şehir fark etmez); veri
+    // yoksa bölüm kendini gizler. TARİFE bölümü kendi kaydı doldukça çıkar.
+    final hasRubber = lines.any((b) => _isRubberTyred(b.type));
     return [
-      if (rubber) ..._liveSection(text),
-      if (rail || !lineCity.hasLiveBus) ..._scheduledSection(text, lineCity),
+      if (hasRubber) ..._liveSection(text),
+      ..._scheduledSection(text, lineCity),
     ];
   }
 
@@ -420,8 +466,8 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
           padding: const EdgeInsets.only(bottom: 6),
           child: Text(
             'Şu an bu durağa yaklaşan araç görünmüyor.',
-            style:
-                text.labelMedium?.copyWith(color: VigilantColors.onSurfaceVariant),
+            style: text.labelMedium
+                ?.copyWith(color: VigilantColors.onSurfaceVariant),
           ),
         )
       else
@@ -456,175 +502,174 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
     final body = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-            if (!widget.embedded)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(8, 8, 20, 0),
-                child: Row(
-                  children: [
-                    IconButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      icon: const Icon(Icons.arrow_back,
-                          color: VigilantColors.onSurfaceVariant),
-                    ),
-                    const Spacer(),
-                  ],
+        if (!widget.embedded)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 8, 20, 0),
+            child: Row(
+              children: [
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.arrow_back,
+                      color: VigilantColors.onSurfaceVariant),
                 ),
-              ),
-            // Durak künyesi: ad, yön, durak kodu + "Konuma git".
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
-                decoration: BoxDecoration(
-                  color: VigilantColors.surfaceContainer,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            trUpper(stop.name),
-                            style: text.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w800,
-                              height: 1.15,
-                            ),
-                          ),
-                          if (stop.contextLabel.isNotEmpty) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              trUpper(stop.contextLabel),
-                              style: text.labelMedium?.copyWith(
-                                  color: VigilantColors.onSurfaceVariant),
-                            ),
-                          ],
-                          if (_stopCode.isNotEmpty) ...[
-                            const SizedBox(height: 2),
-                            Text(
-                              'Durak Kodu: $_stopCode',
-                              style: text.labelMedium?.copyWith(
-                                  color: VigilantColors.onSurfaceVariant),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    // PANELDE "Konuma git" YOK: kullanıcı durağı zaten
-                    // haritadan seçti, onu haritaya götürmenin bir anlamı
-                    // kalmıyor. Onun yerine oradan devam edeceği şey duruyor:
-                    // yol tarifi.
-                    InkWell(
-                      onTap: () {
-                        Haptics.light();
-                        if (widget.embedded) {
-                          // TAM EKRAN AÇ: panel dar, hatların ve yaklaşan
-                          // araçların tamamı sığmıyor.
-                          Navigator.of(context).push(MaterialPageRoute(
-                            builder: (_) => StopLinesScreen(
-                              stop: stop,
-                              lines: lines,
-                              city: city,
-                            ),
-                          ));
-                        } else {
-                          Navigator.of(context).push(MaterialPageRoute(
-                            builder: (_) => NearbyMapScreen(focusStop: stop),
-                          ));
-                        }
-                      },
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        width: 74,
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        decoration: BoxDecoration(
-                          color: VigilantColors.primary,
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                                widget.embedded
-                                    ? Icons.open_in_full_rounded
-                                    : Icons.route_rounded,
-                                color: VigilantColors.onPrimary,
-                                size: 22),
-                            const SizedBox(height: 4),
-                            Text(widget.embedded ? 'Tam ekran' : 'Konuma git',
-                                textAlign: TextAlign.center,
-                                style: text.labelSmall?.copyWith(
-                                    color: VigilantColors.onPrimary,
-                                    fontSize: 10)),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+                const Spacer(),
+              ],
             ),
-            // Bu duraktan geçen hatların kodları — dokununca o hatla alarm.
-            if (lines.isNotEmpty)
-              SizedBox(
-                height: 54,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                  itemCount: lines.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
-                  itemBuilder: (context, i) => _LineChip(
-                    code: lines[i].code,
-                    onTap: () => _pick(context, ref, lines[i]),
+          ),
+        // Durak künyesi: ad, yön, durak kodu + "Konuma git".
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
+            decoration: BoxDecoration(
+              color: VigilantColors.surfaceContainer,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        trUpper(stop.name),
+                        style: text.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          height: 1.15,
+                        ),
+                      ),
+                      if (stop.contextLabel.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          trUpper(stop.contextLabel),
+                          style: text.labelMedium?.copyWith(
+                              color: VigilantColors.onSurfaceVariant),
+                        ),
+                      ],
+                      if (_stopCode.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          'Durak Kodu: $_stopCode',
+                          style: text.labelMedium?.copyWith(
+                              color: VigilantColors.onSurfaceVariant),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
-              ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: ListView(
-                padding: EdgeInsets.fromLTRB(
-                    20,
-                    0,
-                    20,
-                    // PANELDE alt menü + reklam da işin içinde: panelin kendi
-                    // alt kenarı ekranın altına yapışık ve son satır menünün
-                    // altında kalıyordu.
-                    widget.embedded
-                        ? AppInsets.listBottom(context)
-                        : AppInsets.pageBottom(context)),
-                children: [
-                  ..._arrivalsSection(text),
-                  // Başlık BÖLÜMLERDEN BAĞIMSIZ: yaklaşan otobüs / tarife
-                  // bölümü çizilmediğinde (canlı veri yok, şehir
-                  // desteklemiyor) hat listesi başlıksız kalıyordu.
-                  if (lines.isNotEmpty) ...[
-                    Row(
+                const SizedBox(width: 12),
+                // PANELDE "Konuma git" YOK: kullanıcı durağı zaten
+                // haritadan seçti, onu haritaya götürmenin bir anlamı
+                // kalmıyor. Onun yerine oradan devam edeceği şey duruyor:
+                // yol tarifi.
+                InkWell(
+                  onTap: () {
+                    Haptics.light();
+                    if (widget.embedded) {
+                      // TAM EKRAN AÇ: panel dar, hatların ve yaklaşan
+                      // araçların tamamı sığmıyor.
+                      Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => StopLinesScreen(
+                          stop: stop,
+                          lines: lines,
+                          city: city,
+                        ),
+                      ));
+                    } else {
+                      Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => NearbyMapScreen(focusStop: stop),
+                      ));
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    width: 74,
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(
+                      color: VigilantColors.primary,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.alt_route_rounded,
-                            size: 16, color: VigilantColors.primary),
-                        const SizedBox(width: 8),
-                        Text('BU DURAKTAN GEÇEN HATLAR',
+                        Icon(
+                            widget.embedded
+                                ? Icons.open_in_full_rounded
+                                : Icons.route_rounded,
+                            color: VigilantColors.onPrimary,
+                            size: 22),
+                        const SizedBox(height: 4),
+                        Text(widget.embedded ? 'Tam ekran' : 'Konuma git',
+                            textAlign: TextAlign.center,
                             style: text.labelSmall?.copyWith(
-                                color: VigilantColors.onSurfaceVariant,
-                                letterSpacing: 1.2)),
+                                color: VigilantColors.onPrimary, fontSize: 10)),
                       ],
                     ),
-                    const SizedBox(height: 10),
-                  ],
-                  for (var i = 0; i < lines.length; i++) ...[
-                    if (i > 0) const SizedBox(height: 10),
-                    _LineCard(
-                      brief: lines[i],
-                      onTap: () => _pick(context, ref, lines[i]),
-                    ),
-                  ],
-                ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        // Bu duraktan geçen hatların kodları — dokununca o hatla alarm.
+        if (lines.isNotEmpty)
+          SizedBox(
+            height: 54,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              itemCount: lines.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              itemBuilder: (context, i) => _LineChip(
+                code: lines[i].code,
+                onTap: () => _pick(context, ref, lines[i]),
               ),
             ),
+          ),
+        const SizedBox(height: 16),
+        Expanded(
+          child: ListView(
+            padding: EdgeInsets.fromLTRB(
+                20,
+                0,
+                20,
+                // PANELDE alt menü + reklam da işin içinde: panelin kendi
+                // alt kenarı ekranın altına yapışık ve son satır menünün
+                // altında kalıyordu.
+                widget.embedded
+                    ? AppInsets.listBottom(context)
+                    : AppInsets.pageBottom(context)),
+            children: [
+              ..._arrivalsSection(text),
+              // Başlık BÖLÜMLERDEN BAĞIMSIZ: yaklaşan otobüs / tarife
+              // bölümü çizilmediğinde (canlı veri yok, şehir
+              // desteklemiyor) hat listesi başlıksız kalıyordu.
+              if (lines.isNotEmpty) ...[
+                Row(
+                  children: [
+                    const Icon(Icons.alt_route_rounded,
+                        size: 16, color: VigilantColors.primary),
+                    const SizedBox(width: 8),
+                    Text('BU DURAKTAN GEÇEN HATLAR',
+                        style: text.labelSmall?.copyWith(
+                            color: VigilantColors.onSurfaceVariant,
+                            letterSpacing: 1.2)),
+                  ],
+                ),
+                const SizedBox(height: 10),
+              ],
+              for (var i = 0; i < lines.length; i++) ...[
+                if (i > 0) const SizedBox(height: 10),
+                _LineCard(
+                  brief: lines[i],
+                  onTap: () => _pick(context, ref, lines[i]),
+                ),
+              ],
+            ],
+          ),
+        ),
       ],
     );
     // Gömülüyken panelin içine düz gövde konur; tek başına açıldığında
@@ -782,103 +827,104 @@ class _ArrivalRow extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
       ),
       child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 12, 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      arrival.brief.code,
-                      style: text.titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w800),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      arrival.line.name,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: text.labelLarge?.copyWith(
-                          color: VigilantColors.onSurfaceVariant, height: 1.3),
-                    ),
-                    if (plate.isNotEmpty) ...[
+        padding: const EdgeInsets.fromLTRB(16, 14, 12, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        arrival.brief.code,
+                        style: text.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w800),
+                      ),
                       const SizedBox(height: 3),
                       Text(
-                        'Kapı No: $plate',
-                        style: text.labelMedium?.copyWith(
-                            color: VigilantColors.onSurfaceVariant),
+                        arrival.line.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: text.labelLarge?.copyWith(
+                            color: VigilantColors.onSurfaceVariant,
+                            height: 1.3),
                       ),
-                    ],
-                    const SizedBox(height: 8),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                      textBaseline: TextBaseline.alphabetic,
-                      children: [
+                      if (plate.isNotEmpty) ...[
+                        const SizedBox(height: 3),
                         Text(
-                          'Geliş Süresi: ',
-                          style: text.bodyMedium?.copyWith(
+                          'Kapı No: $plate',
+                          style: text.labelMedium?.copyWith(
                               color: VigilantColors.onSurfaceVariant),
                         ),
-                        Text(
-                          _minutes,
-                          style: text.titleLarge?.copyWith(
-                              color: accent, fontWeight: FontWeight.w800),
-                        ),
                       ],
-                    ),
-                    // Belirsizliği SAKLAMA: konum ~60 sn'de bir geliyor,
-                    // tek dakikalık kesinlik iddia edemeyiz. Ana sayı
-                    // okunaklı kalsın diye ikincil satırda duruyor.
-                    Text(
-                      '${e.rangeLabel} aralığında · ${e.stopsAway} durak'
-                      '${e.quality == ArrivalQuality.schedule ? " · tarifeye göre" : ""}',
-                      style: text.labelSmall
-                          ?.copyWith(color: VigilantColors.onSurfaceVariant),
-                    ),
-                  ],
+                      const SizedBox(height: 8),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Text(
+                            'Geliş Süresi: ',
+                            style: text.bodyMedium?.copyWith(
+                                color: VigilantColors.onSurfaceVariant),
+                          ),
+                          Text(
+                            _minutes,
+                            style: text.titleLarge?.copyWith(
+                                color: accent, fontWeight: FontWeight.w800),
+                          ),
+                        ],
+                      ),
+                      // Belirsizliği SAKLAMA: konum ~60 sn'de bir geliyor,
+                      // tek dakikalık kesinlik iddia edemeyiz. Ana sayı
+                      // okunaklı kalsın diye ikincil satırda duruyor.
+                      Text(
+                        '${e.rangeLabel} aralığında · ${e.stopsAway} durak'
+                        '${e.quality == ArrivalQuality.schedule ? " · tarifeye göre" : ""}',
+                        style: text.labelSmall
+                            ?.copyWith(color: VigilantColors.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              // Otobüsün hattaki ilerleyişi: kaç durak kaldığını tek
-              // bakışta veren dikey gösterge.
-              _StopsAwayGauge(stopsAway: e.stopsAway, accent: accent),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: _ArrivalAction(
-                  icon: Icons.alarm_add_rounded,
-                  label: 'Alarm kur',
-                  filled: true,
-                  onTap: onAlarm,
+                const SizedBox(width: 8),
+                // Otobüsün hattaki ilerleyişi: kaç durak kaldığını tek
+                // bakışta veren dikey gösterge.
+                _StopsAwayGauge(stopsAway: e.stopsAway, accent: accent),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: _ArrivalAction(
+                    icon: Icons.alarm_add_rounded,
+                    label: 'Alarm kur',
+                    filled: true,
+                    onTap: onAlarm,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _ArrivalAction(
-                  icon: Icons.my_location_rounded,
-                  label: 'Canlı konum',
-                  onTap: onLive,
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _ArrivalAction(
+                    icon: Icons.my_location_rounded,
+                    label: 'Canlı konum',
+                    onTap: onLive,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              _ArrivalAction(
-                icon: Icons.info_outline_rounded,
-                tooltip: 'Hat sayfası',
-                onTap: onInfo,
-              ),
-            ],
-          ),
-            ],
-          ),
+                const SizedBox(width: 8),
+                _ArrivalAction(
+                  icon: Icons.info_outline_rounded,
+                  tooltip: 'Hat sayfası',
+                  onTap: onInfo,
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

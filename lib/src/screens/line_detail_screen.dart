@@ -138,10 +138,16 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
     }
     _gidis = _firstDir(v, 'G');
     _donus = _firstDir(v, 'D');
-    _depar = [for (final x in v) if (x.depar) x];
+    _depar = [
+      for (final x in v)
+        if (x.depar) x
+    ];
     // Yön etiketi olmayan normal varyant (nadiren): ilk normali gidiş say.
     if (_gidis == null && _donus == null) {
-      final normal = [for (final x in v) if (!x.depar) x];
+      final normal = [
+        for (final x in v)
+          if (!x.depar) x
+      ];
       if (normal.isNotEmpty) {
         _gidis = normal.first;
       } else if (_depar.isNotEmpty) {
@@ -202,7 +208,7 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
     Haptics.selection();
     _selectedId = id;
     _filter = '';
-    _busesAtStop = const {};        // yön değişti: eski konumlar geçersiz
+    _busesAtStop = const {}; // yön değişti: eski konumlar geçersiz
     // SIRALI: ray yolunda araç konumu hattın TÜRÜNDEN ve duraklarından
     // üretiliyor; _line dolmadan çağırmak sessizce boş liste veriyordu.
     _loadSelected().then((_) => _loadLiveBuses());
@@ -219,24 +225,38 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
     final id = _selectedId;
     if (id == null) return;
     final line = _line;
-    final rail = line != null &&
-        line.type != LineType.bus &&
-        line.type != LineType.metrobus;
-    if (!rail && !_lineCity.hasLiveBus) return;
+    if (line == null) return;
+    final rail =
+        line.type != LineType.bus && line.type != LineType.metrobus;
     final isGidis = id.endsWith('_G');
     try {
+      // CANLI YOL ŞEHİRDEN BAĞIMSIZ: İstanbul İETT, Kocaeli e-komobil (izinliyken).
+      // Ray hatları tarifeden konumlanır.
       final vehicles = rail
           ? await _scheduledVehicles(line)
-          : await LiveBusService.instance.vehicles(widget.code);
+          : await LiveBusService.instance.vehicles(
+              widget.code,
+              city: _lineCity,
+              lineId: id,
+            );
       if (!mounted || _selectedId != id) return;
       final counts = <String, int>{};
       for (final v in vehicles) {
-        final code = v.nearestStopCode.trim();
-        if (code.isEmpty) continue;
         // Yönü belirsiz araç (depar/boş güzergâh kodu) sayılmaz: yanlış
         // yöne yazmaktansa hiç yazmamak doğru.
-        final known = v.routeCode.contains('_G_') || v.routeCode.contains('_D_');
+        final known =
+            v.routeCode.contains('_G_') || v.routeCode.contains('_D_');
         if (!known || v.isGidis != isGidis) continue;
+
+        // DURAK KODU YOKSA KONUMDAN BUL. İETT her araç için yakınDurakKodu
+        // veriyor; Kocaeli (e-komobil) ve tarifeden üretilen araçlar vermiyor.
+        // O durumda aracın koordinatı hattın en yakın durağına eşlenir.
+        var code = v.nearestStopCode.trim();
+        if (code.isEmpty) {
+          final near = _nearestStopCode(line, v);
+          if (near == null) continue;
+          code = near;
+        }
         counts[code] = (counts[code] ?? 0) + 1;
       }
       setState(() {
@@ -246,6 +266,27 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
     } catch (_) {
       // Canlı veri yoksa liste sade hâliyle çalışır.
     }
+  }
+
+  /// Aracın koordinatına en yakın durağın HAM kimliği (yoksa null).
+  ///
+  /// Durak satırı ham kimlikle eşleştiğinden (`bus:` öneki ayıklanmış) burada
+  /// da ham hâli döndürülür.
+  String? _nearestStopCode(TransitLine line, BusVehicle v) {
+    if (!v.lat.isFinite || !v.lon.isFinite) return null;
+    double? best;
+    String? bestId;
+    for (final s in line.stops) {
+      final dLat = (s.lat - v.lat).abs();
+      final dLon = (s.lon - v.lon).abs();
+      final d = dLat * dLat + dLon * dLon; // karşılaştırma için karesel yeter
+      if (best == null || d < best) {
+        best = d;
+        bestId =
+            s.id.startsWith(kBusPrefix) ? s.id.substring(kBusPrefix.length) : s.id;
+      }
+    }
+    return bestId;
   }
 
   /// Tarifeden üretilen araçlar — ray hatlarında canlı yayının yerini alır.
@@ -374,7 +415,8 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
                             Expanded(
                               child: _DirTab(
                                 label: 'Dönüş',
-                                sub: rail.name.split(' - ').reversed.join(' - '),
+                                sub:
+                                    rail.name.split(' - ').reversed.join(' - '),
                                 selected: _railReversed,
                                 onTap: () {
                                   if (!_railReversed) _toggleRailDirection();
@@ -453,7 +495,8 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
                       ],
                     )
                   : ListView.builder(
-                      padding: EdgeInsets.fromLTRB(20, 0, 20, AppInsets.pageBottom(context)),
+                      padding: EdgeInsets.fromLTRB(
+                          20, 0, 20, AppInsets.pageBottom(context)),
                       itemCount: stops.length,
                       itemBuilder: (context, i) {
                         final stop = stops[i];
@@ -511,8 +554,8 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
                 Icon(lineTypeIcon(type), size: 18, color: color),
                 const SizedBox(width: 8),
                 Text(widget.code,
-                    style: text.titleMedium?.copyWith(
-                        color: color, fontWeight: FontWeight.w800)),
+                    style: text.titleMedium
+                        ?.copyWith(color: color, fontWeight: FontWeight.w800)),
               ],
             ),
           ),
@@ -536,8 +579,7 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
                   Text(line.name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style:
-                          text.labelSmall?.copyWith(color: color)),
+                      style: text.labelSmall?.copyWith(color: color)),
               ],
             ),
           ),
@@ -561,10 +603,8 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
     // RAY HATLARINDA DA AÇILIR: konum canlı değil, tarifeden üretiliyor
     // (bkz. `ScheduledVehicles`). Ekran bunu açıkça yazıyor. Ölçüt, hattın
     // gösterilecek bir konumu olup olmadığı — canlı yayın olup olmadığı değil.
-    final rubber =
-        line.type == LineType.bus || line.type == LineType.metrobus;
-    final hasLive =
-        rubber ? lineCity.hasLiveBus : lineCity.hasTimetable;
+    final rubber = line.type == LineType.bus || line.type == LineType.metrobus;
+    final hasLive = rubber ? lineCity.hasLiveBus : lineCity.hasTimetable;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
       child: Row(
@@ -593,7 +633,7 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
                   Haptics.light();
                   Navigator.of(context).push(MaterialPageRoute(
                       builder: (_) =>
-                        LiveBusScreen(line: line, city: widget.city)));
+                          LiveBusScreen(line: line, city: widget.city)));
                 },
               ),
             ),
@@ -612,8 +652,7 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
     final line = _line;
     if (line == null) return const SizedBox.shrink();
     final TransitCity lineCity = widget.city ?? ref.watch(activeCityProvider);
-    final rubber =
-        line.type == LineType.bus || line.type == LineType.metrobus;
+    final rubber = line.type == LineType.bus || line.type == LineType.metrobus;
     if (!lineCity.hasAnnouncements || !rubber) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
@@ -734,8 +773,10 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
             const SizedBox(width: 8),
             Expanded(
               child: Text(message,
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: VigilantColors.tertiaryContainer)),
+                  style: Theme.of(context)
+                      .textTheme
+                      .labelMedium
+                      ?.copyWith(color: VigilantColors.tertiaryContainer)),
             ),
           ],
         ),
@@ -748,8 +789,8 @@ class _LineDetailScreenState extends ConsumerState<LineDetailScreen> {
           isDense: true,
           filled: true,
           fillColor: VigilantColors.surfaceContainer,
-          prefixIcon: const Icon(Icons.search,
-              color: VigilantColors.onSurfaceVariant),
+          prefixIcon:
+              const Icon(Icons.search, color: VigilantColors.onSurfaceVariant),
           hintText: 'Durak ara',
           hintStyle:
               text.bodyMedium?.copyWith(color: VigilantColors.onSurfaceVariant),
@@ -849,9 +890,8 @@ class _ActionButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final fg = filled ? Colors.white : VigilantColors.onSurface;
     return Material(
-      color: filled
-          ? VigilantColors.primary
-          : VigilantColors.surfaceContainerHigh,
+      color:
+          filled ? VigilantColors.primary : VigilantColors.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
@@ -867,8 +907,10 @@ class _ActionButton extends StatelessWidget {
                 child: Text(label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: fg, fontWeight: FontWeight.w700)),
+                    style: Theme.of(context)
+                        .textTheme
+                        .labelLarge
+                        ?.copyWith(color: fg, fontWeight: FontWeight.w700)),
               ),
             ],
           ),
@@ -910,10 +952,7 @@ class _DeparRow extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(
-                selected
-                    ? Icons.radio_button_checked
-                    : Icons.radio_button_off,
+            Icon(selected ? Icons.radio_button_checked : Icons.radio_button_off,
                 size: 16,
                 color: selected
                     ? VigilantColors.tertiaryContainer
@@ -1006,8 +1045,7 @@ class _StopRow extends StatelessWidget {
                     ),
                     child: isLast
                         ? Icon(Icons.flag_rounded,
-                            size: 9,
-                            color: here ? Colors.white : color)
+                            size: 9, color: here ? Colors.white : color)
                         : null,
                   ),
                   Expanded(
@@ -1043,8 +1081,9 @@ class _StopRow extends StatelessWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: text.bodyMedium?.copyWith(
-                                  fontWeight:
-                                      here ? FontWeight.w700 : FontWeight.w400)),
+                                  fontWeight: here
+                                      ? FontWeight.w700
+                                      : FontWeight.w400)),
                         ),
                       ],
                     ),

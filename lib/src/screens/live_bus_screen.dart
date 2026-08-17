@@ -70,8 +70,7 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen> {
 
   /// Hattın kendi şehri (yoksa aktif şehir) — duraksız/koordinatsız durumda
   /// haritanın açılacağı yer. Sabit İstanbul koordinatı gömülüydü.
-  TransitCity get _fallbackCity =>
-      widget.city ?? ref.read(activeCityProvider);
+  TransitCity get _fallbackCity => widget.city ?? ref.read(activeCityProvider);
   bool _mapReady = false;
 
   /// Harita hareket ederken yoğun katmanlar çizilmez (bkz. [MapSettle]).
@@ -170,7 +169,11 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen> {
     setState(() => _loading = true);
     final list = _scheduledOnly
         ? await _fromTimetable()
-        : await LiveBusService.instance.vehicles(_code);
+        : await LiveBusService.instance.vehicles(
+            _code,
+            city: _fallbackCity,
+            lineId: _line.id,
+          );
     if (!mounted) return;
     setState(() {
       _vehicles = list;
@@ -213,13 +216,13 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen> {
     if (other == null) {
       if (mounted) {
         setState(() => _switchingDirection = false);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Bu hattın tek yönü var')));
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Bu hattın tek yönü var')));
       }
       return;
     }
-    final line = await TransitDb.instance
-        .buildLine(other.id, cityId: widget.city?.id);
+    final line =
+        await TransitDb.instance.buildLine(other.id, cityId: widget.city?.id);
     if (!mounted) return;
     setState(() {
       _switchingDirection = false;
@@ -301,8 +304,7 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen> {
         if ((s.lat != 0 || s.lon != 0) && safeLatLng(s.lat, s.lon) != null) s,
     ];
     _routePointsCache = [for (final s in _stopsCache) LatLng(s.lat, s.lon)];
-    _drawRouteCache =
-        onlyUsable(_road.length >= 2 ? _road : _routePointsCache);
+    _drawRouteCache = onlyUsable(_road.length >= 2 ? _road : _routePointsCache);
     _arrowsRouteLen = -1;
     _markersKey = null;
     _terminalsBuilt = false;
@@ -394,8 +396,8 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen> {
       acc += len;
       if (acc < spacing) continue;
       acc = 0;
-      final mid = safeLatLng((a.latitude + b.latitude) / 2,
-          (a.longitude + b.longitude) / 2);
+      final mid = safeLatLng(
+          (a.latitude + b.latitude) / 2, (a.longitude + b.longitude) / 2);
       if (mid == null) continue;
       final dLon =
           (b.longitude - a.longitude) * math.cos(a.latitude * math.pi / 180);
@@ -440,9 +442,9 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen> {
                 minZoom: AppMapStyle.minZoom,
                 maxZoom: AppMapStyle.maxZoom,
                 backgroundColor: VigilantColors.surfaceContainerLowest,
-                    // Yakınlaşma jestleri yumuşatılmış (bkz. AppMapStyle).
-                    interactionOptions:
-                        AppMapStyle.interaction(flags: InteractiveFlag.all),
+                // Yakınlaşma jestleri yumuşatılmış (bkz. AppMapStyle).
+                interactionOptions:
+                    AppMapStyle.interaction(flags: InteractiveFlag.all),
                 onMapReady: () {
                   _mapReady = true;
                   _fit();
@@ -519,31 +521,31 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen> {
                 MarkerLayer(markers: [
                   for (final v in shown)
                     if (safeLatLng(v.lat, v.lon) case final vp?)
-                    Marker(
-                      point: vp,
-                      width: 44,
-                      height: 44,
-                      child: GestureDetector(
-                        onTap: () {
-                          Haptics.light();
-                          setState(() {
-                            _selectedStop = null;
-                            _selected =
-                                _selected?.plate == v.plate ? null : v;
-                          });
-                        },
-                        child: _BusMarker(
-                          vehicle: v,
-                          selected: _selected?.plate == v.plate,
-                          type: _line.type,
+                      Marker(
+                        point: vp,
+                        width: 44,
+                        height: 44,
+                        child: GestureDetector(
+                          onTap: () {
+                            Haptics.light();
+                            setState(() {
+                              _selectedStop = null;
+                              _selected =
+                                  _selected?.plate == v.plate ? null : v;
+                            });
+                          },
+                          child: _BusMarker(
+                            vehicle: v,
+                            selected: _selected?.plate == v.plate,
+                            type: _line.type,
+                          ),
                         ),
                       ),
-                    ),
                 ]),
                 // Kullanıcının CANLI konumu — en üstte çizilir.
                 MarkerLayer(markers: [
-                  if (ref.watch(liveLocationProvider).valueOrNull
-                      case final me? when me.isUsable)
+                  if (ref.watch(liveLocationProvider).valueOrNull case final me?
+                      when me.isUsable)
                     Marker(
                       point: me,
                       width: 24,
@@ -606,8 +608,7 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen> {
       point: LatLng(s.lat, s.lon),
       width: showLabels ? 132 : dotBox,
       height: height,
-      alignment:
-          showLabels ? _dotAlignment(dotBox, height) : Alignment.center,
+      alignment: showLabels ? _dotAlignment(dotBox, height) : Alignment.center,
       child: GestureDetector(
         onTap: () {
           Haptics.light();
@@ -683,8 +684,7 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen> {
               ),
             ),
             Flexible(
-              child: _MapLabel(
-                  text: s.name, highlight: selected, strong: true),
+              child: _MapLabel(text: s.name, highlight: selected, strong: true),
             ),
           ],
         ),
@@ -713,8 +713,8 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   decoration: BoxDecoration(
-                    color: VigilantColors.surfaceContainer
-                        .withValues(alpha: 0.92),
+                    color:
+                        VigilantColors.surfaceContainer.withValues(alpha: 0.92),
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: Row(
@@ -934,8 +934,7 @@ class _InfoCard extends StatelessWidget {
         border: Border.all(
             color: VigilantColors.surfaceVariant.withValues(alpha: 0.4)),
         boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: 0.4), blurRadius: 20),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.4), blurRadius: 20),
         ],
       ),
       child: Column(
@@ -998,7 +997,9 @@ class _InfoCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   count > 0
-                      ? (scheduled ? 'Yolda $count sefer' : 'Hatta $count otobüs')
+                      ? (scheduled
+                          ? 'Yolda $count sefer'
+                          : 'Hatta $count otobüs')
                       : (loading ? 'Yükleniyor…' : 'Şu an sefer görünmüyor'),
                   style: text.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
                 ),
@@ -1096,8 +1097,8 @@ class _SelectionBox extends StatelessWidget {
                 child: Text(title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: text.bodyMedium
-                        ?.copyWith(fontWeight: FontWeight.w800)),
+                    style:
+                        text.bodyMedium?.copyWith(fontWeight: FontWeight.w800)),
               ),
               GestureDetector(
                 onTap: onClose,
@@ -1134,9 +1135,8 @@ class _ActionButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final fg = filled ? Colors.white : VigilantColors.onSurface;
     return Material(
-      color: filled
-          ? VigilantColors.primary
-          : VigilantColors.surfaceContainerHigh,
+      color:
+          filled ? VigilantColors.primary : VigilantColors.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
