@@ -100,7 +100,10 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
   // Sürüklenebilir panel (Alarm Kur ekranındaki gibi).
   static const _minFraction = 0.28;
   static const _maxFraction = 0.75;
-  double _panelFraction = 0.42;
+  // VARSAYILAN yükseklik ekranın %60'ı: durak listesi ilk açılışta daha
+  // görünür olsun (kullanıcı çoğu zaman haritadan çok listeyle işi var).
+  // Kullanıcı tutamaçtan [_minFraction, _maxFraction] arasında değiştirir.
+  double _panelFraction = 0.60;
   double _availableHeight = 0;
 
   /// Kullanıcının ANLIK konumu — canlı GPS akışından (mavi nokta bunu izler).
