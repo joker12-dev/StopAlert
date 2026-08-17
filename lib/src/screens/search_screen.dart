@@ -709,6 +709,10 @@ class _ResultsView extends StatelessWidget {
     // sonra karşısına çıkması hem daha az rahatsız hem daha çok tıklanıyor.
     if (children.isNotEmpty && !busLoading) {
       children.add(const NativeAdSlot(
+        // KALICI KEY: sonuç listesi her tuşta yeniden çiziliyor. Key olmadan
+        // yuvanın State'i düşüp her tuşta YENİ reklam isteği gidiyordu —
+        // hem israf hem AdMob'un "geçersiz trafik" bayrağı.
+        key: ValueKey('search-native-ad'),
         margin: EdgeInsets.only(top: 18),
         template: TemplateType.small,
       ));

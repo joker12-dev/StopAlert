@@ -28,10 +28,16 @@ class _DataPackagesScreenState extends ConsumerState<DataPackagesScreen> {
   /// Şehir kimliği -> sunucudaki sürüm/boyut (null = bakılmadı/ulaşılamadı).
   final Map<String, ({String? version, int bytes})?> _remote = {};
 
-  /// O an indirilen şehir ve ilerlemesi.
-  String? _busyCity;
-  double _progress = 0;
-  String _phase = '';
+  /// İNDİRME DURUMU ŞEHİR BAZLI. Tek bir `_busyCity` vardı ve ikinci şehre
+  /// basınca birincinin ilerlemesi eziliyordu; iki kart aynı anda kendi
+  /// durumunu gösteremiyordu.
+  final Map<String, double> _progress = {};
+  final Map<String, String> _phase = {};
+
+  /// İndirmeler SIRALANIR: BusDataService.ensureReady veritabanını kapatıp
+  /// açıyor; iki çağrı aynı anda koşarsa paket bozulabiliyor. Bu zincir bir
+  /// indirme bitmeden ötekini başlatmaz.
+  Future<void> _downloadChain = Future<void>.value();
 
   @override
   void initState() {
@@ -53,19 +59,29 @@ class _DataPackagesScreenState extends ConsumerState<DataPackagesScreen> {
   }
 
   Future<void> _download(TransitCity city) async {
+    // Zaten bu şehir indiriliyor/sırada: tekrar başlatma.
+    if (_phase.containsKey(city.id)) return;
     Haptics.light();
     setState(() {
-      _busyCity = city.id;
-      _progress = 0;
-      _phase = 'Kontrol ediliyor…';
+      _progress[city.id] = 0;
+      _phase[city.id] = 'Sırada…';
     });
+    // Öncekinin arkasına ekle: indirmeler ÜST ÜSTE BİNMEZ. İki kart da
+    // beklerken "Sırada…" gösterir, sıra gelince gerçek ilerleme akar.
+    _downloadChain = _downloadChain.then((_) => _runDownload(city));
+    await _downloadChain;
+  }
+
+  Future<void> _runDownload(TransitCity city) async {
+    if (!mounted) return;
+    setState(() => _phase[city.id] = 'Kontrol ediliyor…');
     await BusDataService.instance.ensureReady(
       city: city,
       onProgress: (phase, fraction) {
         if (!mounted) return;
         setState(() {
-          _progress = fraction;
-          _phase = switch (phase) {
+          _progress[city.id] = fraction;
+          _phase[city.id] = switch (phase) {
             BusDataPhase.checking => 'Sürüm kontrol ediliyor…',
             BusDataPhase.downloading => 'İndiriliyor…',
             BusDataPhase.verifying => 'Doğrulanıyor…',
@@ -77,7 +93,10 @@ class _DataPackagesScreenState extends ConsumerState<DataPackagesScreen> {
       },
     );
     if (!mounted) return;
-    setState(() => _busyCity = null);
+    setState(() {
+      _progress.remove(city.id);
+      _phase.remove(city.id);
+    });
     await _refresh();
     // İndirilen paket aktif şehrinki değilse veritabanı ona geçmiş olur;
     // aktif şehri yeniden açarak eski hâle döndür.
@@ -152,9 +171,9 @@ class _DataPackagesScreenState extends ConsumerState<DataPackagesScreen> {
               isActive: active.id == city.id,
               local: _local[city.id],
               remote: _remote[city.id],
-              busy: _busyCity == city.id,
-              progress: _progress,
-              phase: _phase,
+              busy: _phase.containsKey(city.id),
+              progress: _progress[city.id] ?? 0,
+              phase: _phase[city.id] ?? '',
               sizeLabel: _size,
               versionLabel: _versionLabel,
               onDownload: () => _download(city),

@@ -467,6 +467,9 @@ class _StopSearchViewState extends ConsumerState<_StopSearchView> {
       itemBuilder: (context, i) {
         if (i == results.length + hint) {
           return const NativeAdSlot(
+            // Kalıcı key: arama her tuşta yeniden çiziliyor, reklam isteği
+            // tek sefer gitsin (bkz. search_screen'deki aynı not).
+            key: ValueKey('stops-native-ad'),
             margin: EdgeInsets.only(top: 8),
             template: TemplateType.small,
           );

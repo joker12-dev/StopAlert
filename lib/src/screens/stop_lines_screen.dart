@@ -89,6 +89,23 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
     _loadArrivals();
   }
 
+  @override
+  void didUpdateWidget(StopLinesScreen old) {
+    super.didUpdateWidget(old);
+    // HAT LİSTESİ SONRADAN GELİYOR. Harita panelinde durağa dokununca ekran
+    // ÖNCE boş hat listesiyle kuruluyor, hatlar async yükleniyor. `initState`
+    // yalnızca bir kez çalıştığı için o ilk boş listeyle hesaplanıyor ve
+    // hatlar geldiğinde yaklaşan araçlar hiç hesaplanmıyordu (aynı key
+    // yüzünden State korunuyor, yeni widget yeni initState açmıyor).
+    if (old.stop.id != widget.stop.id ||
+        old.lines.length != widget.lines.length) {
+      _arrivals = const [];
+      _scheduled = const [];
+      _arrivalsAt = null;
+      _loadArrivals();
+    }
+  }
+
   /// Yaklaşan araçlar — HAT TÜRÜNE GÖRE İKİ AYRI KAYNAK.
   ///
   /// Canlı araç konumu yalnızca LASTİKLİ hatlar için var (İETT filo servisi).
