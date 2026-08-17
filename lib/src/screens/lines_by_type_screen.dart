@@ -110,8 +110,13 @@ class _LinesByTypeScreenState extends ConsumerState<LinesByTypeScreen> {
         final rows =
             await TransitDb.instance.linesByType(widget.type.name, cityId: c.id);
         for (final b in rows) {
-          // Aynı kod iki ilde olabiliyor (147); ikisi de listelenir.
-          byKey.putIfAbsent('${c.id}|${b.code}', () => (b, c));
+          // TEKİLLEŞTİRME HAT KİMLİĞİNE GÖRE, şehir+koda göre DEĞİL.
+          //
+          // Şehir anahtarı kullanılınca aynı satır iki ilin altında ayrı ayrı
+          // görünebiliyordu: Marmaray sayfasında 3 İstanbul + 3 Kocaeli çıktı,
+          // oysa Kocaeli paketinde Marmaray yok. Kimlik paketin içinden geldiği
+          // için aynı hat hangi yoldan okunursa okunsun tek satır kalır.
+          byKey.putIfAbsent(b.id, () => (b, c));
         }
       } catch (_) {
         // O ilin paketi kurulu değil; ötekiler yine listelenir.
@@ -121,7 +126,7 @@ class _LinesByTypeScreenState extends ConsumerState<LinesByTypeScreen> {
     for (final l in rail) {
       if (l.type != widget.type) continue;
       byKey.putIfAbsent(
-        '${city.id}|${l.code}',
+        l.id,
         () => (
           TransitLineBrief(id: l.id, code: l.code, name: l.name, type: l.type),
           city,

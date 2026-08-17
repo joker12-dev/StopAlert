@@ -331,22 +331,10 @@ class _CityCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                if (installed && !isActive) ...[
-                  if (_updateAvailable) const SizedBox(width: 10),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: onActivate,
-                      icon: const Icon(Icons.swap_horiz_rounded, size: 18),
-                      label: const Text('Bu şehre geç'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: VigilantColors.onSurface,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                      ),
-                    ),
-                  ),
-                ],
+                // "BU ŞEHRE GEÇ" YOK: şehir seçimi kaldırıldı, indirilen
+                // her paket her yerde geçerli. Aktif şehir kavramı yalnızca
+                // hangi paketin birincil açılacağını belirliyor ve konumdan
+                // kendiliğinden çözülüyor.
                 if (installed) ...[
                   const SizedBox(width: 10),
                   IconButton(

@@ -15,6 +15,18 @@ import '../util/platform_check.dart';
 /// ve kullanıcıya "stopalert-15716.firebaseapp.com" alan adını gösteriyordu —
 /// hem tanıdık değil hem de tedirgin edici. Yerli akış sistemin kendi hesap
 /// seçicisini açar.
+/// Google hesap seçildi ama kimlik jetonu gelmedi.
+///
+/// Neredeyse her zaman yapılandırma sorunudur: derlemeyi imzalayan anahtarın
+/// SHA-1'i Firebase'e kayıtlı değilse Google jetonu üretmiyor. Sessiz geçmek
+/// yerine adıyla anılıyor ki arayüz doğru şeyi söyleyebilsin.
+class MissingIdTokenException implements Exception {
+  const MissingIdTokenException();
+
+  @override
+  String toString() => 'MissingIdTokenException';
+}
+
 class AuthService {
   AuthService(this._auth);
 
@@ -57,12 +69,21 @@ class AuthService {
   }
 
   /// Sistemin hesap seçicisini açar ve Firebase kimlik bilgisi üretir.
-  /// Kullanıcı vazgeçerse null döner.
-  Future<AuthCredential?> _googleCredential() async {
+  /// Google hesabından Firebase kimlik bilgisi üretir.
+  ///
+  /// Vazgeçme durumunda `authenticate()` zaten fırlatıyor; bu yüzden buradan
+  /// null DÖNMEZ. Kimlik jetonu gelmezse [MissingIdTokenException] atılır.
+  Future<AuthCredential> _googleCredential() async {
     await _ensureGoogleReady();
     final account = await GoogleSignIn.instance.authenticate();
     final idToken = account.authentication.idToken;
-    if (idToken == null) return null;
+    // JETON YOKSA SESSİZ KALMA.
+    //
+    // Eskiden null dönüyordu ve çağıran bunu "kullanıcı vazgeçti" sayıp hiçbir
+    // şey yapmıyordu: hesap seçiliyor, ekran kapanıyor, hiçbir mesaj çıkmıyor.
+    // Oysa bu gerçek bir yapılandırma hatası — imza parmak izi Firebase'de
+    // kayıtlı değilse Google jetonu vermiyor.
+    if (idToken == null) throw const MissingIdTokenException();
     return GoogleAuthProvider.credential(idToken: idToken);
   }
 
@@ -71,16 +92,20 @@ class AuthService {
       return AuthLinkResult.error('Bu cihazda desteklenmiyor.');
     }
     try {
-      final cred = await _googleCredential();
-      if (cred == null) return AuthLinkResult.cancelled();
-      return _linkCredential(cred);
+      return _linkCredential(await _googleCredential());
+    } on MissingIdTokenException {
+      return AuthLinkResult.error(
+        'Google kimlik doğrulaması tamamlanamadı. Uygulamanın imza parmak izi '
+        'Firebase’de kayıtlı olmayabilir; birkaç dakika sonra tekrar dene.',
+      );
     } on GoogleSignInException catch (e) {
       if (e.code == GoogleSignInExceptionCode.canceled) {
         return AuthLinkResult.cancelled();
       }
-      return AuthLinkResult.error(e.description ?? 'Google girişi başarısız.');
-    } catch (_) {
-      return AuthLinkResult.error('Google girişi başarısız.');
+      return AuthLinkResult.error(
+          e.description ?? 'Google girişi başarısız (${e.code.name}).');
+    } catch (e) {
+      return AuthLinkResult.error('Google girişi başarısız: $e');
     }
   }
 
@@ -151,16 +176,20 @@ class AuthService {
       return AuthLinkResult.error('Bu cihazda desteklenmiyor.');
     }
     try {
-      final cred = await _googleCredential();
-      if (cred == null) return AuthLinkResult.cancelled();
-      return signInWithCredential(cred);
+      return signInWithCredential(await _googleCredential());
+    } on MissingIdTokenException {
+      return AuthLinkResult.error(
+        'Google kimlik doğrulaması tamamlanamadı. Uygulamanın imza parmak izi '
+        'Firebase’de kayıtlı olmayabilir; birkaç dakika sonra tekrar dene.',
+      );
     } on GoogleSignInException catch (e) {
       if (e.code == GoogleSignInExceptionCode.canceled) {
         return AuthLinkResult.cancelled();
       }
-      return AuthLinkResult.error(e.description ?? 'Google girişi başarısız.');
-    } catch (_) {
-      return AuthLinkResult.error('Google girişi başarısız.');
+      return AuthLinkResult.error(
+          e.description ?? 'Google girişi başarısız (${e.code.name}).');
+    } catch (e) {
+      return AuthLinkResult.error('Google girişi başarısız: $e');
     }
   }
 
