@@ -18,6 +18,7 @@ import '../state/city_provider.dart';
 import '../state/journey_provider.dart';
 import '../state/live_location_provider.dart';
 import '../theme/app_theme.dart';
+import '../widgets/offline_banner.dart';
 import '../util/haptics.dart';
 import '../util/latlng_guard.dart';
 import '../util/map_settle.dart';
@@ -557,6 +558,19 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen> {
             ),
           ),
           _topBar(context),
+          // ÇEVRİMDIŞI ŞERİDİ — yalnızca CANLI (ağ gerektiren) konumda.
+          // Tarifeden üretilen ray konumu internetsiz de çalışır; orada
+          // göstermek yanlış olurdu.
+          if (!_scheduledOnly)
+            Positioned(
+              left: 12,
+              right: 12,
+              top: MediaQuery.viewPaddingOf(context).top + 64,
+              child: const OfflineBanner(
+                message: 'Bağlantı yok — canlı konum güncellenemiyor.',
+                margin: EdgeInsets.zero,
+              ),
+            ),
           Positioned(
             left: 16,
             right: 16,
