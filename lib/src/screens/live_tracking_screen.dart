@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart' show TemplateType;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
@@ -21,6 +22,7 @@ import '../services/telemetry.dart';
 import '../services/tracking_service.dart';
 import '../state/journey_provider.dart';
 import '../theme/app_theme.dart';
+import '../widgets/native_ad_slot.dart';
 import '../util/haptics.dart';
 import '../util/platform_check.dart';
 import '../widgets/glass_panel.dart';
@@ -922,6 +924,13 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                 ),
               ),
             ),
+          ),
+          // Panelin EN ÜSTÜNDE (tutamacın altında) yerel reklam. Yüklenmezse
+          // hiç yer kaplamaz; kalan-durak halkası hemen altında kalır.
+          const NativeAdSlot(
+            key: ValueKey('live-tracking-native-ad'),
+            margin: EdgeInsets.fromLTRB(16, 0, 16, 10),
+            template: TemplateType.small,
           ),
           // Kalan durak halkası + ETA/mesafe.
           Padding(

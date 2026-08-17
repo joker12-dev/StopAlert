@@ -14,6 +14,7 @@ import 'src/screens/consent_screen.dart';
 import 'src/screens/onboarding_screen.dart';
 import 'src/screens/permission_gate_screen.dart';
 import 'src/services/ad_service.dart';
+import 'src/services/app_open_ad_service.dart';
 import 'src/services/alarm_notifications.dart';
 import 'src/services/bus_data_service.dart';
 import 'src/services/cloud_learning_service.dart';
@@ -40,6 +41,9 @@ Future<void> main() async {
   await AlarmNotifications.init();
   // AdMob SDK'sını arka planda başlat (mobil dışı platformda no-op).
   unawaited(AdService.instance.init());
+  // Uygulama-açılış reklamı: yalnızca arka plandan DÖNÜŞTE gösterilir
+  // (akış içinde tam ekran reklam yok). Bkz. AppOpenAdManager.
+  AppOpenAdManager.instance.start();
   // Firebase.initializeApp BEKLENEREK çağrılır (yerel, hızlı) ki okuma
   // sağlayıcıları hazır olmayan FirebaseAuth'a düşmesin. Anonim giriş (ağ)
   // bunun içinde bloklamadan yapılır.

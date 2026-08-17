@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart' show TemplateType;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
@@ -14,6 +15,7 @@ import '../state/city_provider.dart';
 import '../state/journey_provider.dart';
 import '../state/live_location_provider.dart';
 import '../theme/app_theme.dart';
+import '../widgets/native_ad_slot.dart';
 import '../util/haptics.dart';
 import '../util/insets.dart';
 import '../util/latlng_guard.dart';
@@ -886,6 +888,13 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
             child: Text('Listeyi değiştirmek için haritayı gezdir',
                 style: text.labelSmall
                     ?.copyWith(color: VigilantColors.onSurfaceVariant)),
+          ),
+          // Yarıçap çiplerinin altında yerel reklam (küçük). Yüklenmezse hiç
+          // yer kaplamaz; panel listesi hemen başlar.
+          const NativeAdSlot(
+            key: ValueKey('nearby-native-ad'),
+            margin: EdgeInsets.fromLTRB(14, 0, 14, 8),
+            template: TemplateType.small,
           ),
           Expanded(
             child: _loadingStops && stops.isEmpty

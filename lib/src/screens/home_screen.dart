@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart' show TemplateType;
 
 import '../data/favorite_route.dart';
 import '../data/journey_payload.dart';
@@ -25,6 +26,7 @@ import '../widgets/glass_panel.dart';
 import '../widgets/mascot.dart';
 import '../widgets/permission_required_sheet.dart';
 import '../widgets/skeleton.dart';
+import '../widgets/native_ad_slot.dart';
 import '../widgets/traffic_strip.dart';
 import 'alarm_setup_screen.dart';
 import 'announcements_screen.dart';
@@ -124,6 +126,13 @@ class HomeScreen extends ConsumerWidget {
             // Trafik yoğunluğu İBB servisinden geliyor — yalnızca İstanbul.
             if (ref.watch(activeCityProvider).hasTraffic)
               const EntranceFade(delayMs: 260, child: TrafficStrip()),
+            // Trafik yoğunluğunun altında yerel reklam. Yüklenmezse hiç yer
+            // kaplamaz; kalıcı key ile her rebuild'de yeni istek atmaz.
+            const NativeAdSlot(
+              key: ValueKey('home-native-ad'),
+              margin: EdgeInsets.only(top: 20),
+              template: TemplateType.small,
+            ),
             // Sık rota önerisi (bizim özellik) — varsa
             ..._buildSuggestionSection(context, ref, text),
             const SizedBox(height: 28),

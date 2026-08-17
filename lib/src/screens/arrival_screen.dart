@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart' show TemplateType;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/favorite_route.dart';
@@ -9,6 +10,7 @@ import '../services/ad_service.dart';
 import '../services/app_review_service.dart';
 import '../state/journey_provider.dart';
 import '../theme/app_theme.dart';
+import '../widgets/native_ad_slot.dart';
 import '../util/haptics.dart';
 import '../widgets/confetti_overlay.dart';
 import '../widgets/glass_panel.dart';
@@ -194,6 +196,13 @@ class _ArrivalScreenState extends ConsumerState<ArrivalScreen> {
                     ],
                   ),
                   const SizedBox(height: 16),
+                  // Yolculuk özeti ile eylem düğmeleri arasında yerel reklam.
+                  // Yüklenmezse hiç yer kaplamaz.
+                  const NativeAdSlot(
+                    key: ValueKey('arrival-native-ad'),
+                    margin: EdgeInsets.only(bottom: 16),
+                    template: TemplateType.small,
+                  ),
                   // Favori + Paylaş
                   Row(
                     children: [

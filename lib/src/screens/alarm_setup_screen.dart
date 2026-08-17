@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart' show TemplateType;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
 
@@ -18,6 +19,7 @@ import '../data/alarm_sound.dart';
 import '../services/alarm_sound_preview.dart';
 import '../services/journey_reminder.dart';
 import '../theme/app_theme.dart';
+import '../widgets/native_ad_slot.dart';
 import '../util/haptics.dart';
 import '../util/platform_check.dart';
 import '../widgets/map_style_sheet.dart';
@@ -601,6 +603,13 @@ class _AlarmSetupScreenState extends ConsumerState<AlarmSetupScreen> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
               children: [
+                // Durak adının ÜSTÜNDE yerel reklam. Yüklenmezse hiç yer
+                // kaplamaz; alarm akışının hiçbir düğmesini kaydırmaz.
+                const NativeAdSlot(
+                  key: ValueKey('alarm-native-ad'),
+                  margin: EdgeInsets.only(bottom: 12),
+                  template: TemplateType.small,
+                ),
                 Row(
                   children: [
                     Expanded(

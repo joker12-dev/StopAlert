@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart' show TemplateType;
 
 import '../data/models.dart';
 import '../data/recent_search.dart';
@@ -16,6 +17,7 @@ import '../services/segment_learning_store.dart';
 import '../state/city_provider.dart';
 import '../state/journey_provider.dart';
 import '../theme/app_theme.dart';
+import '../widgets/native_ad_slot.dart';
 import '../util/insets.dart';
 import '../util/haptics.dart';
 import '../util/turkish.dart';
@@ -415,6 +417,13 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
     // yoksa bölüm kendini gizler. TARİFE bölümü kendi kaydı doldukça çıkar.
     final hasRubber = lines.any((b) => _isRubberTyred(b.type));
     return [
+      // Yaklaşan araçların ÜSTÜNE yerel reklam. Tam ekran değil, içeriği
+      // kesmez; yüklenmezse hiç yer kaplamaz.
+      const NativeAdSlot(
+        key: ValueKey('stop-info-native-ad'),
+        margin: EdgeInsets.only(bottom: 14),
+        template: TemplateType.small,
+      ),
       if (hasRubber) ..._liveSection(text),
       ..._scheduledSection(text, lineCity),
     ];

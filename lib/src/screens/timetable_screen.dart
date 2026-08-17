@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart' show TemplateType;
 
 import '../data/models.dart';
 import '../data/timetable.dart';
 import '../data/transit_city.dart';
 import '../services/timetable_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/native_ad_slot.dart';
 import '../util/haptics.dart';
 import '../util/insets.dart';
 
@@ -170,6 +172,12 @@ class _TimetableScreenState extends State<TimetableScreen> {
               ),
             ),
           const SizedBox(height: 12),
+          // Gün/yön seçicinin altında, saat listesinin üstünde yerel reklam.
+          const NativeAdSlot(
+            key: ValueKey('timetable-native-ad'),
+            margin: EdgeInsets.fromLTRB(16, 0, 16, 8),
+            template: TemplateType.small,
+          ),
           Expanded(child: _body(rows, next)),
         ],
       ),

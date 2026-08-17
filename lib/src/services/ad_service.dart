@@ -84,6 +84,24 @@ abstract final class AdConfig {
         : _testBannerAndroid;
   }
 
+  // Google resmi TEST uygulama-açılış birimleri.
+  static const _testAppOpenAndroid = 'ca-app-pub-3940256099942544/9257395921';
+  static const _testAppOpenIos = 'ca-app-pub-3940256099942544/5575463023';
+
+  // ---- GERÇEK uygulama-açılış kimlikleri (AdMob konsolu, StopAlert) ----
+  static const _realAppOpenAndroid = 'ca-app-pub-6579751877708140/3008395538';
+  static const _realAppOpenIos = 'ca-app-pub-6579751877708140/1005048723';
+
+  /// Aktif platformun uygulama-açılış reklam birimi kimliği (gerçek yoksa TEST).
+  static String get appOpenUnitId {
+    if (isIosDevice) {
+      return _realAppOpenIos.isNotEmpty ? _realAppOpenIos : _testAppOpenIos;
+    }
+    return _realAppOpenAndroid.isNotEmpty
+        ? _realAppOpenAndroid
+        : _testAppOpenAndroid;
+  }
+
   /// GELİŞTİRME CİHAZLARI — buraya eklenen cihazlar AdMob'a "test" olarak
   /// bildirilir: bizim denemelerimiz gerçek istek/gösterim istatistiklerini
   /// (eşleşme oranı, eBGBM) KİRLETMEZ ve geçersiz trafik riski oluşmaz.
