@@ -684,6 +684,7 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
                 _LineCard(
                   brief: lines[i],
                   onTap: () => _pick(context, ref, lines[i]),
+                  onInfo: () => _openLinePage(lines[i]),
                 ),
               ],
             ],
@@ -700,10 +701,19 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
 }
 
 class _LineCard extends StatelessWidget {
-  const _LineCard({required this.brief, required this.onTap});
+  const _LineCard({
+    required this.brief,
+    required this.onTap,
+    required this.onInfo,
+  });
 
   final TransitLineBrief brief;
+
+  /// Karta dokunmak: bu hatla alarm kur (birincil eylem).
   final VoidCallback onTap;
+
+  /// "Otobüs bilgisi" düğmesi: hattın sayfası (duraklar, yön, canlı konum).
+  final VoidCallback onInfo;
 
   @override
   Widget build(BuildContext context) {
@@ -715,7 +725,7 @@ class _LineCard extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(18),
         child: Padding(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.fromLTRB(14, 14, 8, 14),
           child: Row(
             children: [
               Container(
@@ -741,9 +751,18 @@ class _LineCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: text.bodyMedium),
               ),
-              const SizedBox(width: 8),
+              // OTOBÜS BİLGİSİ: hattın sayfası (duraklar, yön, canlı konum).
+              // Karta dokunmak alarm kuruyor; hattı incelemek isteyen buraya.
+              IconButton(
+                onPressed: onInfo,
+                tooltip: 'Otobüs bilgisi',
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.directions_bus_filled_rounded,
+                    color: VigilantColors.onSurfaceVariant, size: 20),
+              ),
               const Icon(Icons.alarm_add_rounded,
                   color: VigilantColors.primary, size: 22),
+              const SizedBox(width: 6),
             ],
           ),
         ),

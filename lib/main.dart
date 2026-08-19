@@ -55,6 +55,22 @@ Future<void> main() async {
   // da kilitlenir ki her cihazda kesin olsun.
   await SystemChrome.setPreferredOrientations(
       const [DeviceOrientation.portraitUp]);
+  // KENARDAN KENARA (edge-to-edge) + ŞEFFAF SİSTEM ÇUBUKLARI.
+  //
+  // Android 15 (targetSdk 35) uygulamayı zaten zorla edge-to-edge yapıyor;
+  // biz açıkça bildirmezsek sistem gezinme çubuğu bazı cihazlarda YARI SAYDAM
+  // bir zemin çiziyor ve altındaki içerik onun arkasında kalıyordu. Çubukları
+  // tam şeffaf yapıp "kontrast zorlamasını" kapatınca Flutter doğru inset'i
+  // raporluyor ve SafeArea/viewPadding alt içeriği çubuğun üstünde tutuyor.
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    systemNavigationBarColor: Colors.transparent,
+    systemNavigationBarDividerColor: Colors.transparent,
+    systemNavigationBarContrastEnforced: false,
+    statusBarIconBrightness: Brightness.light,
+    systemNavigationBarIconBrightness: Brightness.light,
+  ));
   runApp(const ProviderScope(child: StopAlertApp()));
 }
 

@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -24,6 +25,7 @@ import '../util/latlng_guard.dart';
 import '../util/map_settle.dart';
 import '../util/map_style.dart';
 import 'alarm_setup_screen.dart';
+import 'stop_lines_screen.dart';
 
 /// "Otobüsüm nerede" — bir hattın canlı araç konumları harita üzerinde.
 ///
@@ -255,6 +257,25 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen> {
     ));
   }
 
+  /// Durak künyesi: bu duraktan geçen hatlar + yaklaşan araçlar.
+  Future<void> _openStopInfo(Stop stop) async {
+    Haptics.light();
+    List<TransitLineBrief> lines = const [];
+    try {
+      if (isBusId(stop.id)) {
+        lines = await TransitDb.instance
+            .linesForStop(stop.id, cityId: widget.city?.id);
+      }
+    } catch (_) {
+      // Hat listesi çözülemedi: künye yine açılır.
+    }
+    if (!mounted) return;
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) =>
+          StopLinesScreen(stop: stop, lines: lines, city: widget.city),
+    ));
+  }
+
   /// Yalnızca GÖSTERİLEN yöndeki araçlar.
   ///
   /// İETT hattın bütün araçlarını tek listede veriyor; yönü `guzergahkodu`
@@ -280,6 +301,36 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen> {
             v.isGidis == _isGidisLine)
           v,
     ];
+  }
+
+  /// Aracın GİDİŞ YÖNÜ (radyan, kuzeyden saat yönünde) — güzergâhtan hesaplanır.
+  ///
+  /// İETT/e-komobil araç pusulası vermiyor; ama araç hattın SIRALI durakları
+  /// boyunca ilerlediği için, konumuna en yakın güzergâh parçasının yönü
+  /// gidiş yönüdür. `null` = güzergâh yok/kısa (ok çizilmez).
+  double? _headingFor(BusVehicle v) {
+    final route = _drawRoute.length >= 2 ? _drawRoute : _routePoints;
+    if (route.length < 2) return null;
+    final p = safeLatLng(v.lat, v.lon);
+    if (p == null) return null;
+    // En yakın güzergâh köşesini bul.
+    var bestI = 0;
+    var bestD = double.infinity;
+    for (var i = 0; i < route.length; i++) {
+      final dLat = route[i].latitude - p.latitude;
+      final dLon = route[i].longitude - p.longitude;
+      final d = dLat * dLat + dLon * dLon;
+      if (d < bestD) {
+        bestD = d;
+        bestI = i;
+      }
+    }
+    // Yön: o köşeden BİR SONRAKİNE (son köşedeyse öncekinden ona).
+    final a = bestI + 1 < route.length ? route[bestI] : route[bestI - 1];
+    final b = bestI + 1 < route.length ? route[bestI + 1] : route[bestI];
+    if (a == b) return null;
+    final deg = const Distance().bearing(a, b);
+    return deg * math.pi / 180.0;
   }
 
   /// Gösterilen varyant gidiş mi — hat id'si `bus:147_G` biçiminde.
@@ -524,8 +575,8 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen> {
                     if (safeLatLng(v.lat, v.lon) case final vp?)
                       Marker(
                         point: vp,
-                        width: 44,
-                        height: 44,
+                        width: 54,
+                        height: 54,
                         child: GestureDetector(
                           onTap: () {
                             Haptics.light();
@@ -539,6 +590,7 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen> {
                             vehicle: v,
                             selected: _selected?.plate == v.plate,
                             type: _line.type,
+                            heading: _headingFor(v),
                           ),
                         ),
                       ),
@@ -593,6 +645,10 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen> {
               onSetAlarm: () {
                 final s = _selectedStop;
                 if (s != null) _setAlarm(s);
+              },
+              onStopInfo: () {
+                final s = _selectedStop;
+                if (s != null) _openStopInfo(s);
               },
               onRefresh: () {
                 Haptics.light();
@@ -830,6 +886,7 @@ class _BusMarker extends StatelessWidget {
     required this.vehicle,
     this.selected = false,
     this.type = LineType.bus,
+    this.heading,
   });
 
   final BusVehicle vehicle;
@@ -839,18 +896,21 @@ class _BusMarker extends StatelessWidget {
   /// simgesi koymak, konumun nereden geldiği konusunda da yanıltıcıydı.
   final LineType type;
 
+  /// Gidiş yönü (radyan, kuzeyden saat yönünde). null ise ok çizilmez.
+  final double? heading;
+
   @override
   Widget build(BuildContext context) {
-    return AnimatedContainer(
+    final fill = selected
+        ? Colors.white
+        : VigilantColors.primary
+            .withValues(alpha: vehicle.scheduled ? 0.72 : 1);
+    final circle = AnimatedContainer(
       duration: const Duration(milliseconds: 160),
-      margin: EdgeInsets.all(selected ? 0 : 4),
+      width: selected ? 34 : 30,
+      height: selected ? 34 : 30,
       decoration: BoxDecoration(
-        // Tarifeden üretilen konum daha SOLUK: haritada canlı bir araçla
-        // aynı kesinlikte görünmemeli.
-        color: selected
-            ? Colors.white
-            : VigilantColors.primary
-                .withValues(alpha: vehicle.scheduled ? 0.72 : 1),
+        color: fill,
         shape: BoxShape.circle,
         border: Border.all(
             color: selected ? VigilantColors.primary : Colors.white,
@@ -868,9 +928,64 @@ class _BusMarker extends StatelessWidget {
       ),
       child: Icon(lineTypeIcon(type),
           color: selected ? VigilantColors.primary : Colors.white,
-          size: selected ? 22 : 20),
+          size: selected ? 20 : 18),
+    );
+    return SizedBox(
+      width: 54,
+      height: 54,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // YÖN OKU: dairenin dışına çıkan, gidiş yönüne bakan üçgen. Merkez
+          // etrafında döndürülür; ok tabanı dairenin kenarına oturur.
+          if (heading case final h?)
+            Transform.rotate(
+              angle: h,
+              child: CustomPaint(
+                size: const Size(54, 54),
+                painter: _HeadingArrow(color: fill),
+              ),
+            ),
+          circle,
+        ],
+      ),
     );
   }
+}
+
+/// Otobüs göstergesinin gidiş yönünü işaret eden üçgen ok.
+///
+/// 54x54 tuvalin üst-ortasına, ucu YUKARI (kuzey) bakan bir üçgen çizer;
+/// [_BusMarker] bunu gidiş açısıyla döndürür.
+class _HeadingArrow extends CustomPainter {
+  const _HeadingArrow({required this.color});
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    // Üçgen: uç yukarıda (y=2), taban daire kenarında (~y=18). Daire yarıçapı
+    // 15 olduğundan taban dairenin hemen dışında başlar.
+    final path = ui.Path()
+      ..moveTo(cx, 1)
+      ..lineTo(cx - 7, 17)
+      ..lineTo(cx + 7, 17)
+      ..close();
+    canvas.drawPath(path, Paint()..color = color);
+    // Beyaz ince kenar: haritanın koyu/açık her yerinde okunsun.
+    canvas.drawPath(
+      path,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5
+        ..strokeJoin = StrokeJoin.round
+        ..color = Colors.white,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_HeadingArrow old) => old.color != color;
 }
 
 class _InfoCard extends StatelessWidget {
@@ -884,6 +999,7 @@ class _InfoCard extends StatelessWidget {
     required this.onSwitchDirection,
     required this.onRefresh,
     required this.onSetAlarm,
+    required this.onStopInfo,
     this.selected,
     this.selectedStop,
     this.onClearSelection,
@@ -903,6 +1019,9 @@ class _InfoCard extends StatelessWidget {
   final VoidCallback onSwitchDirection;
   final VoidCallback onRefresh;
   final VoidCallback onSetAlarm;
+
+  /// Seçili durağın künyesini aç (duraktan geçen hatlar + yaklaşanlar).
+  final VoidCallback onStopInfo;
 
   /// Haritadan seçilen araç — varsa güzergâh detayı gösterilir.
   final BusVehicle? selected;
@@ -966,20 +1085,43 @@ class _InfoCard extends StatelessWidget {
                   if (s.contextLabel.isNotEmpty)
                     _row(text, Icons.place_outlined, s.contextLabel),
                   const SizedBox(height: 10),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                      onPressed: onSetAlarm,
-                      icon: const Icon(Icons.alarm_add_rounded, size: 18),
-                      label: const Text('Bu durağa alarm kur'),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: VigilantColors.primary,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14)),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: onSetAlarm,
+                          icon: const Icon(Icons.alarm_add_rounded, size: 18),
+                          label: const Text('Alarm kur'),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: VigilantColors.primary,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14)),
+                          ),
+                        ),
                       ),
-                    ),
+                      const SizedBox(width: 8),
+                      // DURAK BİLGİSİ: bu duraktan geçen hatlar + yaklaşan
+                      // araçlar. Kullanıcı canlı haritada bir durağa dokununca
+                      // yalnızca alarm değil, durağın künyesine de ulaşabilmeli.
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: onStopInfo,
+                          icon: const Icon(Icons.info_outline_rounded, size: 18),
+                          label: const Text('Durak bilgisi'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: VigilantColors.onSurface,
+                            side: BorderSide(
+                                color: VigilantColors.surfaceVariant
+                                    .withValues(alpha: 0.7)),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14)),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
