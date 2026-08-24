@@ -29,6 +29,7 @@ import '../widgets/skeleton.dart';
 import '../widgets/native_ad_slot.dart';
 import '../widgets/offline_banner.dart';
 import '../widgets/traffic_strip.dart';
+import '../widgets/widget_promo.dart';
 import 'alarm_setup_screen.dart';
 import 'announcements_screen.dart';
 import 'lines_by_type_screen.dart';
@@ -126,6 +127,8 @@ class HomeScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 28),
+            // Ana ekran widget'ı tanıtımı — tek seferlik, kapatılınca gitmez.
+            const WidgetPromoCard(),
             EntranceFade(
               delayMs: 180,
               child: _CategoryRow(

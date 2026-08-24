@@ -98,6 +98,33 @@ abstract final class HomeWidgetService {
     } catch (_) {}
   }
 
+  /// Cihaz "widget'ı ana ekrana sabitle" penceresini destekliyor mu?
+  ///
+  /// Yalnızca Android 8+ (API 26) ve bunu uygulayan başlatıcılarda çalışır
+  /// (çoğu modern başlatıcı destekler; bazı OEM başlatıcılar desteklemez).
+  static Future<bool> isPinSupported() async {
+    if (!isAndroidDevice) return false;
+    try {
+      return (await HomeWidget.isRequestPinWidgetSupported()) ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Sistemin "bu widget'ı ana ekrana ekle" penceresini açar.
+  ///
+  /// NEDEN: kullanıcıların çoğu ana ekran widget'ından haberdar değil; menüyü
+  /// uzun basıp aramak yerine tek dokunuşla ekleyebilmeli. Desteklenmiyorsa
+  /// [isPinSupported] false döner ve çağıran elle-ekleme yönergesini gösterir.
+  static Future<void> requestPin() async {
+    if (!isAndroidDevice) return;
+    try {
+      await HomeWidget.requestPinWidget(androidName: _provider);
+    } catch (_) {
+      // Başlatıcı reddetti/desteklemiyor: sessizce geç, arayüz yönerge verir.
+    }
+  }
+
   /// Boş durumdaki tek-dokunuş kısayolları (son yolculuk, favori rota).
   ///
   /// Kısayola basınca uygulama AÇILMAZ; arka planda alarm başlar

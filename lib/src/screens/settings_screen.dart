@@ -14,6 +14,7 @@ import '../services/alarm_sound_preview.dart';
 import '../services/journey_reminder.dart';
 import '../util/haptics.dart';
 import '../util/legal_links.dart';
+import '../widgets/widget_promo.dart';
 import '../util/platform_check.dart';
 import 'data_packages_screen.dart';
 import 'help_screen.dart';
@@ -521,6 +522,17 @@ class SettingsScreen extends ConsumerWidget {
                 ),
                 onTap: () => _pickMapStyle(context, ref, settings),
               ),
+              // ANA EKRAN WIDGET'I: kullanıcıların çoğu varlığından habersiz.
+              // Yalnızca Android'de anlamlı; iOS'ta widget yok.
+              if (isAndroidDevice)
+                _SettingsTile(
+                  icon: Icons.widgets_outlined,
+                  title: 'Ana Ekran Widget’ı',
+                  subtitle: 'Yolculuğunu ana ekranından takip et',
+                  trailing: const Icon(Icons.add_to_home_screen_rounded,
+                      color: VigilantColors.onSurfaceVariant),
+                  onTap: () => promptAddWidget(context),
+                ),
             ],
           ),
           _Section(
