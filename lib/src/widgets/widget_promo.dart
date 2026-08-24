@@ -90,7 +90,11 @@ class WidgetPromoCard extends ConsumerWidget {
             style: text.bodySmall?.copyWith(
                 color: VigilantColors.onSurfaceVariant, height: 1.4),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
+          // ÖNİZLEME: widget'ın "alarm kurulu" hâlinin küçük bir maketi —
+          // kullanıcı neye benzediğini görsün.
+          const _WidgetPreview(),
+          const SizedBox(height: 14),
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
@@ -223,4 +227,135 @@ class _Step extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Ana ekran widget'ının "alarm kurulu" hâlinin küçük ÖNİZLEMESİ.
+///
+/// Gerçek widget'ın düzenini taklit eder: solda kalan durak halkası, sağda
+/// hat kodu + durum + hedef durak + mesafe. Örnek (statik) verilerle —
+/// yalnızca "neye benziyor" sorusunu cevaplar.
+class _WidgetPreview extends StatelessWidget {
+  const _WidgetPreview();
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        // Gerçek widget koyu bir zeminde duruyor.
+        color: const Color(0xFF141414),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Row(
+        children: [
+          // Kalan durak halkası.
+          SizedBox(
+            width: 58,
+            height: 58,
+            child: CustomPaint(
+              painter: _MiniRing(),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('3',
+                        style: text.titleLarge?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                            height: 1)),
+                    Text('durak',
+                        style: text.labelSmall?.copyWith(
+                            fontSize: 9,
+                            color: Colors.white.withValues(alpha: 0.6))),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text('34A',
+                          style: text.labelSmall?.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800)),
+                    ),
+                    const SizedBox(width: 8),
+                    Text('YAKLAŞIYOR',
+                        style: text.labelSmall?.copyWith(
+                            fontSize: 10,
+                            color: VigilantColors.primary,
+                            fontWeight: FontWeight.w800)),
+                  ],
+                ),
+                const SizedBox(height: 5),
+                const Text('Kadıköy',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800)),
+                const SizedBox(height: 1),
+                Text('1,2 km · ~4 dk',
+                    style: text.labelSmall?.copyWith(
+                        color: Colors.white.withValues(alpha: 0.7))),
+                const SizedBox(height: 5),
+                Text('Şu an: Acıbadem · Sonraki: Ünalan',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: text.labelSmall?.copyWith(
+                        fontSize: 10,
+                        color: Colors.white.withValues(alpha: 0.55))),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Önizlemedeki kalan-durak halkası: gri iz + marka kırmızısı ilerleme yayı.
+class _MiniRing extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final c = Offset(size.width / 2, size.height / 2);
+    final r = size.width / 2 - 3;
+    final track = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 5
+      ..color = Colors.white.withValues(alpha: 0.14);
+    canvas.drawCircle(c, r, track);
+    final arc = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 5
+      ..strokeCap = StrokeCap.round
+      ..color = VigilantColors.primary;
+    // Üstten başlayıp saat yönünde ~%68'lik yay (örnek ilerleme).
+    canvas.drawArc(
+      Rect.fromCircle(center: c, radius: r),
+      -1.5708,
+      6.2832 * 0.68,
+      false,
+      arc,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_MiniRing old) => false;
 }
