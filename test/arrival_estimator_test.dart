@@ -28,18 +28,70 @@ void main() {
         ],
       );
 
-  BusVehicle bus(String plate, String nearStop, {String seen = ''}) =>
-      BusVehicle(
-        plate: plate,
-        lat: 41.0,
-        lon: 29.0,
-        headingTo: 'D4',
-        routeCode: 'T_G_D0',
-        lastSeen: seen,
-        nearestStopCode: nearStop,
-      );
+  // GERÇEKÇİ KONUM: aracı en yakın durağın koordinatına yerleştirir. Motor
+  // konumu güzergâha izdüşürüp kesirli yer hesapladığı için (bkz.
+  // _vehiclePosition) araç, kod verdiği durakla aynı yerde durmalı — gerçek
+  // İETT verisinde de öyle. Duraklar 29.000 + (kod-100)*0,012 boylamında.
+  BusVehicle bus(String plate, String nearStop, {String seen = ''}) {
+    final idx = (int.tryParse(nearStop) ?? 100) - 100;
+    return BusVehicle(
+      plate: plate,
+      lat: 41.0,
+      lon: 29.000 + idx * 0.012,
+      headingTo: 'D4',
+      routeCode: 'T_G_D0',
+      lastSeen: seen,
+      nearestStopCode: nearStop,
+    );
+  }
 
   final now = DateTime(2026, 8, 10, 13, 0); // pazartesi, gündüz
+
+  group('Hedefe yaklaşan araç kaybolmaz', () {
+    test('hedef durağın hemen öncesindeki segmentin ikinci yarısı listelenir',
+        () {
+      // Araç D2 ile D3 arasının %70'inde; hedef D3. Eskiden konum D3'e
+      // yuvarlanıp "geçti" sayılıyor ve araç listeden düşüyordu.
+      final v = BusVehicle(
+        plate: 'yaklasan',
+        lat: 41.0,
+        lon: 29.024 + 0.012 * 0.7, // D2→D3 arası %70
+        headingTo: 'D4',
+        routeCode: 'T_G_D0',
+        lastSeen: '',
+        nearestStopCode: '', // servis kodu yok: konumdan hesaplanmalı
+      );
+      final r = ArrivalEstimator.forStop(
+        line: line(),
+        targetStopId: 'bus:103',
+        vehicles: [v],
+        now: now,
+      );
+      expect(r.length, 1, reason: 'yaklaşan araç görünmeli');
+      // Segmentin %30'u kaldı: 120 sn x 0,3 ≈ 36 sn.
+      expect(r.single.seconds, closeTo(36, 15));
+    });
+
+    test('durağı yeni geçmiş araç (segmentin ikinci yarısı) listelenmez', () {
+      // Araç D3→D4 arasının %60'ında; hedef D3 → geçti.
+      final v = BusVehicle(
+        plate: 'gecti',
+        lat: 41.0,
+        lon: 29.036 + 0.012 * 0.6,
+        headingTo: 'D4',
+        routeCode: 'T_G_D0',
+        lastSeen: '',
+        nearestStopCode: '',
+      );
+      final r = ArrivalEstimator.forStop(
+        line: line(),
+        targetStopId: 'bus:103',
+        vehicles: [v],
+        now: now,
+      );
+      expect(r, isEmpty);
+    });
+  });
 
   group('Temel hesap', () {
     test('araç durak sayısı kadar segment süresi toplar', () {

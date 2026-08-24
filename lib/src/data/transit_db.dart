@@ -381,8 +381,13 @@ class TransitDb {
     final id = int.tryParse(raw);
     if (id == null) return null;
     try {
+      // s.* KULLANILIR: sütun adı `direction` (eski kod `dir` seçiyordu ve o
+      // sütun yok — sorgu sessizce "no such column: dir" ile çöküp null
+      // dönüyordu; son aramadan durak açılınca "bulunamadı" bunun sonucuydu).
+      // Eski paketlerde `district` bulunmayabildiği için sütun tek tek
+      // sayılmaz, tümü çekilir.
       final rows = await db.rawQuery(
-        'SELECT id, name, lat, lon, dir FROM stops WHERE id = ? LIMIT 1',
+        'SELECT * FROM stops WHERE id = ? LIMIT 1',
         [id],
       );
       if (rows.isEmpty) return null;
@@ -392,7 +397,8 @@ class TransitDb {
         name: (r['name'] as String? ?? '').trim(),
         lat: (r['lat'] as num?)?.toDouble() ?? 0,
         lon: (r['lon'] as num?)?.toDouble() ?? 0,
-        direction: (r['dir'] as String? ?? '').trim(),
+        direction: (r['direction'] as String? ?? '').trim(),
+        district: (r['district'] as String? ?? '').trim(),
       );
     } catch (_) {
       return null;

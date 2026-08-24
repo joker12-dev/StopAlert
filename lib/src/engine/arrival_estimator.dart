@@ -127,25 +127,35 @@ abstract final class ArrivalEstimator {
       // çekilmiş, seferi bitmiş). Onu "yaklaşıyor" diye göstermek
       // gelmeyecek bir otobüsü beklettirmek olur.
       if (age != null && age > activeWithinSeconds) continue;
-      final idx = _vehicleIndex(line, v);
-      // Durağı geçmiş ya da yeri belirlenemeyen araç gösterilmez: "geçti"
-      // bilgisini varış gibi sunmak kullanıcıyı boşuna bekletir.
-      if (idx == null || idx >= targetIndex) continue;
+      // KESİRLİ KONUM: aracın hattaki yeri "durak i + segmentin t kadarı"
+      // biçiminde. Eskiden bu tam sayıya YUVARLANIYORDU (t≥0.5 → i+1) ve
+      // hedef durağın hemen öncesindeki segmentin ikinci yarısındaki bir
+      // otobüs "durağı geçmiş" sayılıp ELENİYORDU — yaklaşan otobüs listede
+      // kayboluyordu. Artık kesirli konumla hem eleme hem ETA doğru.
+      final pos = _vehiclePosition(line, v);
+      // Durağı geçmiş ya da yeri belirlenemeyen araç gösterilmez.
+      if (pos == null || pos >= targetIndex) continue;
 
+      final startStop = pos.floor();
+      // İçinde bulunulan segmentin KALAN kısmı (0..1): araç segmentin %60'ında
+      // ise o segmentten yalnızca %40 süre kalmıştır.
+      final firstFrac = 1.0 - (pos - startStop);
       var eta = 0.0;
       var learnedSegments = 0;
-      final total = targetIndex - idx;
-      for (var i = idx; i < targetIndex; i++) {
+      final total = targetIndex - startStop;
+      for (var i = startStop; i < targetIndex; i++) {
         // Saat, tahmin ilerledikçe akar: 20 dakika sonra varacak bir otobüs
         // bant sınırını aşabilir ve o segment başka bir kovadan okunmalıdır.
         final at = clock.add(Duration(seconds: eta.round()));
         final hit = learner?.lookup(
             line.id, line.stops[i].id, line.stops[i + 1].id, TimeBucket.of(at));
+        // İlk segment aracın içinde bulunduğu segment: yalnızca kalan kısmı.
+        final weight = i == startStop ? firstFrac : 1.0;
         if (hit != null) {
-          eta += hit.seconds;
+          eta += hit.seconds * weight;
           if (hit.source == LearnedSource.exact) learnedSegments++;
         } else {
-          eta += seconds[i];
+          eta += seconds[i] * weight;
         }
       }
 
@@ -209,20 +219,31 @@ abstract final class ArrivalEstimator {
   /// Önce servisin verdiği en yakın durak kodu kullanılır — İETT bunu zaten
   /// hesaplayıp gönderiyor ve izdüşümden güvenilirdir (hat kendi üstünden
   /// geçtiğinde izdüşüm yanlış segmente oturabiliyor).
-  static int? _vehicleIndex(TransitLine line, BusVehicle v) {
+  /// Aracın hattaki KESİRLİ konumu: `segmentIndex + t` (0..durakSayısı-1).
+  ///
+  /// Tam sayı değil çünkü hedefe eleme ve ETA, aracın segment içindeki
+  /// yerini bilmek zorunda. Önce konum güzergâha izdüşürülür (kesirli, en
+  /// hassas); hattan uzaktaysa (kendi üstünden geçen güzergâhta yanlış
+  /// segmente oturabildiği için) servisin verdiği en yakın durak koduna
+  /// düşülür. `null` = yeri belirlenemedi.
+  static double? _vehiclePosition(TransitLine line, BusVehicle v) {
+    if (v.lat.isFinite && v.lon.isFinite) {
+      final pts = [for (final s in line.stops) LatLng(s.lat, s.lon)];
+      if (pts.length >= 2) {
+        final proj = projectOntoLine(LatLng(v.lat, v.lon), pts);
+        // Hatta yakınsa izdüşüm güvenilir; kesirli konum döndürülür.
+        if (proj.offsetMeters <= 400) {
+          return proj.segmentIndex + proj.t;
+        }
+      }
+    }
+    // Yedek: servisin verdiği en yakın durak kodu (tam sayı konum).
     final code = v.nearestStopCode.trim();
     if (code.isNotEmpty) {
       final i = line.indexOfStop('$kBusPrefix$code');
-      if (i != -1) return i;
+      if (i != -1) return i.toDouble();
     }
-    // Yedek: konumu güzergâha izdüşür.
-    if (!v.lat.isFinite || !v.lon.isFinite) return null;
-    final pts = [for (final s in line.stops) LatLng(s.lat, s.lon)];
-    if (pts.length < 2) return null;
-    final proj = projectOntoLine(LatLng(v.lat, v.lon), pts);
-    // Hattan çok uzaktaki araç bu güzergâhta değildir (garaj seferi vb.).
-    if (proj.offsetMeters > 400) return null;
-    return proj.t >= 0.5 ? proj.segmentIndex + 1 : proj.segmentIndex;
+    return null;
   }
 
   /// Hattın segment süreleri — MESAFEYE göre dağıtılmış.
