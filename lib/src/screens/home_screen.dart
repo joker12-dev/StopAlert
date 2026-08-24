@@ -910,21 +910,24 @@ class _NearbyRow extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       child: Row(
         children: [
-          Container(
-            constraints: const BoxConstraints(minWidth: 50),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: HomeScreen._chipDark,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: HomeScreen._chipBorder),
-            ),
-            child: Text(hit.line?.code ?? 'DURAK',
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: text.labelLarge
-                    ?.copyWith(color: Colors.white, fontWeight: FontWeight.w700)),
-          ),
+          // TÜRE GÖRE RENKLİ SEMBOL: "DURAK" yazısı yerine durağın türünü
+          // gösteren ikon. Ray/vapur durağı ait olduğu hattın türünü, otobüs
+          // durağı otobüs simgesini alır — her tür kendi renginde.
+          Builder(builder: (context) {
+            final type = hit.line?.type ?? LineType.bus;
+            final color = lineTypeColor(type);
+            return Container(
+              width: 40,
+              height: 40,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.16),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: color.withValues(alpha: 0.4)),
+              ),
+              child: Icon(lineTypeIcon(type), size: 20, color: color),
+            );
+          }),
           const SizedBox(width: 12),
           Expanded(
             child: Text(hit.stop.name,
@@ -1022,19 +1025,22 @@ class _CategoryRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        for (var i = 0; i < _cats.length; i++) ...[
-          if (i > 0) const SizedBox(width: 8),
-          Expanded(
-            child: _CategoryChip(
-              label: _cats[i].label,
-              icon: _cats[i].icon,
-              onTap: () => onTap(_cats[i].type),
-            ),
-          ),
-        ],
-      ],
+    // KAYDIRILABİLİR: butonlar büyüdü, beşi 390 px'e sığmıyor. Yatay listede
+    // her biri kendi genişliğinde; kenardan taşan tür kaydırılarak görünür.
+    return SizedBox(
+      height: 96,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: EdgeInsets.zero,
+        physics: const BouncingScrollPhysics(),
+        itemCount: _cats.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 14),
+        itemBuilder: (_, i) => _CategoryChip(
+          label: _cats[i].label,
+          icon: _cats[i].icon,
+          onTap: () => onTap(_cats[i].type),
+        ),
+      ),
     );
   }
 }
@@ -1066,51 +1072,56 @@ class _CategoryChipState extends State<_CategoryChip> {
         widget.onTap();
       },
       behavior: HitTestBehavior.opaque,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeOut,
-            width: 60,
-            height: 60,
-            transform: Matrix4.translationValues(0, active ? -3 : 0, 0)
-              ..scaleByDouble(
-                  active ? 1.06 : 1.0, active ? 1.06 : 1.0, 1, 1),
-            transformAlignment: Alignment.center,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: active
-                  ? VigilantColors.primary
-                  : VigilantColors.surfaceContainer,
-              border: Border.all(
-                  color: active
-                      ? Colors.transparent
-                      : VigilantColors.surfaceVariant.withValues(alpha: 0.5)),
-              boxShadow: active
-                  ? [
-                      BoxShadow(
-                          color: VigilantColors.primary.withValues(alpha: 0.3),
-                          blurRadius: 18,
-                          offset: const Offset(0, 6)),
-                    ]
-                  : null,
+      child: SizedBox(
+        width: 76,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOut,
+              width: 72,
+              height: 72,
+              transform: Matrix4.translationValues(0, active ? -3 : 0, 0)
+                ..scaleByDouble(
+                    active ? 1.06 : 1.0, active ? 1.06 : 1.0, 1, 1),
+              transformAlignment: Alignment.center,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: active
+                    ? VigilantColors.primary
+                    : VigilantColors.surfaceContainer,
+                border: Border.all(
+                    color: active
+                        ? Colors.transparent
+                        : VigilantColors.surfaceVariant.withValues(alpha: 0.5)),
+                boxShadow: active
+                    ? [
+                        BoxShadow(
+                            color:
+                                VigilantColors.primary.withValues(alpha: 0.3),
+                            blurRadius: 18,
+                            offset: const Offset(0, 6)),
+                      ]
+                    : null,
+              ),
+              child: Icon(widget.icon,
+                  size: 32,
+                  color:
+                      active ? Colors.white : VigilantColors.onSurfaceVariant),
             ),
-            child: Icon(widget.icon,
-                size: 26,
-                color: active ? Colors.white : VigilantColors.onSurfaceVariant),
-          ),
-          const SizedBox(height: 8),
-          Text(widget.label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: text.labelMedium?.copyWith(
-                  color: active
-                      ? VigilantColors.onSurface
-                      : VigilantColors.onSurfaceVariant,
-                  fontWeight: active ? FontWeight.w700 : FontWeight.w500)),
-        ],
+            const SizedBox(height: 8),
+            Text(widget.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: text.labelMedium?.copyWith(
+                    color: active
+                        ? VigilantColors.onSurface
+                        : VigilantColors.onSurfaceVariant,
+                    fontWeight: active ? FontWeight.w700 : FontWeight.w500)),
+          ],
+        ),
       ),
     );
   }

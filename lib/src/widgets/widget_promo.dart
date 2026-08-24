@@ -42,19 +42,12 @@ class WidgetPromoCard extends ConsumerWidget {
     final text = Theme.of(context).textTheme;
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
-      padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+      padding: const EdgeInsets.fromLTRB(16, 12, 12, 14),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            VigilantColors.primary.withValues(alpha: 0.18),
-            VigilantColors.surfaceContainer,
-          ],
-        ),
+        // KOYU zemin: kart daha sakin dursun, önizleme öne çıksın.
+        color: const Color(0xFF161616),
         borderRadius: BorderRadius.circular(20),
-        border:
-            Border.all(color: VigilantColors.primary.withValues(alpha: 0.3)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -83,18 +76,11 @@ class WidgetPromoCard extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: 6),
-          Text(
-            'Uygulamayı açmadan, ana ekranından yolculuğunu takip et: kalan '
-            'durak ve mesafe widget’ta görünür, tek dokunuşla alarm kurarsın.',
-            style: text.bodySmall?.copyWith(
-                color: VigilantColors.onSurfaceVariant, height: 1.4),
-          ),
-          const SizedBox(height: 14),
-          // ÖNİZLEME: widget'ın "alarm kurulu" hâlinin küçük bir maketi —
-          // kullanıcı neye benzediğini görsün.
+          const SizedBox(height: 10),
+          // ÖNİZLEME: widget'ın "alarm kurulu" hâli — açıklama yazısı yok,
+          // maket zaten neye benzediğini gösteriyor.
           const _WidgetPreview(),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
