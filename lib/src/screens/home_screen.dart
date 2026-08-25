@@ -122,14 +122,8 @@ class HomeScreen extends ConsumerWidget {
                   Navigator.of(context).push(MaterialPageRoute(
                       builder: (_) => const NearbyMapScreen()));
                 },
-              ),
-            ),
-            const SizedBox(height: 24),
-            // Ulaşım türü kısayolları — büyük, yatay kaydırılabilir.
-            EntranceFade(
-              delayMs: 180,
-              child: _CategoryRow(
-                onTap: (type) => Navigator.of(context).push(
+                // Ulaşım türü kısayolları artık aynı kartın 3. katmanında.
+                onCategory: (type) => Navigator.of(context).push(
                   MaterialPageRoute(
                       builder: (_) => LinesByTypeScreen(type: type)),
                 ),
@@ -705,16 +699,26 @@ class _SearchRow extends StatelessWidget {
   }
 }
 
-/// Konum satırı + Yakındaki Duraklar kartı (içinde "Yolculuk Başlat" CTA).
+/// Konum satırı + Yakındaki Duraklar kartı — TEK KART, ÜÇ KATMAN:
+///   1) Yakındaki duraklar listesi
+///   2) "Alarm Başlat" butonu
+///   3) Ulaşım türü kategorileri
+/// Katmanlar arası gölgeyle "kat kat" derinlik verilir (mockup).
 class _NearbyCard extends ConsumerWidget {
   const _NearbyCard(
-      {required this.onStart, required this.onOpenStop, required this.onMap});
+      {required this.onStart,
+      required this.onOpenStop,
+      required this.onMap,
+      required this.onCategory});
 
   final VoidCallback onStart;
   /// Ray/vapur durağında hat bellidir; OTOBÜS durağında null gelir ve
   /// kullanıcıya önce "hangi hatla?" sorulur.
   final void Function(TransitLine? line, Stop stop) onOpenStop;
   final VoidCallback onMap;
+
+  /// 3. katmandaki tür kısayolu — o türün hat listesini açar.
+  final void Function(LineType type) onCategory;
 
   String _fmt(double m) => m >= 1000
       ? '${(m / 1000).toStringAsFixed(1).replaceAll('.', ',')} km'
@@ -756,117 +760,134 @@ class _NearbyCard extends ConsumerWidget {
           ],
         ),
         const SizedBox(height: 12),
+        // TEK KART — üç katman, aralarında gölge (kat kat derinlik).
         Container(
-          padding: const EdgeInsets.all(18),
+          padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: HomeScreen._cardDark,
-            borderRadius: BorderRadius.circular(20),
-            // KAT KAT GÖLGE: yakın-uzak iki katmanla derinlik.
+            // Katmanlar bu KOYU tabanın üstünde kabarık durur.
+            color: const Color(0xFF121214),
+            borderRadius: BorderRadius.circular(22),
             boxShadow: [
               BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.45),
-                  blurRadius: 24,
-                  offset: const Offset(0, 12)),
-              BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.3),
-                  blurRadius: 6,
-                  offset: const Offset(0, 2)),
+                  color: Colors.black.withValues(alpha: 0.5),
+                  blurRadius: 26,
+                  offset: const Offset(0, 14)),
             ],
           ),
-          child: Stack(
-            clipBehavior: Clip.none,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Row(
-                          children: [
-                            Flexible(
-                              child: Text('Yakındaki Duraklar',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: text.bodyLarge
-                                      ?.copyWith(fontWeight: FontWeight.w600)),
-                            ),
-                            const SizedBox(width: 8),
-                            if (nearestBadge != null)
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: VigilantColors.surfaceContainer,
-                                  borderRadius: BorderRadius.circular(999),
+              // ---- KATMAN 1: Yakındaki Duraklar ----
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: HomeScreen._cardDark,
+                  borderRadius: BorderRadius.circular(18),
+                  // Bu katmanın gölgesi ALTTAKİ 2. katmana düşer.
+                  boxShadow: [
+                    BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.5),
+                        blurRadius: 16,
+                        offset: const Offset(0, 10)),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Row(
+                            children: [
+                              Flexible(
+                                child: Text('Yakındaki Duraklar',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: text.bodyLarge?.copyWith(
+                                        fontWeight: FontWeight.w600)),
+                              ),
+                              const SizedBox(width: 8),
+                              if (nearestBadge != null)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: VigilantColors.surfaceContainer,
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: Text(nearestBadge,
+                                      style: text.labelSmall?.copyWith(
+                                          color:
+                                              VigilantColors.onSurfaceVariant,
+                                          fontWeight: FontWeight.w500)),
                                 ),
-                                child: Text(nearestBadge,
-                                    style: text.labelSmall?.copyWith(
-                                        color: VigilantColors.onSurfaceVariant,
-                                        fontWeight: FontWeight.w500)),
-                              ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      // Sağ üst: haritada göster (yakın duraklar + yürüme rotası).
-                      GestureDetector(
-                        onTap: onMap,
-                        behavior: HitTestBehavior.opaque,
-                        child: Container(
-                          width: 34,
-                          height: 34,
-                          decoration: BoxDecoration(
-                            color: VigilantColors.surfaceContainer,
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                                color: VigilantColors.surfaceVariant
-                                    .withValues(alpha: 0.4)),
-                          ),
-                          child: const Icon(Icons.map_rounded,
-                              size: 18, color: VigilantColors.primary),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  ...nearby.when(
-                    loading: () => [
-                      const SkeletonBox(width: double.infinity, height: 18),
-                      const SizedBox(height: 12),
-                      const SkeletonBox(width: 200, height: 18),
-                    ],
-                    error: (_, __) => [
-                      Text('Yakındaki duraklar alınamadı.',
-                          style: text.labelMedium?.copyWith(
-                              color: VigilantColors.onSurfaceVariant)),
-                    ],
-                    data: (hits) => hits.isEmpty
-                        ? [
-                            Text(
-                                'Konum kapalı — yakındaki durakları görmek için '
-                                'konum izni ver.',
-                                style: text.labelMedium?.copyWith(
-                                    color: VigilantColors.onSurfaceVariant)),
-                          ]
-                        : [
-                            for (var i = 0; i < hits.take(2).length; i++) ...[
-                              if (i > 0) const SizedBox(height: 10),
-                              _NearbyRow(
-                                hit: hits[i],
-                                live: i == 0,
-                                distanceText: _fmt(hits[i].meters),
-                                onTap: () =>
-                                    onOpenStop(hits[i].line, hits[i].stop),
-                              ),
                             ],
-                          ],
-                  ),
-                  const SizedBox(height: 20),
-                  // Ana CTA — Yolculuk Başlat
-                  _PrimaryCta(onTap: onStart),
-                ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        // Sağ üst: haritada göster.
+                        GestureDetector(
+                          onTap: onMap,
+                          behavior: HitTestBehavior.opaque,
+                          child: Container(
+                            width: 34,
+                            height: 34,
+                            decoration: BoxDecoration(
+                              color: VigilantColors.surfaceContainer,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(Icons.map_rounded,
+                                size: 18, color: VigilantColors.primary),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    ...nearby.when(
+                      loading: () => [
+                        const SkeletonBox(
+                            width: double.infinity, height: 18),
+                        const SizedBox(height: 12),
+                        const SkeletonBox(width: 200, height: 18),
+                      ],
+                      error: (_, __) => [
+                        Text('Yakındaki duraklar alınamadı.',
+                            style: text.labelMedium?.copyWith(
+                                color: VigilantColors.onSurfaceVariant)),
+                      ],
+                      data: (hits) => hits.isEmpty
+                          ? [
+                              Text(
+                                  'Konum kapalı — yakındaki durakları görmek '
+                                  'için konum izni ver.',
+                                  style: text.labelMedium?.copyWith(
+                                      color:
+                                          VigilantColors.onSurfaceVariant)),
+                            ]
+                          : [
+                              for (var i = 0;
+                                  i < hits.take(2).length;
+                                  i++) ...[
+                                if (i > 0) const SizedBox(height: 12),
+                                _NearbyRow(
+                                  hit: hits[i],
+                                  live: i == 0,
+                                  distanceText: _fmt(hits[i].meters),
+                                  onTap: () =>
+                                      onOpenStop(hits[i].line, hits[i].stop),
+                                ),
+                              ],
+                            ],
+                    ),
+                  ],
+                ),
               ),
+              const SizedBox(height: 14),
+              // ---- KATMAN 2: Alarm Başlat ----
+              _PrimaryCta(onTap: onStart),
+              const SizedBox(height: 14),
+              // ---- KATMAN 3: Kategoriler ----
+              _CategoryRow(onTap: onCategory),
             ],
           ),
         ),
@@ -891,22 +912,25 @@ class _NearbyRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
+    // CANLI (ilk) satır: kabarık alt-plaka, KESKİN gölge (yayılmaz).
+    // İKİNCİ satır: doğrudan katmanın üstünde — plaka/border/gölge YOK.
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
-        // KABARIK ALT-KART: kendi gölgesiyle karttan bir kat yukarıda durur
-        // (mockup'taki "kat kat" his). BORDER YOK; radius abartısız.
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
-          color: const Color(0xFF161618),
+          color: live ? const Color(0xFF2A2A2D) : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withValues(alpha: 0.4),
-                blurRadius: 10,
-                offset: const Offset(0, 4)),
-          ],
+          boxShadow: live
+              ? [
+                  // KESKİN gölge: düşük blur, dar offset — yayılmaz.
+                  BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.55),
+                      blurRadius: 2,
+                      offset: const Offset(0, 3)),
+                ]
+              : null,
         ),
         child: IntrinsicHeight(
           child: Row(
@@ -917,7 +941,7 @@ class _NearbyRow extends StatelessWidget {
                 Container(width: 5, color: VigilantColors.primary),
               Expanded(
                 child: Padding(
-                  padding: EdgeInsets.fromLTRB(live ? 12 : 14, 12, 12, 12),
+                  padding: EdgeInsets.fromLTRB(live ? 12 : 2, 10, 4, 10),
                   child: Row(
                     children: [
                       // "DURAK" rozeti — canlı satırda koyu kırmızı, yazıda
@@ -930,12 +954,15 @@ class _NearbyRow extends StatelessWidget {
                               ? VigilantColors.primaryContainer
                               : HomeScreen._chipDark,
                           borderRadius: BorderRadius.circular(9),
-                          boxShadow: [
-                            BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.35),
-                                blurRadius: 5,
-                                offset: const Offset(0, 2)),
-                          ],
+                          boxShadow: live
+                              ? [
+                                  BoxShadow(
+                                      color:
+                                          Colors.black.withValues(alpha: 0.35),
+                                      blurRadius: 5,
+                                      offset: const Offset(0, 2)),
+                                ]
+                              : null,
                         ),
                         child: Text('DURAK',
                             style: text.labelSmall?.copyWith(
@@ -1258,7 +1285,13 @@ class _CategoryChipState extends State<_CategoryChip> {
                             blurRadius: 18,
                             offset: const Offset(0, 6)),
                       ]
-                    : null,
+                    : [
+                        // Durağan hâlde de düşen gölge — kabarık daireler.
+                        BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.45),
+                            blurRadius: 8,
+                            offset: const Offset(0, 4)),
+                      ],
               ),
               child: Icon(widget.icon,
                   size: 26,
