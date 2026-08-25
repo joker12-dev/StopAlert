@@ -41,15 +41,21 @@ class BottomNavShell extends ConsumerStatefulWidget {
 }
 
 class _BottomNavShellState extends ConsumerState<BottomNavShell> {
+  // Her sekme: DOLU (aktif) ve İNCE (pasif) ikon — mockup'taki gibi aktif
+  // sekme kırmızı+dolu, ötekiler gri+ince. Başlıklar korunur.
   static const _tabs = [
-    (icon: Icons.home_rounded, label: 'Ana Sayfa'),
+    (on: Icons.home_rounded, off: Icons.home_outlined, label: 'Ana Sayfa'),
     // "Rotalar" yol tarifi çağrıştırıyordu; sekme aslında HAT arama.
-    (icon: Icons.alt_route_rounded, label: 'Hatlar'),
+    (on: Icons.alt_route_rounded, off: Icons.alt_route_outlined, label: 'Hatlar'),
     // Durak arama AYRI sekme: hat ve durak tek listede karışınca kullanıcı
     // ne aradığını bulamıyordu.
-    (icon: Icons.location_on_rounded, label: 'Duraklar'),
-    (icon: Icons.bookmark_rounded, label: 'Favoriler'),
-    (icon: Icons.person_rounded, label: 'Profil'),
+    (
+      on: Icons.location_on_rounded,
+      off: Icons.location_on_outlined,
+      label: 'Duraklar'
+    ),
+    (on: Icons.star_rounded, off: Icons.star_border_rounded, label: 'Favoriler'),
+    (on: Icons.person_rounded, off: Icons.person_outline_rounded, label: 'Profil'),
   ];
 
   // Ziyaret edilen sekmeler; yalnızca açıldıktan sonra inşa edilir (tembel
@@ -122,7 +128,7 @@ class _BottomNavShellState extends ConsumerState<BottomNavShell> {
                   for (var i = 0; i < _tabs.length; i++)
                     Expanded(
                       child: _NavTab(
-                        icon: _tabs[i].icon,
+                        icon: i == index ? _tabs[i].on : _tabs[i].off,
                         label: _tabs[i].label,
                         active: i == index,
                         onTap: () => setState(() => _select(i)),
@@ -156,32 +162,22 @@ class _NavTab extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
-        decoration: BoxDecoration(
-          color: active
-              ? VigilantColors.primary.withValues(alpha: 0.14)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: active
-                ? VigilantColors.primary.withValues(alpha: 0.35)
-                : Colors.transparent,
-          ),
-        ),
+      // PILL KUTUSU YOK (mockup): aktif sekme yalnızca kırmızı ikon + kırmızı
+      // kalın etiketle belli olur, ötekiler gri.
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: color, size: 24),
+            Icon(icon, color: color, size: 25),
             const SizedBox(height: 4),
             Text(
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
                     color: color,
-                    fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                    fontWeight: active ? FontWeight.w800 : FontWeight.w500,
                   ),
             ),
           ],

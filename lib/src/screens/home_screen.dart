@@ -9,7 +9,6 @@ import '../data/journey_suggestion.dart';
 import '../data/models.dart';
 import '../data/transit_db.dart';
 import '../services/bus_data_service.dart';
-import '../data/stopi_tips.dart';
 import '../state/city_provider.dart';
 import '../state/hero_image_provider.dart';
 import '../state/journey_provider.dart';
@@ -23,7 +22,6 @@ import '../util/haptics.dart';
 import '../widgets/anim.dart';
 import '../widgets/bottom_nav_shell.dart';
 import '../widgets/glass_panel.dart';
-import '../widgets/mascot.dart';
 import '../widgets/permission_required_sheet.dart';
 import '../widgets/skeleton.dart';
 import '../widgets/native_ad_slot.dart';
@@ -126,9 +124,8 @@ class HomeScreen extends ConsumerWidget {
                 },
               ),
             ),
-            const SizedBox(height: 28),
-            // Ana ekran widget'ı tanıtımı — tek seferlik, kapatılınca gitmez.
-            const WidgetPromoCard(),
+            const SizedBox(height: 24),
+            // Ulaşım türü kısayolları — büyük, yatay kaydırılabilir.
             EntranceFade(
               delayMs: 180,
               child: _CategoryRow(
@@ -138,31 +135,30 @@ class HomeScreen extends ConsumerWidget {
                 ),
               ),
             ),
-            const SizedBox(height: 28),
-            EntranceFade(delayMs: 220, child: _PromoHero(onStart: goToStops)),
-            const SizedBox(height: 28),
-            // Şehir trafik yoğunlukları (İstanbul canlı, diğerleri yer tutucu).
-            // Trafik yoğunluğu İBB servisinden geliyor — yalnızca İstanbul.
+            const SizedBox(height: 20),
+            // Bağlamsal akıllı ipucu (saate göre): tek dokunuşla alarma götürür.
+            EntranceFade(delayMs: 220, child: _SmartTipCard(onTap: goToStops)),
+            const SizedBox(height: 24),
+            // ---- Alt kısım: mockup'ın üstünde yok ama işlevler korunuyor ----
+            // Şehir trafik yoğunluğu (İstanbul canlı, İBB servisi).
             if (ref.watch(activeCityProvider).hasTraffic) ...[
-              // Trafik yoğunluğu canlı veri; bağlantı yoksa söyle.
               const OfflineBanner(
                 message: 'Bağlantı yok — trafik yoğunluğu güncellenemiyor.',
                 margin: EdgeInsets.only(bottom: 8),
               ),
               const EntranceFade(delayMs: 260, child: TrafficStrip()),
             ],
-            // Trafik yoğunluğunun altında yerel reklam. Yüklenmezse hiç yer
-            // kaplamaz; kalıcı key ile her rebuild'de yeni istek atmaz.
             const NativeAdSlot(
               key: ValueKey('home-native-ad'),
               margin: EdgeInsets.only(top: 20),
               template: TemplateType.small,
             ),
-            // Sık rota önerisi (bizim özellik) — varsa
-            ..._buildSuggestionSection(context, ref, text),
-            const SizedBox(height: 28),
+            const SizedBox(height: 20),
+            // Ana ekran widget'ı tanıtımı — tek seferlik, kapatılınca gitmez.
+            const WidgetPromoCard(),
             ..._buildFavoritesSection(context, ref, text),
             ..._buildRecentSection(context, ref, text, goToStops),
+            ..._buildSuggestionSection(context, ref, text),
                 const SizedBox(height: 16),
                 ],
               ),
@@ -668,7 +664,7 @@ class _SearchRow extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Nerede ineceksin?',
+        Text('Nereye ineceksin?',
             style:
                 text.bodyMedium?.copyWith(color: VigilantColors.onSurface)),
         const SizedBox(height: 12),
@@ -685,7 +681,7 @@ class _SearchRow extends StatelessWidget {
                         color: VigilantColors.onSurfaceVariant),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: Text('İneceğin durağı veya hattı ara...',
+                      child: Text('İneceğin durağı veya hattı yaz...',
                           overflow: TextOverflow.ellipsis,
                           style: text.bodyMedium?.copyWith(
                               color: VigilantColors.onSurfaceVariant
@@ -908,54 +904,157 @@ class _NearbyRow extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: Row(
-        children: [
-          // TÜRE GÖRE RENKLİ SEMBOL: "DURAK" yazısı yerine durağın türünü
-          // gösteren ikon. Ray/vapur durağı ait olduğu hattın türünü, otobüs
-          // durağı otobüs simgesini alır — her tür kendi renginde.
-          Builder(builder: (context) {
-            final type = hit.line?.type ?? LineType.bus;
-            final color = lineTypeColor(type);
-            return Container(
-              width: 40,
-              height: 40,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: BoxDecoration(
+          color: VigilantColors.surfaceContainer,
+          borderRadius: BorderRadius.circular(16),
+          // EN YAKIN/CANLI durak kırmızı çerçeveyle öne çıkar (mockup).
+          border: Border.all(
+              color: live
+                  ? VigilantColors.primary.withValues(alpha: 0.55)
+                  : VigilantColors.surfaceVariant.withValues(alpha: 0.35)),
+        ),
+        child: Row(
+          children: [
+            // Canlı satırın solunda kırmızı dikey vurgu çubuğu.
+            if (live) ...[
+              Container(
+                width: 4,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: VigilantColors.primary,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 12),
+            ],
+            // "DURAK" rozeti — canlı satırda kırmızı, ötekinde nötr.
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(
+                color: live
+                    ? VigilantColors.primaryContainer
+                    : HomeScreen._chipDark,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text('DURAK',
+                  style: text.labelSmall?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.5)),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(hit.stop.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: text.labelLarge?.copyWith(
+                      color: VigilantColors.onSurface,
+                      fontWeight: FontWeight.w700)),
+            ),
+            const SizedBox(width: 8),
+            if (live)
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.sensors,
+                      size: 15, color: VigilantColors.primary),
+                  const SizedBox(width: 4),
+                  Text(distanceText,
+                      style: text.labelLarge?.copyWith(
+                          color: VigilantColors.primary,
+                          fontWeight: FontWeight.w800)),
+                ],
+              )
+            else
+              Text(distanceText,
+                  style: text.labelLarge?.copyWith(
+                      color: VigilantColors.onSurfaceVariant,
+                      fontWeight: FontWeight.w600)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Bağlamsal akıllı ipucu kartı — saate göre alarm önerisi.
+///
+/// Mockup'taki "Akşam saatleri yoğun; alarmını erkenden kur." kartı. Metin
+/// günün saatine göre değişir; dokununca durak aramaya (alarm kurmaya) götürür.
+class _SmartTipCard extends StatelessWidget {
+  const _SmartTipCard({required this.onTap});
+
+  final VoidCallback onTap;
+
+  ({String title, IconData icon}) _tip() {
+    final h = DateTime.now().hour;
+    if (h >= 7 && h < 10) {
+      return (
+        title: 'Sabah yoğunluğu başladı; ineceğin durağa alarmı şimdi kur.',
+        icon: Icons.wb_twilight_rounded,
+      );
+    }
+    if (h >= 17 && h < 20) {
+      return (
+        title: 'Akşam saatleri yoğun; alarmını erkenden kur.',
+        icon: Icons.alarm_rounded,
+      );
+    }
+    if (h >= 22 || h < 5) {
+      return (
+        title: 'Son seferleri kaçırma; ineceğin durağa alarm kur.',
+        icon: Icons.bedtime_rounded,
+      );
+    }
+    return (
+      title: 'Uykun gelirse diye — ineceğin durağa alarm kur.',
+      icon: Icons.alarm_add_rounded,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final tip = _tip();
+    return GestureDetector(
+      onTap: () {
+        Haptics.light();
+        onTap();
+      },
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(14, 14, 12, 14),
+        decoration: BoxDecoration(
+          color: HomeScreen._cardDark,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+              color: VigilantColors.surfaceVariant.withValues(alpha: 0.35)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.16),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: color.withValues(alpha: 0.4)),
+                color: VigilantColors.primary.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(lineTypeIcon(type), size: 20, color: color),
-            );
-          }),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(hit.stop.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: text.labelLarge
-                    ?.copyWith(color: VigilantColors.onSurfaceVariant)),
-          ),
-          const SizedBox(width: 8),
-          if (live)
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.sensors,
-                    size: 15, color: VigilantColors.primary),
-                const SizedBox(width: 4),
-                Text(distanceText,
-                    style: text.labelLarge?.copyWith(
-                        color: VigilantColors.primary,
-                        fontWeight: FontWeight.w700)),
-              ],
-            )
-          else
-            Text(distanceText,
-                style: text.labelLarge?.copyWith(
-                    color: VigilantColors.onSurfaceVariant,
-                    fontWeight: FontWeight.w500)),
-        ],
+              child: Icon(tip.icon, size: 22, color: VigilantColors.primary),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(tip.title,
+                  style: text.bodyMedium?.copyWith(height: 1.3)),
+            ),
+            const SizedBox(width: 6),
+            const Icon(Icons.chevron_right_rounded,
+                color: VigilantColors.onSurfaceVariant),
+          ],
+        ),
       ),
     );
   }
@@ -982,8 +1081,8 @@ class _PrimaryCta extends StatelessWidget {
           shadowColor: VigilantColors.primary.withValues(alpha: 0.4),
         ),
         onPressed: onTap,
-        icon: const Icon(Icons.directions_run_rounded),
-        label: Text('Yolculuk Başlat',
+        icon: const Icon(Icons.notifications_active_rounded),
+        label: Text('Alarm Başlat',
             style: text.bodyLarge
                 ?.copyWith(fontWeight: FontWeight.w700, color: Colors.white)),
       ),
@@ -1038,6 +1137,9 @@ class _CategoryRow extends StatelessWidget {
         itemBuilder: (_, i) => _CategoryChip(
           label: _cats[i].label,
           icon: _cats[i].icon,
+          // OTOBÜS öne çıkar (en çok kullanılan): kırmızı halka + kırmızı
+          // etiket. Mockup'taki gibi; dokununca hepsi kendi listesine gider.
+          featured: _cats[i].type == LineType.bus,
           onTap: () => onTap(_cats[i].type),
         ),
       ),
@@ -1047,11 +1149,17 @@ class _CategoryRow extends StatelessWidget {
 
 class _CategoryChip extends StatefulWidget {
   const _CategoryChip(
-      {required this.label, required this.icon, required this.onTap});
+      {required this.label,
+      required this.icon,
+      required this.onTap,
+      this.featured = false});
 
   final String label;
   final IconData icon;
   final VoidCallback onTap;
+
+  /// En çok kullanılan tür — kırmızı halkayla resting hâlde vurgulanır.
+  final bool featured;
 
   @override
   State<_CategoryChip> createState() => _CategoryChipState();
@@ -1088,13 +1196,19 @@ class _CategoryChipState extends State<_CategoryChip> {
               transformAlignment: Alignment.center,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
+                // Basılıyken KIRMIZI DOLGU; öne çıkan (Otobüs) resting hâlde
+                // KIRMIZI HALKA; ötekiler nötr.
                 color: active
                     ? VigilantColors.primary
                     : VigilantColors.surfaceContainer,
                 border: Border.all(
                     color: active
                         ? Colors.transparent
-                        : VigilantColors.surfaceVariant.withValues(alpha: 0.5)),
+                        : widget.featured
+                            ? VigilantColors.primary
+                            : VigilantColors.surfaceVariant
+                                .withValues(alpha: 0.5),
+                    width: widget.featured && !active ? 2 : 1),
                 boxShadow: active
                     ? [
                         BoxShadow(
@@ -1107,8 +1221,11 @@ class _CategoryChipState extends State<_CategoryChip> {
               ),
               child: Icon(widget.icon,
                   size: 32,
-                  color:
-                      active ? Colors.white : VigilantColors.onSurfaceVariant),
+                  color: active
+                      ? Colors.white
+                      : widget.featured
+                          ? Colors.white
+                          : VigilantColors.onSurfaceVariant),
             ),
             const SizedBox(height: 8),
             Text(widget.label,
@@ -1118,169 +1235,14 @@ class _CategoryChipState extends State<_CategoryChip> {
                 style: text.labelMedium?.copyWith(
                     color: active
                         ? VigilantColors.onSurface
-                        : VigilantColors.onSurfaceVariant,
-                    fontWeight: active ? FontWeight.w700 : FontWeight.w500)),
+                        : widget.featured
+                            ? VigilantColors.primary
+                            : VigilantColors.onSurfaceVariant,
+                    fontWeight: (active || widget.featured)
+                        ? FontWeight.w700
+                        : FontWeight.w500)),
           ],
         ),
-      ),
-    );
-  }
-}
-
-/// Promo hero: gradyan kart + Stopi ipucu balonu + maskot + "Hemen Başla".
-class _PromoHero extends ConsumerWidget {
-  const _PromoHero({required this.onStart});
-
-  final VoidCallback onStart;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final text = Theme.of(context).textTheme;
-    final weather = ref.watch(weatherProvider).valueOrNull;
-    final journeys =
-        ref.watch(journeysStreamProvider).valueOrNull ?? const <JourneyRecord>[];
-    final favs =
-        ref.watch(favoritesStreamProvider).valueOrNull ?? const <FavoriteRoute>[];
-    final tip = StopiTips.pick(
-      weatherLabel: weather?.label,
-      hour: DateTime.now().hour,
-      hasFavorites: favs.isNotEmpty,
-      hasJourneys: journeys.isNotEmpty,
-      seed: DateTime.now().day,
-    );
-
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        // Gradyan kart
-        Container(
-          padding: const EdgeInsets.fromLTRB(24, 26, 12, 20),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(28),
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFF1A1A1A), Color(0xFF2D0A0A), Color(0xFF4A0E0E)],
-            ),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
-            boxShadow: [
-              BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.4),
-                  blurRadius: 40,
-                  offset: const Offset(0, 20)),
-            ],
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text('Yolculuğa\nHazır mısın?',
-                        style: text.headlineLarge?.copyWith(
-                            color: Colors.white,
-                            fontSize: 28,
-                            height: 1.1,
-                            fontWeight: FontWeight.w800)),
-                    const SizedBox(height: 10),
-                    Text(
-                        'StopAlert, inmek istediğin durağa yaklaşmadan seni '
-                        'önceden uyarır.',
-                        style: text.labelLarge?.copyWith(
-                            color: Colors.white.withValues(alpha: 0.72),
-                            height: 1.4,
-                            fontWeight: FontWeight.w500)),
-                    const SizedBox(height: 20),
-                    FilledButton(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: const Color(0xFF1A1A1A),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 20, vertical: 13),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(999)),
-                        textStyle:
-                            text.labelLarge?.copyWith(fontWeight: FontWeight.w700),
-                      ),
-                      onPressed: onStart,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.rocket_launch_rounded, size: 18),
-                          const SizedBox(width: 8),
-                          Flexible(
-                            child: Text('Hemen Başla',
-                                maxLines: 1, overflow: TextOverflow.ellipsis),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              // MASKOT: %50 büyük ve SABİT.
-              //
-              // Sürekli oynayan bir çizim gözü kartın asıl işinden ("yolculuk
-              // başlat") çekiyordu; büyütünce zaten kendini gösteriyor.
-              const Padding(
-                padding: EdgeInsets.only(top: 12),
-                child: SizedBox(
-                  width: 156,
-                  child: Mascot(MascotAssets.hero, height: 180),
-                ),
-              ),
-            ],
-          ),
-        ),
-        // Stopi ipucu balonu
-        Positioned(
-          top: -14,
-          right: 16,
-          child: _TipBubble(tip: tip),
-        ),
-      ],
-    );
-  }
-}
-
-class _TipBubble extends StatelessWidget {
-  const _TipBubble({required this.tip});
-
-  final StopiTip tip;
-
-  @override
-  Widget build(BuildContext context) {
-    final text = Theme.of(context).textTheme;
-    return Container(
-      constraints: const BoxConstraints(maxWidth: 230),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-      decoration: BoxDecoration(
-        color: VigilantColors.surfaceBright.withValues(alpha: 0.95),
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(16),
-          topRight: Radius.circular(16),
-          bottomLeft: Radius.circular(16),
-          bottomRight: Radius.circular(4),
-        ),
-        border: Border.all(color: VigilantColors.surfaceVariant.withValues(alpha: 0.5)),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.3), blurRadius: 12),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(tip.icon, size: 15, color: VigilantColors.primary),
-          const SizedBox(width: 7),
-          Flexible(
-            child: Text(tip.text,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: text.labelMedium
-                    ?.copyWith(fontWeight: FontWeight.w500)),
-          ),
-        ],
       ),
     );
   }

@@ -43,7 +43,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Kutunun vaadi "ineceğin durağı ara" — Hatlar'a değil Duraklar'a gider.
-    await tester.tap(find.text('İneceğin durağı veya hattı ara...'));
+    await tester.tap(find.text('İneceğin durağı veya hattı yaz...'));
     await tester.pumpAndSettle();
     expect(find.text('Durak ara…'), findsOneWidget);
   });

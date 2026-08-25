@@ -29,7 +29,7 @@ void main() {
     // saatine bağlı hâle getirirdi.
     expect(find.text('${greetingForHour(DateTime.now().hour)}, Yolcu!'),
         findsOneWidget);
-    expect(find.text('Nerede ineceksin?'), findsOneWidget);
+    expect(find.text('Nereye ineceksin?'), findsOneWidget);
     expect(find.text('Yakındaki Duraklar'), findsOneWidget);
 
     // Favoriler sekmesi
