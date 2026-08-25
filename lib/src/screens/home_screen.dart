@@ -757,35 +757,25 @@ class _NearbyCard extends ConsumerWidget {
         ),
         const SizedBox(height: 12),
         Container(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
             color: HomeScreen._cardDark,
-            borderRadius: BorderRadius.circular(24),
-            border:
-                Border.all(color: VigilantColors.surfaceVariant.withValues(alpha: 0.3)),
+            borderRadius: BorderRadius.circular(20),
+            // KAT KAT GÖLGE: yakın-uzak iki katmanla derinlik.
             boxShadow: [
               BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.25),
-                  blurRadius: 30,
-                  offset: const Offset(0, 8)),
+                  color: Colors.black.withValues(alpha: 0.45),
+                  blurRadius: 24,
+                  offset: const Offset(0, 12)),
+              BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.3),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2)),
             ],
           ),
           child: Stack(
             clipBehavior: Clip.none,
             children: [
-              // Kırmızı ışıma (sağ üst)
-              Positioned(
-                right: -30,
-                top: -30,
-                child: Container(
-                  width: 120,
-                  height: 120,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: VigilantColors.primary.withValues(alpha: 0.10),
-                  ),
-                ),
-              ),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -861,7 +851,7 @@ class _NearbyCard extends ConsumerWidget {
                           ]
                         : [
                             for (var i = 0; i < hits.take(2).length; i++) ...[
-                              if (i > 0) const SizedBox(height: 14),
+                              if (i > 0) const SizedBox(height: 10),
                               _NearbyRow(
                                 hit: hits[i],
                                 live: i == 0,
@@ -905,75 +895,94 @@ class _NearbyRow extends StatelessWidget {
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        // KABARIK ALT-KART: kendi gölgesiyle karttan bir kat yukarıda durur
+        // (mockup'taki "kat kat" his). BORDER YOK; radius abartısız.
+        clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
-          color: VigilantColors.surfaceContainer,
-          borderRadius: BorderRadius.circular(16),
-          // EN YAKIN/CANLI durak kırmızı çerçeveyle öne çıkar (mockup).
-          border: Border.all(
-              color: live
-                  ? VigilantColors.primary.withValues(alpha: 0.55)
-                  : VigilantColors.surfaceVariant.withValues(alpha: 0.35)),
+          color: const Color(0xFF161618),
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withValues(alpha: 0.4),
+                blurRadius: 10,
+                offset: const Offset(0, 4)),
+          ],
         ),
-        child: Row(
-          children: [
-            // Canlı satırın solunda kırmızı dikey vurgu çubuğu.
-            if (live) ...[
-              Container(
-                width: 4,
-                height: 30,
-                decoration: BoxDecoration(
-                  color: VigilantColors.primary,
-                  borderRadius: BorderRadius.circular(2),
+        child: IntrinsicHeight(
+          child: Row(
+            children: [
+              // SOLA SIFIR kırmızı çubuk — satırın soluna yapışık, tam boy.
+              // Yalnızca canlı/en yakın satırda.
+              if (live)
+                Container(width: 5, color: VigilantColors.primary),
+              Expanded(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(live ? 12 : 14, 12, 12, 12),
+                  child: Row(
+                    children: [
+                      // "DURAK" rozeti — canlı satırda koyu kırmızı, yazıda
+                      // gölge; ötekinde nötr.
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: live
+                              ? VigilantColors.primaryContainer
+                              : HomeScreen._chipDark,
+                          borderRadius: BorderRadius.circular(9),
+                          boxShadow: [
+                            BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.35),
+                                blurRadius: 5,
+                                offset: const Offset(0, 2)),
+                          ],
+                        ),
+                        child: Text('DURAK',
+                            style: text.labelSmall?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.5,
+                                shadows: [
+                                  const Shadow(
+                                      color: Colors.black54,
+                                      blurRadius: 3,
+                                      offset: Offset(0, 1)),
+                                ])),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(hit.stop.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: text.labelLarge?.copyWith(
+                                color: VigilantColors.onSurface,
+                                fontWeight: FontWeight.w700)),
+                      ),
+                      const SizedBox(width: 8),
+                      if (live)
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.sensors,
+                                size: 15, color: VigilantColors.primary),
+                            const SizedBox(width: 4),
+                            Text(distanceText,
+                                style: text.labelLarge?.copyWith(
+                                    color: VigilantColors.primary,
+                                    fontWeight: FontWeight.w800)),
+                          ],
+                        )
+                      else
+                        Text(distanceText,
+                            style: text.labelLarge?.copyWith(
+                                color: VigilantColors.onSurfaceVariant,
+                                fontWeight: FontWeight.w600)),
+                    ],
+                  ),
                 ),
               ),
-              const SizedBox(width: 12),
             ],
-            // "DURAK" rozeti — canlı satırda kırmızı, ötekinde nötr.
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-              decoration: BoxDecoration(
-                color: live
-                    ? VigilantColors.primaryContainer
-                    : HomeScreen._chipDark,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text('DURAK',
-                  style: text.labelSmall?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.5)),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(hit.stop.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: text.labelLarge?.copyWith(
-                      color: VigilantColors.onSurface,
-                      fontWeight: FontWeight.w700)),
-            ),
-            const SizedBox(width: 8),
-            if (live)
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.sensors,
-                      size: 15, color: VigilantColors.primary),
-                  const SizedBox(width: 4),
-                  Text(distanceText,
-                      style: text.labelLarge?.copyWith(
-                          color: VigilantColors.primary,
-                          fontWeight: FontWeight.w800)),
-                ],
-              )
-            else
-              Text(distanceText,
-                  style: text.labelLarge?.copyWith(
-                      color: VigilantColors.onSurfaceVariant,
-                      fontWeight: FontWeight.w600)),
-          ],
+          ),
         ),
       ),
     );
@@ -1069,16 +1078,30 @@ class _PrimaryCta extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    return SizedBox(
+    // KIRMIZI GÖLGE: butonun altına yayılan marka rengi glow (mockup). Ayrıca
+    // aşağıya düşen koyu gölge "kabarık" hissi verir.
+    return Container(
       width: double.infinity,
       height: 56,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+              color: VigilantColors.primary.withValues(alpha: 0.45),
+              blurRadius: 22,
+              offset: const Offset(0, 10)),
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.35),
+              blurRadius: 8,
+              offset: const Offset(0, 4)),
+        ],
+      ),
       child: FilledButton.icon(
         style: FilledButton.styleFrom(
           backgroundColor: VigilantColors.primary,
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          elevation: 8,
-          shadowColor: VigilantColors.primary.withValues(alpha: 0.4),
+          elevation: 0,
         ),
         onPressed: onTap,
         icon: const Icon(Icons.notifications_active_rounded),
@@ -1124,23 +1147,41 @@ class _CategoryRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // KAYDIRILABİLİR: butonlar büyüdü, beşi 390 px'e sığmıyor. Yatay listede
-    // her biri kendi genişliğinde; kenardan taşan tür kaydırılarak görünür.
-    return SizedBox(
-      height: 96,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: EdgeInsets.zero,
-        physics: const BouncingScrollPhysics(),
-        itemCount: _cats.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 14),
-        itemBuilder: (_, i) => _CategoryChip(
-          label: _cats[i].label,
-          icon: _cats[i].icon,
-          // OTOBÜS öne çıkar (en çok kullanılan): kırmızı halka + kırmızı
-          // etiket. Mockup'taki gibi; dokununca hepsi kendi listesine gider.
-          featured: _cats[i].type == LineType.bus,
-          onTap: () => onTap(_cats[i].type),
+    // AYRI KART: kategoriler kendi gölgeli kabında durur (mockup). İçinde
+    // yatay kaydırılabilir küçük daireler; beşi 390 px'e sığmasa da taşan tür
+    // kaydırılarak görünür.
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      decoration: BoxDecoration(
+        color: HomeScreen._cardDark,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.4),
+              blurRadius: 20,
+              offset: const Offset(0, 10)),
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.28),
+              blurRadius: 5,
+              offset: const Offset(0, 2)),
+        ],
+      ),
+      child: SizedBox(
+        height: 84,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          physics: const BouncingScrollPhysics(),
+          itemCount: _cats.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 12),
+          itemBuilder: (_, i) => _CategoryChip(
+            label: _cats[i].label,
+            icon: _cats[i].icon,
+            // OTOBÜS öne çıkar (en çok kullanılan): kırmızı halka + kırmızı
+            // etiket. Mockup'taki gibi; dokununca hepsi kendi listesine gider.
+            featured: _cats[i].type == LineType.bus,
+            onTap: () => onTap(_cats[i].type),
+          ),
         ),
       ),
     );
@@ -1181,15 +1222,15 @@ class _CategoryChipState extends State<_CategoryChip> {
       },
       behavior: HitTestBehavior.opaque,
       child: SizedBox(
-        width: 76,
+        width: 62,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             AnimatedContainer(
               duration: const Duration(milliseconds: 180),
               curve: Curves.easeOut,
-              width: 72,
-              height: 72,
+              width: 54,
+              height: 54,
               transform: Matrix4.translationValues(0, active ? -3 : 0, 0)
                 ..scaleByDouble(
                     active ? 1.06 : 1.0, active ? 1.06 : 1.0, 1, 1),
@@ -1220,19 +1261,19 @@ class _CategoryChipState extends State<_CategoryChip> {
                     : null,
               ),
               child: Icon(widget.icon,
-                  size: 32,
+                  size: 26,
                   color: active
                       ? Colors.white
                       : widget.featured
                           ? Colors.white
                           : VigilantColors.onSurfaceVariant),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 7),
             Text(widget.label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
-                style: text.labelMedium?.copyWith(
+                style: text.labelSmall?.copyWith(
                     color: active
                         ? VigilantColors.onSurface
                         : widget.featured
