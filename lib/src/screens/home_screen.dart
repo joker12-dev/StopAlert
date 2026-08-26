@@ -787,9 +787,8 @@ class _NearbyCard extends ConsumerWidget {
           ],
         ),
         const SizedBox(height: 14),
-        // ÜÇ AYRI KART — alt alta, aralarında boşluk. Binmiyor; hepsi aynı
-        // stil (koyu plaka, yuvarlak köşe, düşen gölge).
-        // ==== KART 1: Yakındaki Duraklar ====
+        // TEK KART (eski tasarım): başlık + duraklar + "Alarm Başlat" butonu
+        // hepsi aynı kartın içinde. Kategoriler ayrı kart olarak altta durur.
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -820,31 +819,18 @@ class _NearbyCard extends ConsumerWidget {
                         ),
                         const SizedBox(width: 8),
                         if (nearestBadge != null)
-                          // EN YAKIN mesafe rozeti — kırmızı tonlu, ikonlu
-                          // badge (sade metin yerine).
+                          // EN YAKIN mesafe — sade gri metin rozeti (eski hâl).
                           Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 9, vertical: 4),
+                                horizontal: 8, vertical: 2),
                             decoration: BoxDecoration(
-                              color: VigilantColors.primary
-                                  .withValues(alpha: 0.16),
+                              color: VigilantColors.surfaceContainer,
                               borderRadius: BorderRadius.circular(999),
-                              border: Border.all(
-                                  color: VigilantColors.primary
-                                      .withValues(alpha: 0.4)),
                             ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.near_me_rounded,
-                                    size: 12, color: VigilantColors.primary),
-                                const SizedBox(width: 4),
-                                Text(nearestBadge,
-                                    style: text.labelSmall?.copyWith(
-                                        color: VigilantColors.primary,
-                                        fontWeight: FontWeight.w800)),
-                              ],
-                            ),
+                            child: Text(nearestBadge,
+                                style: text.labelSmall?.copyWith(
+                                    color: VigilantColors.onSurfaceVariant,
+                                    fontWeight: FontWeight.w500)),
                           ),
                       ],
                     ),
@@ -887,7 +873,7 @@ class _NearbyCard extends ConsumerWidget {
                       ]
                     : [
                         for (var i = 0; i < hits.take(2).length; i++) ...[
-                          if (i > 0) const SizedBox(height: 12),
+                          if (i > 0) const SizedBox(height: 10),
                           _NearbyRow(
                             hit: hits[i],
                             live: i == 0,
@@ -898,36 +884,19 @@ class _NearbyCard extends ConsumerWidget {
                         ],
                       ],
               ),
+              const SizedBox(height: 18),
+              // Ana CTA — kartın İÇİNDE (eski tasarım). İsim "Alarm Başlat".
+              _PrimaryCta(onTap: onStart),
             ],
           ),
         ),
         const SizedBox(height: 14),
-        // ==== KART 2: Alarm Başlat — taşıyıcı kart içinde buton ====
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: HomeScreen._cardDark,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.5),
-                blurRadius: 16,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: _PrimaryCta(onTap: onStart),
-        ),
-        const SizedBox(height: 14),
-        // ==== KART 3: Kategoriler ====
+        // Kategoriler AYRI kart olarak altta.
         _CategoryRow(onTap: onCategory),
       ],
     );
   }
 }
-
-/// "DURAK" rozeti ve yanındaki çubuk için marka kırmızısından daha KOYU ton.
-const Color _kDarkRed = Color(0xFF8E120C);
 
 class _NearbyRow extends StatelessWidget {
   const _NearbyRow({
@@ -946,108 +915,61 @@ class _NearbyRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     final l = AppLocalizations.of(context);
-    // CANLI (ilk) satır: kabarık alt-plaka, KESKİN gölge (yayılmaz).
-    // İKİNCİ satır: doğrudan katmanın üstünde — plaka/border/gölge YOK.
+    // ESKİ SADE SATIR: iki satır da aynı gri yuvarlak pill; DURAK rozeti gri;
+    // kırmızı çubuk/plaka/çerçeve YOK. Canlı satırda mesafe kırmızı + sensör.
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
-        clipBehavior: Clip.antiAlias,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         decoration: BoxDecoration(
-          // Canlı satır plakası — karttan bir tık KOYU (önce fazla açıktı).
-          color: live ? const Color(0xFF161618) : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-          // İKİNCİ (canlı olmayan) satıra ince çerçeve.
-          border: live
-              ? null
-              : Border.all(
-                  color: VigilantColors.surfaceVariant.withValues(alpha: 0.5)),
-          boxShadow: live
-              ? [
-                  // KESKİN gölge: düşük blur, dar offset — yayılmaz.
-                  BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.55),
-                      blurRadius: 2,
-                      offset: const Offset(0, 3)),
-                ]
-              : null,
+          color: VigilantColors.surfaceContainer,
+          borderRadius: BorderRadius.circular(16),
         ),
-        child: IntrinsicHeight(
-          child: Row(
-            children: [
-              // SOLA SIFIR koyu-kırmızı çubuk — satırın soluna yapışık, tam boy.
-              // Yalnızca canlı/en yakın satırda. Genişlik ~%40 inceltildi (5→3).
-              if (live) Container(width: 3, color: _kDarkRed),
-              Expanded(
-                child: Padding(
-                  // İki satır AYNI yükseklikte (dikey boşluk 16).
-                  padding: const EdgeInsets.fromLTRB(12, 16, 4, 16),
-                  child: Row(
-                    children: [
-                      // "DURAK" rozeti — canlı satırda KOYU kırmızı, yazıda
-                      // gölge; ötekinde nötr.
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 7),
-                        decoration: BoxDecoration(
-                          color: live ? _kDarkRed : HomeScreen._chipDark,
-                          borderRadius: BorderRadius.circular(9),
-                          boxShadow: live
-                              ? [
-                                  BoxShadow(
-                                      color:
-                                          Colors.black.withValues(alpha: 0.35),
-                                      blurRadius: 5,
-                                      offset: const Offset(0, 2)),
-                                ]
-                              : null,
-                        ),
-                        child: Text(l.stopBadge,
-                            style: text.labelSmall?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 0.5,
-                                shadows: [
-                                  const Shadow(
-                                      color: Colors.black54,
-                                      blurRadius: 3,
-                                      offset: Offset(0, 1)),
-                                ])),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(hit.stop.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: text.labelLarge?.copyWith(
-                                color: VigilantColors.onSurface,
-                                fontWeight: FontWeight.w700)),
-                      ),
-                      const SizedBox(width: 8),
-                      if (live)
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.sensors,
-                                size: 15, color: VigilantColors.primary),
-                            const SizedBox(width: 4),
-                            Text(distanceText,
-                                style: text.labelLarge?.copyWith(
-                                    color: VigilantColors.primary,
-                                    fontWeight: FontWeight.w800)),
-                          ],
-                        )
-                      else
-                        Text(distanceText,
-                            style: text.labelLarge?.copyWith(
-                                color: VigilantColors.onSurfaceVariant,
-                                fontWeight: FontWeight.w600)),
-                    ],
-                  ),
-                ),
+        child: Row(
+          children: [
+            // "DURAK" rozeti — nötr gri (her iki satırda aynı).
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(
+                color: HomeScreen._chipDark,
+                borderRadius: BorderRadius.circular(10),
               ),
-            ],
-          ),
+              child: Text(l.stopBadge,
+                  style: text.labelSmall?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.5)),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(hit.stop.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: text.labelLarge?.copyWith(
+                      color: VigilantColors.onSurface,
+                      fontWeight: FontWeight.w700)),
+            ),
+            const SizedBox(width: 8),
+            if (live)
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.sensors,
+                      size: 15, color: VigilantColors.primary),
+                  const SizedBox(width: 4),
+                  Text(distanceText,
+                      style: text.labelLarge?.copyWith(
+                          color: VigilantColors.primary,
+                          fontWeight: FontWeight.w800)),
+                ],
+              )
+            else
+              Text(distanceText,
+                  style: text.labelLarge?.copyWith(
+                      color: VigilantColors.onSurfaceVariant,
+                      fontWeight: FontWeight.w600)),
+          ],
         ),
       ),
     );
