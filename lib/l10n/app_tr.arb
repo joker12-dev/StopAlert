@@ -17,6 +17,8 @@
   "homeLocationOff": "Konum kapalı — yakındaki durakları görmek için konum izni ver.",
   "homeFavoriteRoutes": "Favori Rotalar",
   "seeAll": "Tümü",
+  "mostUsedLines": "En Sık Kullanılan Hatlar",
+  "mostUsedStops": "En Sık İnilen Duraklar",
 
   "tipMorning": "Sabah yoğunluğu başladı; ineceğin durağa alarmı şimdi kur.",
   "tipEvening": "Akşam saatleri yoğun; alarmını erkenden kur.",

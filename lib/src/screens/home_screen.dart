@@ -16,7 +16,6 @@ import '../state/journey_provider.dart';
 import '../state/settings_provider.dart';
 import '../state/weather_provider.dart';
 import '../theme/app_theme.dart';
-import '../util/anim_config.dart';
 import '../util/insets.dart';
 import '../util/duration_label.dart';
 import '../util/greeting.dart';
@@ -144,6 +143,9 @@ class HomeScreen extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(height: 20),
+                  // Yan yana kaydırılan içgörü kartları (en sık hatlar/duraklar)
+                  // — altında nokta göstergesi. Geçmiş boşsa hiç görünmez.
+                  const EntranceFade(delayMs: 170, child: _InsightCarousel()),
                   // Bağlamsal akıllı ipucu (saate göre): tek dokunuşla alarma götürür.
                   EntranceFade(
                       delayMs: 220, child: _SmartTipCard(onTap: goToStops)),
@@ -818,17 +820,31 @@ class _NearbyCard extends ConsumerWidget {
                         ),
                         const SizedBox(width: 8),
                         if (nearestBadge != null)
+                          // EN YAKIN mesafe rozeti — kırmızı tonlu, ikonlu
+                          // badge (sade metin yerine).
                           Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 2),
+                                horizontal: 9, vertical: 4),
                             decoration: BoxDecoration(
-                              color: VigilantColors.surfaceContainer,
+                              color: VigilantColors.primary
+                                  .withValues(alpha: 0.16),
                               borderRadius: BorderRadius.circular(999),
+                              border: Border.all(
+                                  color: VigilantColors.primary
+                                      .withValues(alpha: 0.4)),
                             ),
-                            child: Text(nearestBadge,
-                                style: text.labelSmall?.copyWith(
-                                    color: VigilantColors.onSurfaceVariant,
-                                    fontWeight: FontWeight.w500)),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.near_me_rounded,
+                                    size: 12, color: VigilantColors.primary),
+                                const SizedBox(width: 4),
+                                Text(nearestBadge,
+                                    style: text.labelSmall?.copyWith(
+                                        color: VigilantColors.primary,
+                                        fontWeight: FontWeight.w800)),
+                              ],
+                            ),
                           ),
                       ],
                     ),
@@ -938,7 +954,8 @@ class _NearbyRow extends StatelessWidget {
       child: Container(
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
-          color: live ? const Color(0xFF2A2A2D) : Colors.transparent,
+          // Canlı satır plakası — karttan bir tık KOYU (önce fazla açıktı).
+          color: live ? const Color(0xFF161618) : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
           // İKİNCİ (canlı olmayan) satıra ince çerçeve.
           border: live
@@ -959,13 +976,12 @@ class _NearbyRow extends StatelessWidget {
           child: Row(
             children: [
               // SOLA SIFIR koyu-kırmızı çubuk — satırın soluna yapışık, tam boy.
-              // Yalnızca canlı/en yakın satırda.
-              if (live) Container(width: 5, color: _kDarkRed),
+              // Yalnızca canlı/en yakın satırda. Genişlik ~%40 inceltildi (5→3).
+              if (live) Container(width: 3, color: _kDarkRed),
               Expanded(
                 child: Padding(
-                  // İLK satır ~%25 daha yüksek (dikey boşluk 10 → 16).
-                  padding: EdgeInsets.fromLTRB(
-                      live ? 12 : 12, live ? 16 : 10, 4, live ? 16 : 10),
+                  // İki satır AYNI yükseklikte (dikey boşluk 16).
+                  padding: const EdgeInsets.fromLTRB(12, 16, 4, 16),
                   child: Row(
                     children: [
                       // "DURAK" rozeti — canlı satırda KOYU kırmızı, yazıda
@@ -1033,6 +1049,312 @@ class _NearbyRow extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Yakındaki Duraklar kartının DIŞINDA, yan yana kaydırılan içgörü kartları.
+///
+/// Geçmiş yolculuklardan türetilir: en sık kullanılan hatlar + en sık inilen
+/// duraklar. Her kart bir sayfa; altında hangi sayfada olduğunu gösteren nokta
+/// göstergesi. Geçmiş boşsa (yeni kullanıcı) hiç görünmez.
+class _InsightCarousel extends ConsumerStatefulWidget {
+  const _InsightCarousel();
+
+  @override
+  ConsumerState<_InsightCarousel> createState() => _InsightCarouselState();
+}
+
+class _InsightCarouselState extends ConsumerState<_InsightCarousel> {
+  final _controller = PageController();
+  int _page = 0;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  /// En sık kullanılan ilk 3 hat (tür|kod|ad'a göre gruplanır, sayıya göre).
+  List<({String code, String name, LineType type, int count})> _topLines(
+      List<JourneyRecord> js) {
+    final map = <String, ({String code, String name, LineType type, int count})>{};
+    for (final j in js) {
+      if (j.lineCode.isEmpty) continue;
+      final key = '${j.lineTypeName}|${j.lineCode}|${j.lineName}';
+      final cur = map[key];
+      map[key] = (
+        code: j.lineCode,
+        name: j.lineName,
+        type: j.lineType,
+        count: (cur?.count ?? 0) + 1,
+      );
+    }
+    final list = map.values.toList()..sort((a, b) => b.count - a.count);
+    return list.take(3).toList();
+  }
+
+  /// En sık inilen ilk 3 durak (hedef durak adına göre).
+  List<({String name, int count})> _topStops(List<JourneyRecord> js) {
+    final map = <String, int>{};
+    for (final j in js) {
+      final name = j.targetStopName.trim();
+      if (name.isEmpty) continue;
+      map[name] = (map[name] ?? 0) + 1;
+    }
+    final list = map.entries.toList()..sort((a, b) => b.value - a.value);
+    return list.take(3).map((e) => (name: e.key, count: e.value)).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final journeys =
+        ref.watch(journeysStreamProvider).valueOrNull ?? const <JourneyRecord>[];
+    if (journeys.isEmpty) return const SizedBox.shrink();
+
+    final lines = _topLines(journeys);
+    final stops = _topStops(journeys);
+
+    final pages = <Widget>[
+      if (lines.isNotEmpty)
+        _InsightCard(
+          title: l.mostUsedLines,
+          icon: Icons.alt_route_rounded,
+          onTap: () {
+            Haptics.light();
+            ref.read(bottomNavIndexProvider.notifier).state = NavTab.lines;
+          },
+          children: [
+            for (final ln in lines)
+              _InsightLineRow(code: ln.code, name: ln.name, type: ln.type, count: ln.count),
+          ],
+        ),
+      if (stops.isNotEmpty)
+        _InsightCard(
+          title: l.mostUsedStops,
+          icon: Icons.location_on_rounded,
+          onTap: () {
+            Haptics.light();
+            ref.read(bottomNavIndexProvider.notifier).state = NavTab.stops;
+          },
+          children: [
+            for (final s in stops)
+              _InsightStopRow(name: s.name, count: s.count),
+          ],
+        ),
+    ];
+    if (pages.isEmpty) return const SizedBox.shrink();
+    // Sayfa taşarsa güvenli kalsın.
+    final active = _page.clamp(0, pages.length - 1);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 24),
+      child: Column(
+        children: [
+          SizedBox(
+            height: 188,
+            child: PageView(
+              controller: _controller,
+              onPageChanged: (i) => setState(() => _page = i),
+              children: pages,
+            ),
+          ),
+          if (pages.length > 1) ...[
+            const SizedBox(height: 12),
+            // NOKTA GÖSTERGESİ — kartın hemen altında; aktif nokta kırmızı+geniş.
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                for (var i = 0; i < pages.length; i++)
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 220),
+                    margin: const EdgeInsets.symmetric(horizontal: 3),
+                    width: i == active ? 20 : 7,
+                    height: 7,
+                    decoration: BoxDecoration(
+                      color: i == active
+                          ? VigilantColors.primary
+                          : VigilantColors.surfaceVariant,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// İçgörü kartı iskeleti — başlık + satırlar (kaydırılabilir sayfa).
+class _InsightCard extends StatelessWidget {
+  const _InsightCard({
+    required this.title,
+    required this.icon,
+    required this.children,
+    required this.onTap,
+  });
+
+  final String title;
+  final IconData icon;
+  final List<Widget> children;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        // Kaydırırken komşu sayfa görünsün diye sağda küçük boşluk.
+        margin: const EdgeInsets.only(right: 4),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: HomeScreen._cardDark,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withValues(alpha: 0.5),
+                blurRadius: 16,
+                offset: const Offset(0, 8)),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, size: 18, color: VigilantColors.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style:
+                          text.bodyLarge?.copyWith(fontWeight: FontWeight.w600)),
+                ),
+                const Icon(Icons.chevron_right,
+                    size: 20, color: VigilantColors.onSurfaceVariant),
+              ],
+            ),
+            const SizedBox(height: 10),
+            for (final c in children) ...[
+              c,
+              if (c != children.last) const SizedBox(height: 8),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// "En sık kullanılan hat" satırı: renkli kod rozeti + ad + kullanım sayısı.
+class _InsightLineRow extends StatelessWidget {
+  const _InsightLineRow({
+    required this.code,
+    required this.name,
+    required this.type,
+    required this.count,
+  });
+
+  final String code;
+  final String name;
+  final LineType type;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final color = lineTypeColor(type);
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.9),
+            borderRadius: BorderRadius.circular(7),
+          ),
+          child: Text(code,
+              style: text.labelSmall?.copyWith(
+                  color: Colors.white, fontWeight: FontWeight.w800)),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(name.isEmpty ? '—' : name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: text.labelLarge?.copyWith(
+                  color: VigilantColors.onSurface,
+                  fontWeight: FontWeight.w600)),
+        ),
+        const SizedBox(width: 8),
+        _UsagePill(count: count),
+      ],
+    );
+  }
+}
+
+/// "En sık inilen durak" satırı: durak simgesi + ad + kullanım sayısı.
+class _InsightStopRow extends StatelessWidget {
+  const _InsightStopRow({required this.name, required this.count});
+
+  final String name;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return Row(
+      children: [
+        const Icon(Icons.place_rounded,
+            size: 18, color: VigilantColors.onSurfaceVariant),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: text.labelLarge?.copyWith(
+                  color: VigilantColors.onSurface,
+                  fontWeight: FontWeight.w600)),
+        ),
+        const SizedBox(width: 8),
+        _UsagePill(count: count),
+      ],
+    );
+  }
+}
+
+/// Kullanım sayısı rozeti — dile bağlı olmayan "↻ N".
+class _UsagePill extends StatelessWidget {
+  const _UsagePill({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: VigilantColors.surfaceContainer,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.repeat_rounded,
+              size: 12, color: VigilantColors.onSurfaceVariant),
+          const SizedBox(width: 3),
+          Text('$count',
+              style: text.labelSmall?.copyWith(
+                  color: VigilantColors.onSurfaceVariant,
+                  fontWeight: FontWeight.w800)),
+        ],
       ),
     );
   }
@@ -1106,39 +1428,14 @@ class _SmartTipCard extends StatelessWidget {
   }
 }
 
-/// Büyük kırmızı "Yolculuk Başlat" CTA.
-class _PrimaryCta extends StatefulWidget {
+/// Büyük kırmızı "Alarm Başlat" CTA — arka planda kayan siyah parıltı ([Sheen]).
+class _PrimaryCta extends StatelessWidget {
   const _PrimaryCta({required this.onTap});
 
   final VoidCallback onTap;
 
   @override
-  State<_PrimaryCta> createState() => _PrimaryCtaState();
-}
-
-class _PrimaryCtaState extends State<_PrimaryCta>
-    with SingleTickerProviderStateMixin {
-  // initState'te kurulur; AppAnim kapalıysa (testler) hiç repeat edilmez.
-  late final AnimationController _c;
-
-  @override
-  void initState() {
-    super.initState();
-    _c = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 2600));
-    if (AppAnim.enabled) _c.repeat();
-  }
-
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final text = Theme.of(context).textTheme;
-    final l = AppLocalizations.of(context);
     // Gölge KOYU ağırlıklı; kırmızı sadece hafif bir iz (azaltıldı).
     return Container(
       width: double.infinity,
@@ -1161,48 +1458,12 @@ class _PrimaryCtaState extends State<_PrimaryCta>
         child: Material(
           color: VigilantColors.primary,
           child: InkWell(
-            onTap: widget.onTap,
-            child: Stack(
+            onTap: onTap,
+            child: const Stack(
               children: [
-                // ARKA PLAN ANİMASYONU: kırmızının üstünden geçen HAFİF ama
-                // belirgin siyah bir bant (sağa doğru kayar). Dokunuşu engellemez.
-                if (AppAnim.enabled)
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: AnimatedBuilder(
-                        animation: _c,
-                        builder: (context, _) => DecoratedBox(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.centerLeft,
-                              end: Alignment.centerRight,
-                              colors: [
-                                Colors.transparent,
-                                Colors.black.withValues(alpha: 0.22),
-                                Colors.transparent,
-                              ],
-                              stops: const [0.32, 0.5, 0.68],
-                              transform: _SlideGradient(_c.value),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                Center(
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.notifications_active_rounded,
-                          color: Colors.white),
-                      const SizedBox(width: 8),
-                      Text(l.homeStartAlarm,
-                          style: text.bodyLarge?.copyWith(
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white)),
-                    ],
-                  ),
-                ),
+                // Kırmızının üstünden geçen kayan siyah bant.
+                Positioned.fill(child: Sheen()),
+                _CtaLabel(),
               ],
             ),
           ),
@@ -1212,17 +1473,25 @@ class _PrimaryCtaState extends State<_PrimaryCta>
   }
 }
 
-/// Degrade bandını yatayda kaydıran dönüşüm (buton arka plan animasyonu).
-class _SlideGradient extends GradientTransform {
-  const _SlideGradient(this.t);
-
-  /// 0→1 döngü; bandı sol dıştan sağ dışa taşır.
-  final double t;
+class _CtaLabel extends StatelessWidget {
+  const _CtaLabel();
 
   @override
-  Matrix4? transform(Rect bounds, {TextDirection? textDirection}) {
-    final dx = (t * 2 - 1) * bounds.width;
-    return Matrix4.translationValues(dx, 0, 0);
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final l = AppLocalizations.of(context);
+    return Center(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.notifications_active_rounded, color: Colors.white),
+          const SizedBox(width: 8),
+          Text(l.homeStartAlarm,
+              style: text.bodyLarge?.copyWith(
+                  fontWeight: FontWeight.w700, color: Colors.white)),
+        ],
+      ),
+    );
   }
 }
 

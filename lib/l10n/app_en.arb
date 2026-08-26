@@ -18,6 +18,8 @@
   "homeLocationOff": "Location off — grant location permission to see nearby stops.",
   "homeFavoriteRoutes": "Favorite Routes",
   "seeAll": "All",
+  "mostUsedLines": "Most Used Lines",
+  "mostUsedStops": "Most Frequent Stops",
 
   "tipMorning": "Morning rush has started; set your alarm for your stop now.",
   "tipEvening": "Evenings are busy; set your alarm early.",

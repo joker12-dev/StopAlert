@@ -172,6 +172,79 @@ class _PulseDotState extends State<PulseDot>
   }
 }
 
+/// Bir yüzeyin üzerinden soldan sağa geçen HAFİF, kayan siyah bant (parıltı).
+///
+/// Alarm Başlat butonu ve trafik yoğunluğu halkalarında ortak kullanılır.
+/// Şekle göre KIRPMA çağıran tarafta yapılır (ClipRRect/ClipOval ile);
+/// [Positioned.fill] içine konur. [AppAnim] kapalıyken (testler) hiçbir şey
+/// çizmez ve döngü başlatılmaz.
+class Sheen extends StatefulWidget {
+  const Sheen({super.key, this.opacity = 0.22, this.periodMs = 2600});
+
+  /// Bandın koyuluğu (siyah).
+  final double opacity;
+  final int periodMs;
+
+  @override
+  State<Sheen> createState() => _SheenState();
+}
+
+class _SheenState extends State<Sheen> with SingleTickerProviderStateMixin {
+  late final AnimationController _c;
+
+  @override
+  void initState() {
+    super.initState();
+    _c = AnimationController(
+        vsync: this, duration: Duration(milliseconds: widget.periodMs));
+    if (AppAnim.enabled) _c.repeat();
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!AppAnim.enabled) return const SizedBox.shrink();
+    return IgnorePointer(
+      child: AnimatedBuilder(
+        animation: _c,
+        builder: (context, _) => DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: [
+                Colors.transparent,
+                Colors.black.withValues(alpha: widget.opacity),
+                Colors.transparent,
+              ],
+              stops: const [0.32, 0.5, 0.68],
+              transform: _SheenSlide(_c.value),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Parıltı bandını yatayda kaydıran degrade dönüşümü (0→1 döngü).
+class _SheenSlide extends GradientTransform {
+  const _SheenSlide(this.t);
+
+  final double t;
+
+  @override
+  Matrix4? transform(Rect bounds, {TextDirection? textDirection}) {
+    final dx = (t * 2 - 1) * bounds.width;
+    return Matrix4.translationValues(dx, 0, 0);
+  }
+}
+
 /// Alt menü sekmeleri arasında geçiş hissi.
 ///
 /// [IndexedStack] durumu koruyor ama sekme bir anda takla atmış gibi

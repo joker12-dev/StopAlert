@@ -200,6 +200,18 @@ abstract class AppLocalizations {
   /// **'All'**
   String get seeAll;
 
+  /// No description provided for @mostUsedLines.
+  ///
+  /// In en, this message translates to:
+  /// **'Most Used Lines'**
+  String get mostUsedLines;
+
+  /// No description provided for @mostUsedStops.
+  ///
+  /// In en, this message translates to:
+  /// **'Most Frequent Stops'**
+  String get mostUsedStops;
+
   /// No description provided for @tipMorning.
   ///
   /// In en, this message translates to:

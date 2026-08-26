@@ -58,6 +58,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get seeAll => 'All';
 
   @override
+  String get mostUsedLines => 'Most Used Lines';
+
+  @override
+  String get mostUsedStops => 'Most Frequent Stops';
+
+  @override
   String get tipMorning =>
       'Morning rush has started; set your alarm for your stop now.';
 

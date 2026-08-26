@@ -17,6 +17,8 @@
   "homeLocationOff": "Localisation désactivée — autorisez la localisation pour voir les arrêts proches.",
   "homeFavoriteRoutes": "Trajets favoris",
   "seeAll": "Tout",
+  "mostUsedLines": "Lignes les plus utilisées",
+  "mostUsedStops": "Arrêts les plus fréquents",
 
   "tipMorning": "L'affluence du matin a commencé ; réglez l'alarme pour votre arrêt maintenant.",
   "tipEvening": "Les soirées sont chargées ; réglez votre alarme tôt.",

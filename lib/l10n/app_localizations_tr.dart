@@ -58,6 +58,12 @@ class AppLocalizationsTr extends AppLocalizations {
   String get seeAll => 'Tümü';
 
   @override
+  String get mostUsedLines => 'En Sık Kullanılan Hatlar';
+
+  @override
+  String get mostUsedStops => 'En Sık İnilen Duraklar';
+
+  @override
   String get tipMorning =>
       'Sabah yoğunluğu başladı; ineceğin durağa alarmı şimdi kur.';
 

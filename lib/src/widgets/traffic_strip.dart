@@ -118,7 +118,12 @@ class _CityCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            TrafficGauge(percent: live ? p : null, size: 96, stroke: 9),
+            TrafficGauge(
+                percent: live ? p : null,
+                size: 96,
+                stroke: 9,
+                // Parıltı yalnızca canlı + veri gelmiş halkada.
+                sheen: live && p != null),
             const SizedBox(height: 12),
             Text(city,
                 maxLines: 1,

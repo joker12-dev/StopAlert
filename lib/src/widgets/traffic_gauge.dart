@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
+import 'anim.dart';
 
 /// Trafik yoğunluğu için yuvarlak gösterge: halka doluluk = yoğunluk,
 /// ortada yüzde. Renk yoğunlukla değişir (yeşil → turuncu → kırmızı).
@@ -14,11 +15,15 @@ class TrafficGauge extends StatelessWidget {
     required this.percent,
     this.size = 74,
     this.stroke = 7,
+    this.sheen = false,
   });
 
   final int? percent;
   final double size;
   final double stroke;
+
+  /// Halkanın üstünden geçen kayan siyah parıltı (Alarm Başlat'takiyle aynı).
+  final bool sheen;
 
   /// Yoğunluğa göre renk — 40 altı akıcı, 70 üstü yoğun.
   static Color colorFor(int p) {
@@ -39,29 +44,38 @@ class TrafficGauge extends StatelessWidget {
     final text = Theme.of(context).textTheme;
     final p = percent;
     final color = p == null ? VigilantColors.outline : colorFor(p);
-    return SizedBox(
-      width: size,
-      height: size,
-      child: CustomPaint(
-        painter: _GaugePainter(
-          value: (p ?? 0) / 100,
-          color: color,
-          stroke: stroke,
-          track: VigilantColors.surfaceContainerHigh,
-        ),
-        child: Center(
-          child: Text(
-            p == null ? '—' : '%$p',
-            style: text.headlineSmall?.copyWith(
-              // Yazı halka boyutuyla orantılı büyüsün.
-              fontSize: size * 0.28,
-              fontWeight: FontWeight.w800,
-              color: p == null ? VigilantColors.onSurfaceVariant : color,
-              height: 1,
-            ),
+    final gauge = CustomPaint(
+      painter: _GaugePainter(
+        value: (p ?? 0) / 100,
+        color: color,
+        stroke: stroke,
+        track: VigilantColors.surfaceContainerHigh,
+      ),
+      child: Center(
+        child: Text(
+          p == null ? '—' : '%$p',
+          style: text.headlineSmall?.copyWith(
+            // Yazı halka boyutuyla orantılı büyüsün.
+            fontSize: size * 0.28,
+            fontWeight: FontWeight.w800,
+            color: p == null ? VigilantColors.onSurfaceVariant : color,
+            height: 1,
           ),
         ),
       ),
+    );
+    return SizedBox(
+      width: size,
+      height: size,
+      // Parıltı daireye KIRPILIR (ClipOval); yalnızca veri varken oynar.
+      child: sheen
+          ? ClipOval(
+              child: Stack(
+                fit: StackFit.expand,
+                children: [gauge, const Positioned.fill(child: Sheen())],
+              ),
+            )
+          : gauge,
     );
   }
 }

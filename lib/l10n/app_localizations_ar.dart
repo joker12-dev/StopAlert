@@ -58,6 +58,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get seeAll => 'الكل';
 
   @override
+  String get mostUsedLines => 'الخطوط الأكثر استخدامًا';
+
+  @override
+  String get mostUsedStops => 'المحطات الأكثر تكرارًا';
+
+  @override
   String get tipMorning => 'بدأ ازدحام الصباح؛ اضبط المنبه لمحطتك الآن.';
 
   @override

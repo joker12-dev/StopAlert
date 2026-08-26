@@ -58,6 +58,12 @@ class AppLocalizationsEs extends AppLocalizations {
   String get seeAll => 'Todas';
 
   @override
+  String get mostUsedLines => 'Líneas más usadas';
+
+  @override
+  String get mostUsedStops => 'Paradas más frecuentes';
+
+  @override
   String get tipMorning =>
       'Ha empezado la hora punta de la mañana; pon la alarma para tu parada ahora.';
 

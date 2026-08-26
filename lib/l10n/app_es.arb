@@ -17,6 +17,8 @@
   "homeLocationOff": "Ubicación desactivada — concede el permiso de ubicación para ver las paradas cercanas.",
   "homeFavoriteRoutes": "Rutas favoritas",
   "seeAll": "Todas",
+  "mostUsedLines": "Líneas más usadas",
+  "mostUsedStops": "Paradas más frecuentes",
 
   "tipMorning": "Ha empezado la hora punta de la mañana; pon la alarma para tu parada ahora.",
   "tipEvening": "Las tardes están concurridas; pon tu alarma temprano.",
