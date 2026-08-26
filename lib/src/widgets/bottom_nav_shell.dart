@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/app_localizations.dart';
 import '../screens/favorites_screen.dart';
 import '../screens/home_screen.dart';
 import '../screens/profile_screen.dart';
@@ -43,20 +44,21 @@ class BottomNavShell extends ConsumerStatefulWidget {
 class _BottomNavShellState extends ConsumerState<BottomNavShell> {
   // Her sekme: DOLU (aktif) ve İNCE (pasif) ikon — mockup'taki gibi aktif
   // sekme kırmızı+dolu, ötekiler gri+ince. Başlıklar korunur.
+  // İkonlar sabit; başlıklar dile göre [_labels] ile üretilir.
   static const _tabs = [
-    (on: Icons.home_rounded, off: Icons.home_outlined, label: 'Ana Sayfa'),
+    (on: Icons.home_rounded, off: Icons.home_outlined),
     // "Rotalar" yol tarifi çağrıştırıyordu; sekme aslında HAT arama.
-    (on: Icons.alt_route_rounded, off: Icons.alt_route_outlined, label: 'Hatlar'),
+    (on: Icons.alt_route_rounded, off: Icons.alt_route_outlined),
     // Durak arama AYRI sekme: hat ve durak tek listede karışınca kullanıcı
     // ne aradığını bulamıyordu.
-    (
-      on: Icons.location_on_rounded,
-      off: Icons.location_on_outlined,
-      label: 'Duraklar'
-    ),
-    (on: Icons.star_rounded, off: Icons.star_border_rounded, label: 'Favoriler'),
-    (on: Icons.person_rounded, off: Icons.person_outline_rounded, label: 'Profil'),
+    (on: Icons.location_on_rounded, off: Icons.location_on_outlined),
+    (on: Icons.star_rounded, off: Icons.star_border_rounded),
+    (on: Icons.person_rounded, off: Icons.person_outline_rounded),
   ];
+
+  /// Sekme başlıkları — seçili dile göre.
+  static List<String> _labels(AppLocalizations l) =>
+      [l.navHome, l.navLines, l.navStops, l.navFavorites, l.navProfile];
 
   // Ziyaret edilen sekmeler; yalnızca açıldıktan sonra inşa edilir (tembel
   // yükleme) — böylece Favoriler/Profil, kullanıcı dokunmadan Firestore'a
@@ -106,6 +108,7 @@ class _BottomNavShellState extends ConsumerState<BottomNavShell> {
 
   Widget _navBar(BuildContext context) {
     final index = ref.watch(bottomNavIndexProvider);
+    final labels = _labels(AppLocalizations.of(context));
     return BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
           // Yükseklik = içerik + sistem navigasyon çubuğu payı. Sabit 80 px
@@ -129,7 +132,7 @@ class _BottomNavShellState extends ConsumerState<BottomNavShell> {
                     Expanded(
                       child: _NavTab(
                         icon: i == index ? _tabs[i].on : _tabs[i].off,
-                        label: _tabs[i].label,
+                        label: labels[i],
                         active: i == index,
                         onTap: () => setState(() => _select(i)),
                       ),

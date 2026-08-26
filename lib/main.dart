@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:home_widget/home_widget.dart';
 
+import 'l10n/app_localizations.dart';
+
 import 'src/data/journey_payload.dart';
 import 'src/data/models.dart';
 import 'src/data/transit_city.dart';
@@ -27,6 +29,7 @@ import 'src/services/tracking_service.dart';
 import 'src/state/city_provider.dart';
 import 'src/state/journey_provider.dart';
 import 'src/state/consent_provider.dart';
+import 'src/state/locale_provider.dart';
 import 'src/state/onboarding_provider.dart';
 import 'src/state/settings_provider.dart';
 import 'src/theme/app_theme.dart';
@@ -74,17 +77,23 @@ Future<void> main() async {
   runApp(const ProviderScope(child: StopAlertApp()));
 }
 
-class StopAlertApp extends StatelessWidget {
+class StopAlertApp extends ConsumerWidget {
   const StopAlertApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Seçili dil; null (kayıt yok) → sistem dili kullanılır. Arapça için RTL,
+    // Flutter'ın global delegeleri üzerinden otomatik uygulanır.
+    final locale = ref.watch(localeControllerProvider).valueOrNull;
     return MaterialApp(
-      title: 'StopAlert',
+      title: 'Stop Alert',
       debugShowCheckedModeBanner: false,
       // Vigilant Dark tasarım sistemi koyu tema üzerine kurulu (bkz. PLAN.md).
       theme: AppTheme.dark(),
       themeMode: ThemeMode.dark,
+      locale: locale,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: const _RootGate(),
     );
   }

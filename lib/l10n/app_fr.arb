@@ -1,0 +1,43 @@
+{
+  "@@locale": "fr",
+  "navHome": "Accueil",
+  "navLines": "Lignes",
+  "navStops": "Arrêts",
+  "navFavorites": "Favoris",
+  "navProfile": "Profil",
+
+  "homeSearchTitle": "Où descendez-vous ?",
+  "homeSearchHint": "Saisissez l'arrêt ou la ligne où descendre...",
+  "homeCurrentLocation": "Position actuelle : ",
+  "homeYourLocation": "Votre position",
+  "homeNearbyStops": "Arrêts à proximité",
+  "homeStartAlarm": "Démarrer l'alarme",
+  "stopBadge": "ARRÊT",
+  "homeNearbyError": "Impossible de charger les arrêts à proximité.",
+  "homeLocationOff": "Localisation désactivée — autorisez la localisation pour voir les arrêts proches.",
+  "homeFavoriteRoutes": "Trajets favoris",
+  "seeAll": "Tout",
+
+  "tipMorning": "L'affluence du matin a commencé ; réglez l'alarme pour votre arrêt maintenant.",
+  "tipEvening": "Les soirées sont chargées ; réglez votre alarme tôt.",
+  "tipLateNight": "Ne manquez pas les derniers trajets ; réglez une alarme pour votre arrêt.",
+  "tipDefault": "Au cas où vous vous assoupiriez — réglez une alarme pour votre arrêt.",
+
+  "categoryBus": "Bus",
+  "categoryMetrobus": "Métrobus",
+  "categoryMarmaray": "Marmaray",
+  "categoryMetro": "Métro",
+  "categoryFerry": "Ferry",
+
+  "actionUnderstood": "Compris",
+  "actionCancel": "Annuler",
+  "actionSave": "Enregistrer",
+  "actionContinue": "Continuer",
+  "actionClose": "Fermer",
+
+  "settingsTitle": "Paramètres",
+  "appSection": "APPLICATION",
+  "language": "Langue",
+  "languageSubtitle": "Langue d'affichage de l'application",
+  "systemDefault": "Langue du système"
+}

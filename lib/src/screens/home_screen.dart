@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart' show TemplateType;
 
+import '../../l10n/app_localizations.dart';
 import '../data/favorite_route.dart';
 import '../data/journey_payload.dart';
 import '../data/journey_record.dart';
@@ -15,6 +16,7 @@ import '../state/journey_provider.dart';
 import '../state/settings_provider.dart';
 import '../state/weather_provider.dart';
 import '../theme/app_theme.dart';
+import '../util/anim_config.dart';
 import '../util/insets.dart';
 import '../util/duration_label.dart';
 import '../util/greeting.dart';
@@ -47,8 +49,18 @@ class HomeScreen extends ConsumerWidget {
   static const _chipBorder = Color(0xFF3A3A3A);
 
   static const _months = [
-    'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
-    'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık',
+    'Ocak',
+    'Şubat',
+    'Mart',
+    'Nisan',
+    'Mayıs',
+    'Haziran',
+    'Temmuz',
+    'Ağustos',
+    'Eylül',
+    'Ekim',
+    'Kasım',
+    'Aralık',
   ];
 
   String get _todayText {
@@ -104,56 +116,60 @@ class HomeScreen extends ConsumerWidget {
                 padding: EdgeInsets.fromLTRB(
                     20, 8, 20, AppInsets.listBottom(context)),
                 children: [
-                EntranceFade(
-                    child: _TopBar(nickname: nickname, dateText: _todayText)),
-            const SizedBox(height: 24),
-            EntranceFade(delayMs: 60, child: _SearchRow(onTap: goToStops)),
-            const SizedBox(height: 20),
-            EntranceFade(
-              delayMs: 120,
-              child: _NearbyCard(
-                // ALARM KURMANIN YOLU DURAKTAN GEÇİYOR: kullanıcı "nereye
-                // gideceğim" değil "nerede ineceğim" sorusunu çözüyor.
-                // Hat listesine düşürmek bir adım fazlaydı.
-                onStart: goToStops,
-                onOpenStop: (line, stop) => _openStop(context, ref, line, stop),
-                onMap: () {
-                  Haptics.light();
-                  Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => const NearbyMapScreen()));
-                },
-                // Ulaşım türü kısayolları artık aynı kartın 3. katmanında.
-                onCategory: (type) => Navigator.of(context).push(
-                  MaterialPageRoute(
-                      builder: (_) => LinesByTypeScreen(type: type)),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            // Bağlamsal akıllı ipucu (saate göre): tek dokunuşla alarma götürür.
-            EntranceFade(delayMs: 220, child: _SmartTipCard(onTap: goToStops)),
-            const SizedBox(height: 24),
-            // ---- Alt kısım: mockup'ın üstünde yok ama işlevler korunuyor ----
-            // Şehir trafik yoğunluğu (İstanbul canlı, İBB servisi).
-            if (ref.watch(activeCityProvider).hasTraffic) ...[
-              const OfflineBanner(
-                message: 'Bağlantı yok — trafik yoğunluğu güncellenemiyor.',
-                margin: EdgeInsets.only(bottom: 8),
-              ),
-              const EntranceFade(delayMs: 260, child: TrafficStrip()),
-            ],
-            const NativeAdSlot(
-              key: ValueKey('home-native-ad'),
-              margin: EdgeInsets.only(top: 20),
-              template: TemplateType.small,
-            ),
-            const SizedBox(height: 20),
-            // Ana ekran widget'ı tanıtımı — tek seferlik, kapatılınca gitmez.
-            const WidgetPromoCard(),
-            ..._buildFavoritesSection(context, ref, text),
-            ..._buildRecentSection(context, ref, text, goToStops),
-            ..._buildSuggestionSection(context, ref, text),
-                const SizedBox(height: 16),
+                  EntranceFade(
+                      child: _TopBar(nickname: nickname, dateText: _todayText)),
+                  const SizedBox(height: 24),
+                  EntranceFade(
+                      delayMs: 60, child: _SearchRow(onTap: goToStops)),
+                  const SizedBox(height: 20),
+                  EntranceFade(
+                    delayMs: 120,
+                    child: _NearbyCard(
+                      // ALARM KURMANIN YOLU DURAKTAN GEÇİYOR: kullanıcı "nereye
+                      // gideceğim" değil "nerede ineceğim" sorusunu çözüyor.
+                      // Hat listesine düşürmek bir adım fazlaydı.
+                      onStart: goToStops,
+                      onOpenStop: (line, stop) =>
+                          _openStop(context, ref, line, stop),
+                      onMap: () {
+                        Haptics.light();
+                        Navigator.of(context).push(MaterialPageRoute(
+                            builder: (_) => const NearbyMapScreen()));
+                      },
+                      // Ulaşım türü kısayolları artık aynı kartın 3. katmanında.
+                      onCategory: (type) => Navigator.of(context).push(
+                        MaterialPageRoute(
+                            builder: (_) => LinesByTypeScreen(type: type)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  // Bağlamsal akıllı ipucu (saate göre): tek dokunuşla alarma götürür.
+                  EntranceFade(
+                      delayMs: 220, child: _SmartTipCard(onTap: goToStops)),
+                  const SizedBox(height: 24),
+                  // ---- Alt kısım: mockup'ın üstünde yok ama işlevler korunuyor ----
+                  // Şehir trafik yoğunluğu (İstanbul canlı, İBB servisi).
+                  if (ref.watch(activeCityProvider).hasTraffic) ...[
+                    const OfflineBanner(
+                      message:
+                          'Bağlantı yok — trafik yoğunluğu güncellenemiyor.',
+                      margin: EdgeInsets.only(bottom: 8),
+                    ),
+                    const EntranceFade(delayMs: 260, child: TrafficStrip()),
+                  ],
+                  const NativeAdSlot(
+                    key: ValueKey('home-native-ad'),
+                    margin: EdgeInsets.only(top: 20),
+                    template: TemplateType.small,
+                  ),
+                  const SizedBox(height: 20),
+                  // Ana ekran widget'ı tanıtımı — tek seferlik, kapatılınca gitmez.
+                  const WidgetPromoCard(),
+                  ..._buildFavoritesSection(context, ref, text),
+                  ..._buildRecentSection(context, ref, text, goToStops),
+                  ..._buildSuggestionSection(context, ref, text),
+                  const SizedBox(height: 16),
                 ],
               ),
             ),
@@ -167,13 +183,14 @@ class HomeScreen extends ConsumerWidget {
 
   List<Widget> _buildFavoritesSection(
       BuildContext context, WidgetRef ref, TextTheme text) {
-    final favs =
-        ref.watch(favoritesStreamProvider).valueOrNull ?? const <FavoriteRoute>[];
+    final favs = ref.watch(favoritesStreamProvider).valueOrNull ??
+        const <FavoriteRoute>[];
     if (favs.isEmpty) return const [];
+    final l = AppLocalizations.of(context);
     return [
       _SectionHeader(
-        title: 'Favori Rotalar',
-        actionLabel: 'Tümü',
+        title: l.homeFavoriteRoutes,
+        actionLabel: l.seeAll,
         onAction: () {
           Haptics.light();
           ref.read(bottomNavIndexProvider.notifier).state = NavTab.favorites;
@@ -226,7 +243,7 @@ class HomeScreen extends ConsumerWidget {
       return [
         _SectionHeader(
           title: 'Son Yolculuklar',
-          actionLabel: 'Tümü',
+          actionLabel: AppLocalizations.of(context).seeAll,
           onAction: () {
             Haptics.light();
             ref.read(bottomNavIndexProvider.notifier).state = NavTab.profile;
@@ -260,8 +277,8 @@ class HomeScreen extends ConsumerWidget {
 
   List<Widget> _buildSuggestionSection(
       BuildContext context, WidgetRef ref, TextTheme text) {
-    final journeys =
-        ref.watch(journeysStreamProvider).valueOrNull ?? const <JourneyRecord>[];
+    final journeys = ref.watch(journeysStreamProvider).valueOrNull ??
+        const <JourneyRecord>[];
     final s = JourneySuggester.suggest(journeys, DateTime.now());
     if (s == null) return const [];
     final color = lineTypeColor(LineType.fromName(s.lineTypeName));
@@ -296,8 +313,8 @@ class HomeScreen extends ConsumerWidget {
                   Text('${s.boardingStopName} → ${s.targetStopName}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style:
-                          text.bodyMedium?.copyWith(fontWeight: FontWeight.w700)),
+                      style: text.bodyMedium
+                          ?.copyWith(fontWeight: FontWeight.w700)),
                   const SizedBox(height: 2),
                   Text('${s.lineCode} · alarmı kurayım mı?',
                       maxLines: 1,
@@ -323,8 +340,8 @@ class HomeScreen extends ConsumerWidget {
 
   // ---- Navigasyon eylemleri ----
 
-  Future<void> _openStop(BuildContext context, WidgetRef ref,
-      TransitLine? line, Stop stop) async {
+  Future<void> _openStop(
+      BuildContext context, WidgetRef ref, TransitLine? line, Stop stop) async {
     Haptics.light();
     // OTOBÜS durağı: hangi hatla gidileceği belli değil — duraktan geçen
     // hatlar sunulur, kullanıcı seçince alarma geçilir.
@@ -476,7 +493,6 @@ class HomeScreen extends ConsumerWidget {
     ));
   }
 
-
   String _relativeTime(DateTime? t) {
     if (t == null) return 'yeni';
     final diff = DateTime.now().difference(t);
@@ -510,11 +526,15 @@ class _HeroBackground extends ConsumerWidget {
         fit: StackFit.expand,
         children: [
           if (asset != null)
-            Image.asset(
-              asset,
-              fit: BoxFit.cover,
-              alignment: Alignment.topCenter,
-              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+            // Arka plan fotoğrafı daha SİLİK dursun — opaklık düşük.
+            Opacity(
+              opacity: 0.35,
+              child: Image.asset(
+                asset,
+                fit: BoxFit.cover,
+                alignment: Alignment.topCenter,
+                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+              ),
             ),
           DecoratedBox(
             decoration: BoxDecoration(
@@ -563,8 +583,8 @@ class _TopBar extends ConsumerWidget {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: VigilantColors.surfaceContainer,
-            border: Border.all(
-                color: VigilantColors.primaryContainer, width: 2),
+            border:
+                Border.all(color: VigilantColors.primaryContainer, width: 2),
           ),
           child: const CircleAvatar(
             backgroundColor: VigilantColors.surfaceContainerHigh,
@@ -599,8 +619,8 @@ class _TopBar extends ConsumerWidget {
                         height: 3,
                         decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: VigilantColors.outline
-                                .withValues(alpha: 0.6))),
+                            color:
+                                VigilantColors.outline.withValues(alpha: 0.6))),
                     const SizedBox(width: 8),
                     Icon(weather.icon,
                         size: 14, color: VigilantColors.tertiaryContainer),
@@ -655,12 +675,12 @@ class _SearchRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
+    final l = AppLocalizations.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Nereye ineceksin?',
-            style:
-                text.bodyMedium?.copyWith(color: VigilantColors.onSurface)),
+        Text(l.homeSearchTitle,
+            style: text.bodyMedium?.copyWith(color: VigilantColors.onSurface)),
         const SizedBox(height: 12),
         Row(
           children: [
@@ -668,14 +688,15 @@ class _SearchRow extends StatelessWidget {
               child: GlassPanel(
                 borderRadius: 20,
                 onTap: onTap,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 17),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 17),
                 child: Row(
                   children: [
                     const Icon(Icons.search,
                         color: VigilantColors.onSurfaceVariant),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: Text('İneceğin durağı veya hattı yaz...',
+                      child: Text(l.homeSearchHint,
                           overflow: TextOverflow.ellipsis,
                           style: text.bodyMedium?.copyWith(
                               color: VigilantColors.onSurfaceVariant
@@ -712,6 +733,7 @@ class _NearbyCard extends ConsumerWidget {
       required this.onCategory});
 
   final VoidCallback onStart;
+
   /// Ray/vapur durağında hat bellidir; OTOBÜS durağında null gelir ve
   /// kullanıcıya önce "hangi hatla?" sorulur.
   final void Function(TransitLine? line, Stop stop) onOpenStop;
@@ -727,17 +749,20 @@ class _NearbyCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final text = Theme.of(context).textTheme;
+    final l = AppLocalizations.of(context);
     final locName = ref.watch(currentLocationProvider).valueOrNull?.name;
     final nearby = ref.watch(nearbyStopsProvider);
     final hits = nearby.valueOrNull ?? const <NearbyStopHit>[];
     final nearestBadge = hits.isNotEmpty ? _fmt(hits.first.meters) : null;
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      // stretch: üç kart tam genişlikte dursun.
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Row(
           children: [
-            const Icon(Icons.location_on, size: 18, color: VigilantColors.primary),
+            const Icon(Icons.location_on,
+                size: 18, color: VigilantColors.primary),
             const SizedBox(width: 6),
             Flexible(
               child: RichText(
@@ -747,9 +772,9 @@ class _NearbyCard extends ConsumerWidget {
                   style: text.labelMedium
                       ?.copyWith(color: VigilantColors.onSurfaceVariant),
                   children: [
-                    const TextSpan(text: 'Mevcut Konum: '),
+                    TextSpan(text: l.homeCurrentLocation),
                     TextSpan(
-                        text: locName ?? 'Konumun',
+                        text: locName ?? l.homeYourLocation,
                         style: const TextStyle(
                             color: VigilantColors.onSurface,
                             fontWeight: FontWeight.w600)),
@@ -759,142 +784,134 @@ class _NearbyCard extends ConsumerWidget {
             ),
           ],
         ),
-        const SizedBox(height: 12),
-        // TEK KART — üç katman, aralarında gölge (kat kat derinlik).
+        const SizedBox(height: 14),
+        // ÜÇ AYRI KART — alt alta, aralarında boşluk. Binmiyor; hepsi aynı
+        // stil (koyu plaka, yuvarlak köşe, düşen gölge).
+        // ==== KART 1: Yakındaki Duraklar ====
         Container(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            // Katmanlar bu KOYU tabanın üstünde kabarık durur.
-            color: const Color(0xFF121214),
-            borderRadius: BorderRadius.circular(22),
+            color: HomeScreen._cardDark,
+            borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.5),
-                  blurRadius: 26,
-                  offset: const Offset(0, 14)),
+                color: Colors.black.withValues(alpha: 0.5),
+                blurRadius: 16,
+                offset: const Offset(0, 8),
+              ),
             ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ---- KATMAN 1: Yakındaki Duraklar ----
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: HomeScreen._cardDark,
-                  borderRadius: BorderRadius.circular(18),
-                  // Bu katmanın gölgesi ALTTAKİ 2. katmana düşer.
-                  boxShadow: [
-                    BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.5),
-                        blurRadius: 16,
-                        offset: const Offset(0, 10)),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+              Row(
+                children: [
+                  Expanded(
+                    child: Row(
                       children: [
-                        Expanded(
-                          child: Row(
-                            children: [
-                              Flexible(
-                                child: Text('Yakındaki Duraklar',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: text.bodyLarge?.copyWith(
-                                        fontWeight: FontWeight.w600)),
-                              ),
-                              const SizedBox(width: 8),
-                              if (nearestBadge != null)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 8, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: VigilantColors.surfaceContainer,
-                                    borderRadius: BorderRadius.circular(999),
-                                  ),
-                                  child: Text(nearestBadge,
-                                      style: text.labelSmall?.copyWith(
-                                          color:
-                                              VigilantColors.onSurfaceVariant,
-                                          fontWeight: FontWeight.w500)),
-                                ),
-                            ],
-                          ),
+                        Flexible(
+                          child: Text(l.homeNearbyStops,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: text.bodyLarge
+                                  ?.copyWith(fontWeight: FontWeight.w600)),
                         ),
                         const SizedBox(width: 8),
-                        // Sağ üst: haritada göster.
-                        GestureDetector(
-                          onTap: onMap,
-                          behavior: HitTestBehavior.opaque,
-                          child: Container(
-                            width: 34,
-                            height: 34,
+                        if (nearestBadge != null)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 2),
                             decoration: BoxDecoration(
                               color: VigilantColors.surfaceContainer,
-                              borderRadius: BorderRadius.circular(10),
+                              borderRadius: BorderRadius.circular(999),
                             ),
-                            child: const Icon(Icons.map_rounded,
-                                size: 18, color: VigilantColors.primary),
+                            child: Text(nearestBadge,
+                                style: text.labelSmall?.copyWith(
+                                    color: VigilantColors.onSurfaceVariant,
+                                    fontWeight: FontWeight.w500)),
                           ),
-                        ),
                       ],
                     ),
-                    const SizedBox(height: 16),
-                    ...nearby.when(
-                      loading: () => [
-                        const SkeletonBox(
-                            width: double.infinity, height: 18),
-                        const SizedBox(height: 12),
-                        const SkeletonBox(width: 200, height: 18),
-                      ],
-                      error: (_, __) => [
-                        Text('Yakındaki duraklar alınamadı.',
+                  ),
+                  const SizedBox(width: 8),
+                  // Sağ üst: haritada göster.
+                  GestureDetector(
+                    onTap: onMap,
+                    behavior: HitTestBehavior.opaque,
+                    child: Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: VigilantColors.surfaceContainer,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.map_rounded,
+                          size: 18, color: VigilantColors.primary),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              ...nearby.when(
+                loading: () => [
+                  const SkeletonBox(width: double.infinity, height: 18),
+                  const SizedBox(height: 12),
+                  const SkeletonBox(width: 200, height: 18),
+                ],
+                error: (_, __) => [
+                  Text(l.homeNearbyError,
+                      style: text.labelMedium?.copyWith(
+                          color: VigilantColors.onSurfaceVariant)),
+                ],
+                data: (hits) => hits.isEmpty
+                    ? [
+                        Text(l.homeLocationOff,
                             style: text.labelMedium?.copyWith(
                                 color: VigilantColors.onSurfaceVariant)),
+                      ]
+                    : [
+                        for (var i = 0; i < hits.take(2).length; i++) ...[
+                          if (i > 0) const SizedBox(height: 12),
+                          _NearbyRow(
+                            hit: hits[i],
+                            live: i == 0,
+                            distanceText: _fmt(hits[i].meters),
+                            onTap: () =>
+                                onOpenStop(hits[i].line, hits[i].stop),
+                          ),
+                        ],
                       ],
-                      data: (hits) => hits.isEmpty
-                          ? [
-                              Text(
-                                  'Konum kapalı — yakındaki durakları görmek '
-                                  'için konum izni ver.',
-                                  style: text.labelMedium?.copyWith(
-                                      color:
-                                          VigilantColors.onSurfaceVariant)),
-                            ]
-                          : [
-                              for (var i = 0;
-                                  i < hits.take(2).length;
-                                  i++) ...[
-                                if (i > 0) const SizedBox(height: 12),
-                                _NearbyRow(
-                                  hit: hits[i],
-                                  live: i == 0,
-                                  distanceText: _fmt(hits[i].meters),
-                                  onTap: () =>
-                                      onOpenStop(hits[i].line, hits[i].stop),
-                                ),
-                              ],
-                            ],
-                    ),
-                  ],
-                ),
               ),
-              const SizedBox(height: 14),
-              // ---- KATMAN 2: Alarm Başlat ----
-              _PrimaryCta(onTap: onStart),
-              const SizedBox(height: 14),
-              // ---- KATMAN 3: Kategoriler ----
-              _CategoryRow(onTap: onCategory),
             ],
           ),
         ),
+        const SizedBox(height: 14),
+        // ==== KART 2: Alarm Başlat — taşıyıcı kart içinde buton ====
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: HomeScreen._cardDark,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.5),
+                blurRadius: 16,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: _PrimaryCta(onTap: onStart),
+        ),
+        const SizedBox(height: 14),
+        // ==== KART 3: Kategoriler ====
+        _CategoryRow(onTap: onCategory),
       ],
     );
   }
 }
+
+/// "DURAK" rozeti ve yanındaki çubuk için marka kırmızısından daha KOYU ton.
+const Color _kDarkRed = Color(0xFF8E120C);
 
 class _NearbyRow extends StatelessWidget {
   const _NearbyRow({
@@ -912,6 +929,7 @@ class _NearbyRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
+    final l = AppLocalizations.of(context);
     // CANLI (ilk) satır: kabarık alt-plaka, KESKİN gölge (yayılmaz).
     // İKİNCİ satır: doğrudan katmanın üstünde — plaka/border/gölge YOK.
     return GestureDetector(
@@ -921,7 +939,12 @@ class _NearbyRow extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           color: live ? const Color(0xFF2A2A2D) : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(8),
+          // İKİNCİ (canlı olmayan) satıra ince çerçeve.
+          border: live
+              ? null
+              : Border.all(
+                  color: VigilantColors.surfaceVariant.withValues(alpha: 0.5)),
           boxShadow: live
               ? [
                   // KESKİN gölge: düşük blur, dar offset — yayılmaz.
@@ -935,24 +958,23 @@ class _NearbyRow extends StatelessWidget {
         child: IntrinsicHeight(
           child: Row(
             children: [
-              // SOLA SIFIR kırmızı çubuk — satırın soluna yapışık, tam boy.
+              // SOLA SIFIR koyu-kırmızı çubuk — satırın soluna yapışık, tam boy.
               // Yalnızca canlı/en yakın satırda.
-              if (live)
-                Container(width: 5, color: VigilantColors.primary),
+              if (live) Container(width: 5, color: _kDarkRed),
               Expanded(
                 child: Padding(
-                  padding: EdgeInsets.fromLTRB(live ? 12 : 2, 10, 4, 10),
+                  // İLK satır ~%25 daha yüksek (dikey boşluk 10 → 16).
+                  padding: EdgeInsets.fromLTRB(
+                      live ? 12 : 12, live ? 16 : 10, 4, live ? 16 : 10),
                   child: Row(
                     children: [
-                      // "DURAK" rozeti — canlı satırda koyu kırmızı, yazıda
+                      // "DURAK" rozeti — canlı satırda KOYU kırmızı, yazıda
                       // gölge; ötekinde nötr.
                       Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 7),
                         decoration: BoxDecoration(
-                          color: live
-                              ? VigilantColors.primaryContainer
-                              : HomeScreen._chipDark,
+                          color: live ? _kDarkRed : HomeScreen._chipDark,
                           borderRadius: BorderRadius.circular(9),
                           boxShadow: live
                               ? [
@@ -964,7 +986,7 @@ class _NearbyRow extends StatelessWidget {
                                 ]
                               : null,
                         ),
-                        child: Text('DURAK',
+                        child: Text(l.stopBadge,
                             style: text.labelSmall?.copyWith(
                                 color: Colors.white,
                                 fontWeight: FontWeight.w800,
@@ -1025,36 +1047,24 @@ class _SmartTipCard extends StatelessWidget {
 
   final VoidCallback onTap;
 
-  ({String title, IconData icon}) _tip() {
+  ({String title, IconData icon}) _tip(AppLocalizations l) {
     final h = DateTime.now().hour;
     if (h >= 7 && h < 10) {
-      return (
-        title: 'Sabah yoğunluğu başladı; ineceğin durağa alarmı şimdi kur.',
-        icon: Icons.wb_twilight_rounded,
-      );
+      return (title: l.tipMorning, icon: Icons.wb_twilight_rounded);
     }
     if (h >= 17 && h < 20) {
-      return (
-        title: 'Akşam saatleri yoğun; alarmını erkenden kur.',
-        icon: Icons.alarm_rounded,
-      );
+      return (title: l.tipEvening, icon: Icons.alarm_rounded);
     }
     if (h >= 22 || h < 5) {
-      return (
-        title: 'Son seferleri kaçırma; ineceğin durağa alarm kur.',
-        icon: Icons.bedtime_rounded,
-      );
+      return (title: l.tipLateNight, icon: Icons.bedtime_rounded);
     }
-    return (
-      title: 'Uykun gelirse diye — ineceğin durağa alarm kur.',
-      icon: Icons.alarm_add_rounded,
-    );
+    return (title: l.tipDefault, icon: Icons.alarm_add_rounded);
   }
 
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    final tip = _tip();
+    final tip = _tip(AppLocalizations.of(context));
     return GestureDetector(
       onTap: () {
         Haptics.light();
@@ -1097,46 +1107,122 @@ class _SmartTipCard extends StatelessWidget {
 }
 
 /// Büyük kırmızı "Yolculuk Başlat" CTA.
-class _PrimaryCta extends StatelessWidget {
+class _PrimaryCta extends StatefulWidget {
   const _PrimaryCta({required this.onTap});
 
   final VoidCallback onTap;
 
   @override
+  State<_PrimaryCta> createState() => _PrimaryCtaState();
+}
+
+class _PrimaryCtaState extends State<_PrimaryCta>
+    with SingleTickerProviderStateMixin {
+  // initState'te kurulur; AppAnim kapalıysa (testler) hiç repeat edilmez.
+  late final AnimationController _c;
+
+  @override
+  void initState() {
+    super.initState();
+    _c = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 2600));
+    if (AppAnim.enabled) _c.repeat();
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    // KIRMIZI GÖLGE: butonun altına yayılan marka rengi glow (mockup). Ayrıca
-    // aşağıya düşen koyu gölge "kabarık" hissi verir.
+    final l = AppLocalizations.of(context);
+    // Gölge KOYU ağırlıklı; kırmızı sadece hafif bir iz (azaltıldı).
     return Container(
       width: double.infinity,
-      height: 56,
+      height: 64,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-              color: VigilantColors.primary.withValues(alpha: 0.45),
-              blurRadius: 22,
-              offset: const Offset(0, 10)),
+              color: Colors.black.withValues(alpha: 0.5),
+              blurRadius: 12,
+              offset: const Offset(0, 6)),
           BoxShadow(
-              color: Colors.black.withValues(alpha: 0.35),
+              color: VigilantColors.primary.withValues(alpha: 0.18),
               blurRadius: 8,
-              offset: const Offset(0, 4)),
+              offset: const Offset(0, 3)),
         ],
       ),
-      child: FilledButton.icon(
-        style: FilledButton.styleFrom(
-          backgroundColor: VigilantColors.primary,
-          foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          elevation: 0,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Material(
+          color: VigilantColors.primary,
+          child: InkWell(
+            onTap: widget.onTap,
+            child: Stack(
+              children: [
+                // ARKA PLAN ANİMASYONU: kırmızının üstünden geçen HAFİF ama
+                // belirgin siyah bir bant (sağa doğru kayar). Dokunuşu engellemez.
+                if (AppAnim.enabled)
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: AnimatedBuilder(
+                        animation: _c,
+                        builder: (context, _) => DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.centerLeft,
+                              end: Alignment.centerRight,
+                              colors: [
+                                Colors.transparent,
+                                Colors.black.withValues(alpha: 0.22),
+                                Colors.transparent,
+                              ],
+                              stops: const [0.32, 0.5, 0.68],
+                              transform: _SlideGradient(_c.value),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                Center(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.notifications_active_rounded,
+                          color: Colors.white),
+                      const SizedBox(width: 8),
+                      Text(l.homeStartAlarm,
+                          style: text.bodyLarge?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
-        onPressed: onTap,
-        icon: const Icon(Icons.notifications_active_rounded),
-        label: Text('Alarm Başlat',
-            style: text.bodyLarge
-                ?.copyWith(fontWeight: FontWeight.w700, color: Colors.white)),
       ),
     );
+  }
+}
+
+/// Degrade bandını yatayda kaydıran dönüşüm (buton arka plan animasyonu).
+class _SlideGradient extends GradientTransform {
+  const _SlideGradient(this.t);
+
+  /// 0→1 döngü; bandı sol dıştan sağ dışa taşır.
+  final double t;
+
+  @override
+  Matrix4? transform(Rect bounds, {TextDirection? textDirection}) {
+    final dx = (t * 2 - 1) * bounds.width;
+    return Matrix4.translationValues(dx, 0, 0);
   }
 }
 
@@ -1148,49 +1234,40 @@ class _CategoryRow extends StatelessWidget {
 
   final void Function(LineType type) onTap;
 
+  // Etiketler dile göre [_label] ile üretilir (Marmaray özel ad, değişmez).
   static const _cats = [
-    (
-      label: 'Otobüs',
-      icon: Icons.directions_bus_filled_rounded,
-      type: LineType.bus
-    ),
-    (
-      label: 'Metrobüs',
-      icon: Icons.airport_shuttle_rounded,
-      type: LineType.metrobus
-    ),
-    (
-      label: 'Marmaray',
-      icon: Icons.directions_railway_filled_rounded,
-      type: LineType.marmaray
-    ),
-    (label: 'Metro', icon: Icons.subway_rounded, type: LineType.metro),
-    (
-      label: 'Vapur',
-      icon: Icons.directions_boat_rounded,
-      type: LineType.ferry
-    ),
+    (icon: Icons.directions_bus_filled_rounded, type: LineType.bus),
+    (icon: Icons.airport_shuttle_rounded, type: LineType.metrobus),
+    (icon: Icons.directions_railway_filled_rounded, type: LineType.marmaray),
+    (icon: Icons.subway_rounded, type: LineType.metro),
+    (icon: Icons.directions_boat_rounded, type: LineType.ferry),
   ];
+
+  static String _label(LineType type, AppLocalizations l) => switch (type) {
+        LineType.bus => l.categoryBus,
+        LineType.metrobus => l.categoryMetrobus,
+        LineType.marmaray => l.categoryMarmaray,
+        LineType.metro => l.categoryMetro,
+        LineType.ferry => l.categoryFerry,
+        _ => l.categoryBus,
+      };
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     // AYRI KART: kategoriler kendi gölgeli kabında durur (mockup). İçinde
     // yatay kaydırılabilir küçük daireler; beşi 390 px'e sığmasa da taşan tür
     // kaydırılarak görünür.
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14),
+      padding: const EdgeInsets.only(top: 16, bottom: 14),
       decoration: BoxDecoration(
         color: HomeScreen._cardDark,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withValues(alpha: 0.4),
-              blurRadius: 20,
-              offset: const Offset(0, 10)),
-          BoxShadow(
-              color: Colors.black.withValues(alpha: 0.28),
-              blurRadius: 5,
-              offset: const Offset(0, 2)),
+              color: Colors.black.withValues(alpha: 0.5),
+              blurRadius: 16,
+              offset: const Offset(0, 8)),
         ],
       ),
       child: SizedBox(
@@ -1202,7 +1279,7 @@ class _CategoryRow extends StatelessWidget {
           itemCount: _cats.length,
           separatorBuilder: (_, __) => const SizedBox(width: 12),
           itemBuilder: (_, i) => _CategoryChip(
-            label: _cats[i].label,
+            label: _label(_cats[i].type, l),
             icon: _cats[i].icon,
             // OTOBÜS öne çıkar (en çok kullanılan): kırmızı halka + kırmızı
             // etiket. Mockup'taki gibi; dokununca hepsi kendi listesine gider.
@@ -1259,8 +1336,7 @@ class _CategoryChipState extends State<_CategoryChip> {
               width: 54,
               height: 54,
               transform: Matrix4.translationValues(0, active ? -3 : 0, 0)
-                ..scaleByDouble(
-                    active ? 1.06 : 1.0, active ? 1.06 : 1.0, 1, 1),
+                ..scaleByDouble(active ? 1.06 : 1.0, active ? 1.06 : 1.0, 1, 1),
               transformAlignment: Alignment.center,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
@@ -1341,8 +1417,8 @@ class _FavoriteCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: HomeScreen._cardDark,
         borderRadius: BorderRadius.circular(20),
-        border:
-            Border.all(color: VigilantColors.surfaceVariant.withValues(alpha: 0.3)),
+        border: Border.all(
+            color: VigilantColors.surfaceVariant.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1350,7 +1426,8 @@ class _FavoriteCard extends StatelessWidget {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: HomeScreen._chipDark,
                   borderRadius: BorderRadius.circular(6),
@@ -1359,7 +1436,8 @@ class _FavoriteCard extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(lineTypeIcon(favorite.lineType), size: 12, color: color),
+                    Icon(lineTypeIcon(favorite.lineType),
+                        size: 12, color: color),
                     const SizedBox(width: 5),
                     Text(favorite.lineCode,
                         style: text.labelMedium?.copyWith(
@@ -1381,14 +1459,16 @@ class _FavoriteCard extends StatelessWidget {
                 height: 9,
                 decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    border: Border.all(color: VigilantColors.primary, width: 2)),
+                    border:
+                        Border.all(color: VigilantColors.primary, width: 2)),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(favorite.boardingStopName,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: text.labelLarge?.copyWith(fontWeight: FontWeight.w600)),
+                    style:
+                        text.labelLarge?.copyWith(fontWeight: FontWeight.w600)),
               ),
             ],
           ),
@@ -1399,13 +1479,15 @@ class _FavoriteCard extends StatelessWidget {
           ),
           Row(
             children: [
-              const Icon(Icons.location_on, size: 13, color: VigilantColors.primary),
+              const Icon(Icons.location_on,
+                  size: 13, color: VigilantColors.primary),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(favorite.targetStopName,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: text.labelLarge?.copyWith(fontWeight: FontWeight.w600)),
+                    style:
+                        text.labelLarge?.copyWith(fontWeight: FontWeight.w600)),
               ),
             ],
           ),
@@ -1426,7 +1508,8 @@ class _FavoriteCard extends StatelessWidget {
               onPressed: onStart,
               icon: const Icon(Icons.alarm_add_rounded, size: 17),
               label: Text('Alarm Kur',
-                  style: text.labelLarge?.copyWith(fontWeight: FontWeight.w600)),
+                  style:
+                      text.labelLarge?.copyWith(fontWeight: FontWeight.w600)),
             ),
           ),
         ],
@@ -1458,7 +1541,8 @@ class _SectionHeader extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 minimumSize: const Size(0, 32)),
             child: Text(actionLabel!,
-                style: text.labelLarge?.copyWith(color: VigilantColors.primary)),
+                style:
+                    text.labelLarge?.copyWith(color: VigilantColors.primary)),
           ),
       ],
     );
@@ -1479,8 +1563,8 @@ class _EmptyJourneys extends StatelessWidget {
       decoration: BoxDecoration(
         color: HomeScreen._cardDark,
         borderRadius: BorderRadius.circular(24),
-        border:
-            Border.all(color: VigilantColors.surfaceVariant.withValues(alpha: 0.3)),
+        border: Border.all(
+            color: VigilantColors.surfaceVariant.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
@@ -1502,7 +1586,8 @@ class _EmptyJourneys extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('Henüz yolculuk yapmadınız',
-                    style: text.bodyMedium?.copyWith(fontWeight: FontWeight.w700)),
+                    style:
+                        text.bodyMedium?.copyWith(fontWeight: FontWeight.w700)),
                 const SizedBox(height: 4),
                 Text('İlk yolculuğunu kur, ineceğin durağı asla kaçırma.',
                     style: text.labelMedium?.copyWith(
@@ -1615,7 +1700,6 @@ class _JourneyCard extends StatelessWidget {
     );
   }
 }
-
 
 /// Son yolculuk kartındaki tek durak satırı (kalkış ya da varış).
 ///

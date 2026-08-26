@@ -1,0 +1,43 @@
+{
+  "@@locale": "tr",
+  "navHome": "Ana Sayfa",
+  "navLines": "Hatlar",
+  "navStops": "Duraklar",
+  "navFavorites": "Favoriler",
+  "navProfile": "Profil",
+
+  "homeSearchTitle": "Nereye ineceksin?",
+  "homeSearchHint": "İneceğin durağı veya hattı yaz...",
+  "homeCurrentLocation": "Mevcut Konum: ",
+  "homeYourLocation": "Konumun",
+  "homeNearbyStops": "Yakındaki Duraklar",
+  "homeStartAlarm": "Alarm Başlat",
+  "stopBadge": "DURAK",
+  "homeNearbyError": "Yakındaki duraklar alınamadı.",
+  "homeLocationOff": "Konum kapalı — yakındaki durakları görmek için konum izni ver.",
+  "homeFavoriteRoutes": "Favori Rotalar",
+  "seeAll": "Tümü",
+
+  "tipMorning": "Sabah yoğunluğu başladı; ineceğin durağa alarmı şimdi kur.",
+  "tipEvening": "Akşam saatleri yoğun; alarmını erkenden kur.",
+  "tipLateNight": "Son seferleri kaçırma; ineceğin durağa alarm kur.",
+  "tipDefault": "Uykun gelirse diye — ineceğin durağa alarm kur.",
+
+  "categoryBus": "Otobüs",
+  "categoryMetrobus": "Metrobüs",
+  "categoryMarmaray": "Marmaray",
+  "categoryMetro": "Metro",
+  "categoryFerry": "Vapur",
+
+  "actionUnderstood": "Anladım",
+  "actionCancel": "Vazgeç",
+  "actionSave": "Kaydet",
+  "actionContinue": "Devam et",
+  "actionClose": "Kapat",
+
+  "settingsTitle": "Ayarlar",
+  "appSection": "UYGULAMA",
+  "language": "Dil",
+  "languageSubtitle": "Uygulama görüntüleme dili",
+  "systemDefault": "Sistem dili"
+}

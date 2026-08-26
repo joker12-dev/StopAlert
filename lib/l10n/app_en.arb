@@ -1,0 +1,44 @@
+{
+  "@@locale": "en",
+  "navHome": "Home",
+  "@navHome": {"description": "Bottom navigation: home tab"},
+  "navLines": "Lines",
+  "navStops": "Stops",
+  "navFavorites": "Favorites",
+  "navProfile": "Profile",
+
+  "homeSearchTitle": "Where are you getting off?",
+  "homeSearchHint": "Type the stop or line you'll get off at...",
+  "homeCurrentLocation": "Current Location: ",
+  "homeYourLocation": "Your location",
+  "homeNearbyStops": "Nearby Stops",
+  "homeStartAlarm": "Start Alarm",
+  "stopBadge": "STOP",
+  "homeNearbyError": "Couldn't load nearby stops.",
+  "homeLocationOff": "Location off — grant location permission to see nearby stops.",
+  "homeFavoriteRoutes": "Favorite Routes",
+  "seeAll": "All",
+
+  "tipMorning": "Morning rush has started; set your alarm for your stop now.",
+  "tipEvening": "Evenings are busy; set your alarm early.",
+  "tipLateNight": "Don't miss the last trips; set an alarm for your stop.",
+  "tipDefault": "In case you doze off — set an alarm for your stop.",
+
+  "categoryBus": "Bus",
+  "categoryMetrobus": "Metrobus",
+  "categoryMarmaray": "Marmaray",
+  "categoryMetro": "Metro",
+  "categoryFerry": "Ferry",
+
+  "actionUnderstood": "Got it",
+  "actionCancel": "Cancel",
+  "actionSave": "Save",
+  "actionContinue": "Continue",
+  "actionClose": "Close",
+
+  "settingsTitle": "Settings",
+  "appSection": "APP",
+  "language": "Language",
+  "languageSubtitle": "App display language",
+  "systemDefault": "System default"
+}

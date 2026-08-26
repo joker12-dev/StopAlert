@@ -1,0 +1,43 @@
+{
+  "@@locale": "es",
+  "navHome": "Inicio",
+  "navLines": "Líneas",
+  "navStops": "Paradas",
+  "navFavorites": "Favoritos",
+  "navProfile": "Perfil",
+
+  "homeSearchTitle": "¿Dónde te bajas?",
+  "homeSearchHint": "Escribe la parada o línea donde te bajas...",
+  "homeCurrentLocation": "Ubicación actual: ",
+  "homeYourLocation": "Tu ubicación",
+  "homeNearbyStops": "Paradas cercanas",
+  "homeStartAlarm": "Iniciar alarma",
+  "stopBadge": "PARADA",
+  "homeNearbyError": "No se pudieron cargar las paradas cercanas.",
+  "homeLocationOff": "Ubicación desactivada — concede el permiso de ubicación para ver las paradas cercanas.",
+  "homeFavoriteRoutes": "Rutas favoritas",
+  "seeAll": "Todas",
+
+  "tipMorning": "Ha empezado la hora punta de la mañana; pon la alarma para tu parada ahora.",
+  "tipEvening": "Las tardes están concurridas; pon tu alarma temprano.",
+  "tipLateNight": "No te pierdas los últimos viajes; pon una alarma para tu parada.",
+  "tipDefault": "Por si te quedas dormido — pon una alarma para tu parada.",
+
+  "categoryBus": "Autobús",
+  "categoryMetrobus": "Metrobús",
+  "categoryMarmaray": "Marmaray",
+  "categoryMetro": "Metro",
+  "categoryFerry": "Ferry",
+
+  "actionUnderstood": "Entendido",
+  "actionCancel": "Cancelar",
+  "actionSave": "Guardar",
+  "actionContinue": "Continuar",
+  "actionClose": "Cerrar",
+
+  "settingsTitle": "Ajustes",
+  "appSection": "APLICACIÓN",
+  "language": "Idioma",
+  "languageSubtitle": "Idioma de la aplicación",
+  "systemDefault": "Idioma del sistema"
+}

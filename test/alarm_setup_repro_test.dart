@@ -31,8 +31,12 @@ void main() {
     // Onboarding'i tamamlanmış say ki testler doğrudan ana ekrana açılsın.
     // Rıza ekranı uygulamanın İLK kapısı; testler ana akışı denediği
     // için onay verilmiş sayılır.
-    SharedPreferences.setMockInitialValues(
-        {'onboarding_done_v1': true, 'consent_accepted_v1': true});
+    SharedPreferences.setMockInitialValues({
+      'onboarding_done_v1': true,
+      'consent_accepted_v1': true,
+      // Dil TÜRKÇE'ye sabit (aksi hâlde sistem dili 'en' olur).
+      'app_locale_v1': 'tr',
+    });
     // Sürekli animasyonları kapat (pumpAndSettle kilitlenmesin).
     AppAnim.enabled = false;
   });

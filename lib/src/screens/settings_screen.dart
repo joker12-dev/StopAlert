@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/app_localizations.dart';
 import '../services/account_service.dart';
 import '../services/auth_service.dart';
 import '../services/prediction_log.dart';
 import '../services/segment_learning_store.dart';
 import '../state/journey_provider.dart';
+import '../state/locale_provider.dart';
 import '../state/settings_provider.dart';
 import '../theme/app_theme.dart';
 import '../util/insets.dart';
@@ -18,6 +20,7 @@ import '../widgets/widget_promo.dart';
 import '../util/platform_check.dart';
 import 'data_packages_screen.dart';
 import 'help_screen.dart';
+import 'language_screen.dart';
 import 'privacy_screen.dart';
 
 /// Ayarlar — gerçek, kalıcı tercihler (bkz. [settingsProvider]).
@@ -323,10 +326,14 @@ class SettingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final text = Theme.of(context).textTheme;
+    final l = AppLocalizations.of(context);
     final settings =
         ref.watch(settingsProvider).valueOrNull ?? const AppSettings();
     // Auth değişimlerini izle (bağla/çöz sonrası UI tazelensin).
     ref.watch(userChangesProvider);
+    // Seçili dilin adı (yoksa "sistem dili").
+    final localeCode =
+        ref.watch(localeControllerProvider).valueOrNull?.languageCode;
     final auth = ref.read(authServiceProvider);
     final isLinked = auth.isLinked;
     return Scaffold(
@@ -335,7 +342,7 @@ class SettingsScreen extends ConsumerWidget {
           onPressed: () => Navigator.of(context).pop(),
           icon: const Icon(Icons.arrow_back),
         ),
-        title: const Text('Ayarlar'),
+        title: Text(l.settingsTitle),
       ),
       body: ListView(
         padding: EdgeInsets.fromLTRB(20, 8, 20, AppInsets.pageBottom(context) + 16),
@@ -378,6 +385,33 @@ class SettingsScreen extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 24),
+          // UYGULAMA — dil seçimi (ilk açılışta sistem dili, buradan değişir).
+          _Section(
+            title: l.appSection,
+            children: [
+              _SettingsTile(
+                icon: Icons.language,
+                title: l.language,
+                subtitle: l.languageSubtitle,
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                        LocaleController.nameFor(localeCode) ?? l.systemDefault,
+                        style: text.labelMedium?.copyWith(
+                            color: VigilantColors.onSurfaceVariant)),
+                    const Icon(Icons.chevron_right,
+                        color: VigilantColors.onSurfaceVariant),
+                  ],
+                ),
+                onTap: () {
+                  Haptics.light();
+                  Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => const LanguageScreen()));
+                },
+              ),
+            ],
+          ),
           _Section(
             title: 'HESAP',
             children: [

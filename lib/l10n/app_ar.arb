@@ -1,0 +1,43 @@
+{
+  "@@locale": "ar",
+  "navHome": "الرئيسية",
+  "navLines": "الخطوط",
+  "navStops": "المحطات",
+  "navFavorites": "المفضلة",
+  "navProfile": "الملف الشخصي",
+
+  "homeSearchTitle": "أين ستنزل؟",
+  "homeSearchHint": "اكتب المحطة أو الخط الذي ستنزل عنده...",
+  "homeCurrentLocation": "الموقع الحالي: ",
+  "homeYourLocation": "موقعك",
+  "homeNearbyStops": "المحطات القريبة",
+  "homeStartAlarm": "بدء المنبه",
+  "stopBadge": "محطة",
+  "homeNearbyError": "تعذّر تحميل المحطات القريبة.",
+  "homeLocationOff": "الموقع مُعطّل — امنح إذن الموقع لرؤية المحطات القريبة.",
+  "homeFavoriteRoutes": "المسارات المفضلة",
+  "seeAll": "الكل",
+
+  "tipMorning": "بدأ ازدحام الصباح؛ اضبط المنبه لمحطتك الآن.",
+  "tipEvening": "المساء مزدحم؛ اضبط منبهك مبكرًا.",
+  "tipLateNight": "لا تفوّت آخر الرحلات؛ اضبط منبهًا لمحطتك.",
+  "tipDefault": "تحسّبًا للنعاس — اضبط منبهًا لمحطتك.",
+
+  "categoryBus": "حافلة",
+  "categoryMetrobus": "مترو باص",
+  "categoryMarmaray": "مرمراي",
+  "categoryMetro": "مترو",
+  "categoryFerry": "عبّارة",
+
+  "actionUnderstood": "حسنًا",
+  "actionCancel": "إلغاء",
+  "actionSave": "حفظ",
+  "actionContinue": "متابعة",
+  "actionClose": "إغلاق",
+
+  "settingsTitle": "الإعدادات",
+  "appSection": "التطبيق",
+  "language": "اللغة",
+  "languageSubtitle": "لغة عرض التطبيق",
+  "systemDefault": "لغة النظام"
+}
