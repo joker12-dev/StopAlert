@@ -1,0 +1,25 @@
+{
+  "announcements": [
+    {
+      "id": "2026-08-27-bakim",
+      "category": "dikkat",
+      "title": "Planlı bakım",
+      "body": "Bu gece 22:00-23:00 arası canlı otobüs konumları kısa süreli kesintili olabilir. Alarm ve takip çalışmaya devam eder.",
+      "date": "2026-08-27"
+    },
+    {
+      "id": "2026-08-25-yeni-surum",
+      "category": "bilgi",
+      "title": "Yeni özellik: yaklaşan otobüs",
+      "body": "Ana sayfada en yakın durağa yaklaşan otobüsü artık dakikası ve gittiği yönüyle görebilirsin.",
+      "date": "2026-08-25"
+    },
+    {
+      "id": "2026-08-20-kocaeli-canli",
+      "category": "uyari",
+      "title": "Kocaeli canlı konum geçici olarak kapalı",
+      "body": "Kocaeli otobüsleri için canlı konum kaynağı geçici olarak devre dışı. Varış tahminleri tarifeye göre gösteriliyor.",
+      "date": "2026-08-20"
+    }
+  ]
+}

@@ -1,9 +1,15 @@
 /// Harita döşeme stilleri — [RouteMap] ve harita ekranları statik olarak okur
 /// (Ayarlar ile senkron; [Haptics] / [AppAnim] ile aynı desen).
 ///
-/// Hepsi ÜCRETSİZ ve API ANAHTARI GEREKTİRMEZ:
-/// - CartoDB (dark_all / voyager / light_all) — OpenStreetMap tabanlı
-/// - Esri World Imagery — uydu görüntüsü
+/// Hepsi ÜCRETSİZ ve API ANAHTARI GEREKTİRMEZ — tümü Esri ArcGIS Online:
+/// - World Street Map (canlı, renkli + etiketli)
+/// - Dark/Light Gray Canvas (gece/sade; etiketler ayrı referans katmanında)
+/// - World Imagery (uydu)
+///
+/// NOT: Eskiden CartoDB (basemaps.cartocdn.com) kullanılıyordu; CARTO artık
+/// zemin döşemeleri için API anahtarı zorunlu kıldığından ("api key required")
+/// harita üstünde uyarı döşemesi çıkıyordu. Esri'nin klasik REST döşeme uçları
+/// anahtarsız çalışır.
 library;
 
 import 'package:flutter/material.dart';
@@ -94,39 +100,43 @@ abstract final class AppMapStyle {
   static bool get light => style == MapTileStyle.sade;
   static set light(bool v) => style = v ? MapTileStyle.sade : MapTileStyle.gece;
 
-  /// CartoDB varyantı (yalnızca CartoDB stilleri için anlamlı).
-  static String get tileVariant => switch (style) {
-        MapTileStyle.sade => 'light_all',
-        MapTileStyle.canli => 'rastertiles/voyager',
-        _ => 'dark_all',
-      };
-
   static const _esri = 'https://server.arcgisonline.com/ArcGIS/rest/services';
 
-  /// Esri tabanlı stiller (raster, {s} ve @2x desteklemez).
-  static bool get _esriStyle => style == MapTileStyle.uydu;
-
-  /// Aktif stilin döşeme URL şablonu.
+  /// Aktif stilin ZEMİN döşeme URL şablonu (hepsi Esri, anahtar gerekmez).
   static String get urlTemplate => switch (style) {
-        MapTileStyle.uydu => '$_esri/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-        _ => 'https://{s}.basemaps.cartocdn.com/$tileVariant/{z}/{x}/{y}{r}.png',
+        MapTileStyle.canli =>
+          '$_esri/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+        MapTileStyle.gece =>
+          '$_esri/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+        MapTileStyle.sade =>
+          '$_esri/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+        MapTileStyle.uydu =>
+          '$_esri/World_Imagery/MapServer/tile/{z}/{y}/{x}',
       };
 
   /// Esri döşemeleri {s} alt alan adı kullanmaz.
-  static List<String> get subdomains =>
-      _esriStyle ? const [] : const ['a', 'b', 'c', 'd'];
+  static List<String> get subdomains => const [];
 
   /// Retina (@2x) desteği — Esri raster tile'da yok.
-  static bool get supportsRetina => !_esriStyle;
+  static bool get supportsRetina => false;
 
   /// Döşeme sağlayıcı atfı (lisans şartı).
-  static String get attribution => _esriStyle ? '© Esri' : '© OSM · CARTO';
+  static String get attribution => '© Esri';
 
-  /// Uydu zemininde yol/yer adı yok — üstüne ince etiket katmanı bindirilir.
-  static bool get needsLabelOverlay => style == MapTileStyle.uydu;
+  /// Gri kanvas ve uydu zemininde etiketler AYRI referans katmanında; "canli"
+  /// (World Street Map) etiketleri zaten içeriyor.
+  static bool get needsLabelOverlay => style != MapTileStyle.canli;
 
-  static const labelOverlayUrl =
-      'https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png';
+  /// Aktif stilin etiket (referans) katmanı — zemine göre değişir.
+  static String get labelOverlayUrl => switch (style) {
+        MapTileStyle.gece =>
+          '$_esri/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
+        MapTileStyle.sade =>
+          '$_esri/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
+        MapTileStyle.uydu =>
+          '$_esri/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+        MapTileStyle.canli => '',
+      };
 
-  static List<String> get labelSubdomains => const ['a', 'b', 'c', 'd'];
+  static List<String> get labelSubdomains => const [];
 }

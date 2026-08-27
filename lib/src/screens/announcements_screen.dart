@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../services/iett_service.dart';
-import '../data/transit_city.dart';
-import '../state/city_provider.dart';
+import '../data/app_announcement.dart';
+import '../state/app_announcements_provider.dart';
 import '../theme/app_theme.dart';
 import '../util/insets.dart';
 import '../util/haptics.dart';
@@ -11,22 +10,8 @@ import '../widgets/offline_banner.dart';
 import '../widgets/mascot.dart';
 import '../widgets/offline_notice.dart';
 
-/// Yenile'ye her basışta artar — sağlayıcıya "önbelleği atla" der.
-///
-/// ŞART: servis yanıtı 5 dakika bellekte tutuluyor. Yalnızca sağlayıcıyı
-/// tazelemek aynı listeyi geri veriyordu; kullanıcı yenile'ye bassa da hep
-/// aynı duyuruları görüyordu.
-final announcementsRefreshProvider = StateProvider<int>((_) => 0);
-
-/// İETT duyuruları (sefer iptali, güzergâh değişikliği). Kaynak: İBB Açık Veri
-/// — lisans gereği ekranda atıf gösterilir.
-final announcementsProvider =
-    FutureProvider.autoDispose<List<IettAnnouncement>>((ref) async {
-  final n = ref.watch(announcementsRefreshProvider);
-  return IettService.instance.announcements(force: n > 0);
-});
-
-/// Bildirim merkezi — hat duyurularını listeler, hat adına göre filtrelenir.
+/// Bildirim merkezi — UYGULAMA duyuruları (aksaklık, bakım, güncelleme,
+/// bilgilendirme). Kaynak: uzak JSON (bkz. [AppAnnouncementsService]).
 class AnnouncementsScreen extends ConsumerStatefulWidget {
   const AnnouncementsScreen({super.key});
 
@@ -36,31 +21,21 @@ class AnnouncementsScreen extends ConsumerStatefulWidget {
 }
 
 class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen> {
-  String _query = '';
-
-  /// 0 = Anlık durumlar (güzergâh/trafik), 1 = Sefer bilgilendirmeleri.
-  int _tab = 0;
+  bool _markedSeen = false;
 
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    final async = ref.watch(announcementsProvider);
-    final all = async.valueOrNull ?? const <IettAnnouncement>[];
-    final q = _query.trim().toLowerCase();
+    final async = ref.watch(appAnnouncementsProvider);
+    final items = async.valueOrNull ?? const <AppAnnouncement>[];
 
-    // Sefer iptali/saat bildirimleri ile anlık durum duyurularını AYIR:
-    // ikisi karışınca 200+ sefer iptali diğerlerini boğuyordu.
-    final durum = [for (final a in all) if (!a.isTrip) a];
-    final sefer = [for (final a in all) if (a.isTrip) a];
-    final source = _tab == 0 ? durum : sefer;
-    final items = q.isEmpty
-        ? source
-        : [
-            for (final a in source)
-              if (a.line.toLowerCase().contains(q) ||
-                  a.message.toLowerCase().contains(q))
-                a
-          ];
+    // İlk yüklemede en yeni duyuruyu "okundu" işaretle (zil rozeti sönsün).
+    if (!_markedSeen && items.isNotEmpty) {
+      _markedSeen = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(announcementsSeenProvider.notifier).markSeen(items.first.id);
+      });
+    }
 
     return Scaffold(
       body: SafeArea(
@@ -84,12 +59,13 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen> {
                       children: [
                         Text('Duyurular',
                             style: text.headlineSmall?.copyWith(fontSize: 20)),
-                        // Yayında TARİH yok, yalnızca saat var. Verinin ne
-                        // zaman çekildiğini söylemezsek liste bayat sanılıyor.
-                        if (_fetchedLabel(async) case final s?)
-                          Text(s,
-                              style: text.labelSmall?.copyWith(
-                                  color: VigilantColors.onSurfaceVariant)),
+                        Text(
+                          async.isLoading
+                              ? 'Yenileniyor…'
+                              : 'Uygulama duyuruları',
+                          style: text.labelSmall?.copyWith(
+                              color: VigilantColors.onSurfaceVariant),
+                        ),
                       ],
                     ),
                   ),
@@ -97,7 +73,7 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen> {
                     tooltip: 'Yenile',
                     onPressed: () {
                       Haptics.light();
-                      ref.read(announcementsRefreshProvider.notifier).state++;
+                      ref.read(appAnnouncementsRefreshProvider.notifier).state++;
                     },
                     icon: const Icon(Icons.refresh_rounded,
                         color: VigilantColors.onSurfaceVariant),
@@ -105,115 +81,53 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen> {
                 ],
               ),
             ),
-            // Tür ayrımı: anlık durumlar / sefer bilgilendirmeleri
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 10),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _TypeTab(
-                      label: 'Anlık durumlar',
-                      count: durum.length,
-                      selected: _tab == 0,
-                      color: VigilantColors.accentBlue,
-                      onTap: () => setState(() => _tab = 0),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _TypeTab(
-                      label: 'Sefer bilgisi',
-                      count: sefer.length,
-                      selected: _tab == 1,
-                      color: VigilantColors.tertiaryContainer,
-                      onTap: () => setState(() => _tab = 1),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-              child: TextField(
-                style: text.bodyMedium,
-                onChanged: (v) => setState(() => _query = v),
-                decoration: InputDecoration(
-                  isDense: true,
-                  filled: true,
-                  fillColor: VigilantColors.surfaceContainer,
-                  prefixIcon: const Icon(Icons.search,
-                      color: VigilantColors.onSurfaceVariant),
-                  hintText: 'Hat veya duyuru ara',
-                  hintStyle: text.bodyMedium
-                      ?.copyWith(color: VigilantColors.onSurfaceVariant),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-              ),
-            ),
+            const SizedBox(height: 4),
             const OfflineBanner(
                 message: 'Bağlantı yok — duyurular güncellenemiyor.'),
-            _feedNotice(text, ref.watch(activeCityProvider)),
             Expanded(
-              // BESLEME ŞEHRE KİLİTLİ DEĞİL. Duyurular İETT'nin (İstanbul)
-              // ve Kocaeli'nin eşdeğer bir servisi yok; eskiden Kocaeli'deki
-              // kullanıcıya boş ekran gösteriliyordu. Artık liste görünüyor,
-              // üstünde kimin duyurusu olduğu yazıyor (bkz. _feedNotice).
-              child: async.isLoading && all.isEmpty
+              child: async.isLoading && items.isEmpty
                   ? const Center(
                       child: CircularProgressIndicator(
                           color: VigilantColors.primary))
-                  : all.isEmpty
-                      // Veri hiç gelmedi: boş liste "duyuru yok" gibi
-                      // okunuyordu, oysa çoğu zaman ağ sorunu.
-                      ? OfflineNotice(
-                          title: 'Duyurular alınamadı',
-                          detail: 'İETT duyuru servisine ulaşılamadı. '
-                              'Bağlantını kontrol edip tekrar dene.',
-                          onRetry: () => ref
-                              .read(announcementsRefreshProvider.notifier)
-                              .state++,
-                        )
-                      : RefreshIndicator(
-                          color: VigilantColors.primary,
-                          onRefresh: () async {
-                            Haptics.light();
-                            ref
-                                .read(announcementsRefreshProvider.notifier)
-                                .state++;
-                            await Future<void>.delayed(
-                                const Duration(milliseconds: 500));
-                          },
-                          child: items.isEmpty
-                              ? ListView(
-                                  physics:
-                                      const AlwaysScrollableScrollPhysics(),
-                                  children: [_empty(text, all.isEmpty)],
-                                )
-                              : ListView.separated(
-                                  physics:
-                                      const AlwaysScrollableScrollPhysics(),
-                                  padding: EdgeInsets.fromLTRB(
-                                      20, 0, 20, AppInsets.pageBottom(context)),
-                                  itemCount: items.length,
-                                  separatorBuilder: (_, __) =>
-                                      const SizedBox(height: 10),
-                                  itemBuilder: (context, i) =>
-                                      _AnnouncementCard(item: items[i]),
-                                ),
-                        ),
-            ),
-            // Lisans gereği kaynak atfı (İBB Açık Veri Lisansı / CC BY 4.0).
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
-              child: Text(
-                IettService.attribution,
-                textAlign: TextAlign.center,
-                style: text.labelSmall
-                    ?.copyWith(color: VigilantColors.onSurfaceVariant),
-              ),
+                  : RefreshIndicator(
+                      color: VigilantColors.primary,
+                      onRefresh: () async {
+                        Haptics.light();
+                        ref
+                            .read(appAnnouncementsRefreshProvider.notifier)
+                            .state++;
+                        await Future<void>.delayed(
+                            const Duration(milliseconds: 500));
+                      },
+                      child: items.isEmpty
+                          ? ListView(
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              children: [
+                                async.hasError
+                                    ? OfflineNotice(
+                                        title: 'Duyurular alınamadı',
+                                        detail:
+                                            'Duyuru dosyasına ulaşılamadı. '
+                                            'Bağlantını kontrol edip tekrar dene.',
+                                        onRetry: () => ref
+                                            .read(appAnnouncementsRefreshProvider
+                                                .notifier)
+                                            .state++,
+                                      )
+                                    : _empty(text),
+                              ],
+                            )
+                          : ListView.separated(
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              padding: EdgeInsets.fromLTRB(
+                                  20, 4, 20, AppInsets.pageBottom(context)),
+                              itemCount: items.length,
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(height: 10),
+                              itemBuilder: (context, i) =>
+                                  _AnnouncementCard(item: items[i]),
+                            ),
+                    ),
             ),
           ],
         ),
@@ -221,70 +135,22 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen> {
     );
   }
 
-  /// "Güncellendi: az önce" — veri gerçekten tazelendi mi, görünsün.
-  String? _fetchedLabel(AsyncValue<List<IettAnnouncement>> async) {
-    if (async.isLoading) return 'Yenileniyor…';
-    final at = IettService.instance.lastFetchedAt;
-    if (at == null) return null;
-    final s = DateTime.now().difference(at).inSeconds;
-    if (s < 10) return 'Güncellendi: az önce';
-    if (s < 60) return 'Güncellendi: $s sn önce';
-    final m = s ~/ 60;
-    if (m < 60) return 'Güncellendi: $m dk önce';
-    return 'Güncellendi: ${m ~/ 60} sa önce';
-  }
-
-  /// Şehrin duyuru beslemesi yok (İETT'nin karşılığı Kocaeli'de bulunmuyor).
-  /// Boş liste göstermek "duyuru yok" gibi okunurdu; sebebi açıkça yazılır.
-  /// Beslemenin KİME ait olduğunu söyleyen şerit.
-  ///
-  /// Duyurular İETT'nin; Kocaeli'nin eşdeğer bir servisi yok. Başka şehirdeki
-  /// kullanıcıya boş ekran göstermektense listeyi verip kaynağı açıkça
-  /// yazmak daha faydalı — ama "senin şehrinin duyurusu" izlenimi
-  /// bırakmadan.
-  Widget _feedNotice(TextTheme text, TransitCity city) {
-    if (city.hasAnnouncements) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-        decoration: BoxDecoration(
-          color: VigilantColors.tertiaryContainer.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-              color: VigilantColors.tertiaryContainer.withValues(alpha: 0.3)),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.info_outline_rounded,
-                size: 15, color: VigilantColors.tertiaryContainer),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                'Bu duyurular İETT (İstanbul) hatlarına ait — '
-                '${city.name} için duyuru beslemesi yayınlanmıyor.',
-                style: text.labelSmall?.copyWith(
-                    color: VigilantColors.tertiaryContainer, height: 1.3),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _empty(TextTheme text, bool nothingLoaded) => Center(
+  Widget _empty(TextTheme text) => Center(
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.fromLTRB(24, 60, 24, 24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Mascot(MascotAssets.dikkat, height: 110),
-              const SizedBox(height: 12),
+              const Mascot(MascotAssets.hero, height: 120),
+              const SizedBox(height: 14),
               Text(
-                nothingLoaded
-                    ? 'Duyurular alınamadı — internet bağlantını kontrol et.'
-                    : 'Aramanla eşleşen duyuru yok.',
+                'Şu an yeni bir duyuru yok.',
+                textAlign: TextAlign.center,
+                style: text.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Aksaklık, bakım ya da güncelleme olduğunda burada göreceksin.',
                 textAlign: TextAlign.center,
                 style: text.bodyMedium
                     ?.copyWith(color: VigilantColors.onSurfaceVariant),
@@ -295,128 +161,91 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen> {
       );
 }
 
-/// Duyuru türü sekmesi (anlık durum / sefer bilgisi) + sayaç.
-class _TypeTab extends StatelessWidget {
-  const _TypeTab({
-    required this.label,
-    required this.count,
-    required this.selected,
-    required this.color,
-    required this.onTap,
-  });
-
-  final String label;
-  final int count;
-  final bool selected;
-  final Color color;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final text = Theme.of(context).textTheme;
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: selected
-              ? color.withValues(alpha: 0.15)
-              : VigilantColors.surfaceContainer,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: selected
-                ? color
-                : VigilantColors.surfaceVariant.withValues(alpha: 0.4),
-          ),
+/// Kategoriye göre renk + ikon + etiket.
+({Color color, IconData icon, String label}) _kindStyle(AnnouncementKind k) =>
+    switch (k) {
+      AnnouncementKind.uyari => (
+          color: VigilantColors.primary,
+          icon: Icons.error_outline_rounded,
+          label: 'Uyarı',
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Flexible(
-              child: Text(label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: text.labelLarge?.copyWith(
-                    color: selected ? color : VigilantColors.onSurfaceVariant,
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                  )),
-            ),
-            const SizedBox(width: 6),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-              decoration: BoxDecoration(
-                color: (selected ? color : VigilantColors.onSurfaceVariant)
-                    .withValues(alpha: 0.18),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text('$count',
-                  style: text.labelSmall?.copyWith(
-                      color: selected ? color : VigilantColors.onSurfaceVariant,
-                      fontWeight: FontWeight.w700)),
-            ),
-          ],
+      AnnouncementKind.dikkat => (
+          color: VigilantColors.tertiaryContainer,
+          icon: Icons.warning_amber_rounded,
+          label: 'Dikkat',
         ),
-      ),
-    );
-  }
-}
+      AnnouncementKind.bilgi => (
+          color: VigilantColors.accentBlue,
+          icon: Icons.info_outline_rounded,
+          label: 'Bilgi',
+        ),
+    };
+
+const _months = [
+  'Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz',
+  'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara',
+];
+
+String _dateLabel(DateTime d) => '${d.day} ${_months[d.month - 1]} ${d.year}';
 
 class _AnnouncementCard extends StatelessWidget {
   const _AnnouncementCard({required this.item});
 
-  final IettAnnouncement item;
+  final AppAnnouncement item;
 
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    final accent = item.isTrip
-        ? VigilantColors.tertiaryContainer
-        : VigilantColors.accentBlue;
+    final s = _kindStyle(item.kind);
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: VigilantColors.surfaceContainer,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-            color: VigilantColors.surfaceVariant.withValues(alpha: 0.3)),
+        border: Border.all(color: s.color.withValues(alpha: 0.35)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
+              // Kategori rozeti.
               Container(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(6),
+                  color: s.color.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(7),
                 ),
-                child: Text(item.type.isEmpty ? 'Duyuru' : item.type,
-                    style: text.labelSmall?.copyWith(
-                        color: accent, fontWeight: FontWeight.w700)),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(s.icon, size: 13, color: s.color),
+                    const SizedBox(width: 5),
+                    Text(s.label,
+                        style: text.labelSmall?.copyWith(
+                            color: s.color, fontWeight: FontWeight.w800)),
+                  ],
+                ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(item.line,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: text.labelMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: VigilantColors.onSurface)),
-              ),
-              if (item.time.isNotEmpty)
-                Text(item.time,
+              const Spacer(),
+              if (item.date != null)
+                Text(_dateLabel(item.date!),
                     style: text.labelSmall
                         ?.copyWith(color: VigilantColors.onSurfaceVariant)),
             ],
           ),
-          const SizedBox(height: 8),
-          Text(item.message,
-              style: text.bodyMedium
-                  ?.copyWith(color: VigilantColors.onSurfaceVariant)),
+          if (item.title.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(item.title,
+                style: text.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+          ],
+          if (item.body.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(item.body,
+                style: text.bodyMedium?.copyWith(
+                    color: VigilantColors.onSurfaceVariant, height: 1.35)),
+          ],
         ],
       ),
     );

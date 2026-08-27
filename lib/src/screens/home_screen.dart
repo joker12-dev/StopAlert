@@ -10,6 +10,7 @@ import '../data/journey_suggestion.dart';
 import '../data/models.dart';
 import '../data/transit_db.dart';
 import '../services/bus_data_service.dart';
+import '../state/app_announcements_provider.dart';
 import '../state/city_provider.dart';
 import '../state/hero_image_provider.dart';
 import '../state/journey_provider.dart';
@@ -644,7 +645,8 @@ class _TopBar extends ConsumerWidget {
               IconButton(
                 onPressed: () {
                   Haptics.light();
-                  // Bildirim merkezi = İETT hat duyuruları (sefer iptali vb.).
+                  // Bildirim merkezi = UYGULAMA duyuruları (aksaklık/bakım/
+                  // güncelleme). Kaynak: uzak JSON.
                   Navigator.of(context).push(MaterialPageRoute(
                       builder: (_) => const AnnouncementsScreen()));
                 },
@@ -653,11 +655,13 @@ class _TopBar extends ConsumerWidget {
                       color: VigilantColors.onSurface),
                 ),
               ),
-              Positioned(
-                top: 12,
-                right: 12,
-                child: PulseDot(color: VigilantColors.primary, size: 7),
-              ),
+              // Kırmızı nokta yalnızca OKUNMAMIŞ duyuru varken.
+              if (ref.watch(hasUnreadAnnouncementsProvider))
+                const Positioned(
+                  top: 12,
+                  right: 12,
+                  child: PulseDot(color: VigilantColors.primary, size: 7),
+                ),
             ],
           ),
         ),
