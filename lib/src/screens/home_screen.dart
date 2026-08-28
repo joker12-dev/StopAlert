@@ -16,7 +16,6 @@ import '../state/hero_image_provider.dart';
 import '../state/journey_provider.dart';
 import '../state/nearest_arrival_provider.dart';
 import '../state/settings_provider.dart';
-import '../state/tour_keys.dart';
 import '../state/weather_provider.dart';
 import '../theme/app_theme.dart';
 import '../util/insets.dart';
@@ -26,7 +25,6 @@ import '../util/haptics.dart';
 import '../widgets/anim.dart';
 import '../widgets/bottom_nav_shell.dart';
 import '../widgets/glass_panel.dart';
-import '../widgets/home_tour.dart';
 import '../widgets/permission_required_sheet.dart';
 import '../widgets/skeleton.dart';
 import '../widgets/native_ad_slot.dart';
@@ -35,6 +33,7 @@ import '../widgets/traffic_strip.dart';
 import '../widgets/widget_promo.dart';
 import 'alarm_setup_screen.dart';
 import 'announcements_screen.dart';
+import 'guide_screen.dart';
 import 'lines_by_type_screen.dart';
 import 'live_tracking_screen.dart';
 import 'nearby_map_screen.dart';
@@ -87,11 +86,16 @@ class HomeScreen extends ConsumerWidget {
       ref.read(bottomNavIndexProvider.notifier).state = NavTab.stops;
     }
 
+    // Akıllı ipucu kartına dokununca uygulama rehberi (nasıl kullanılır) açılır.
+    void openGuide() {
+      Haptics.light();
+      Navigator.of(context)
+          .push(MaterialPageRoute(builder: (_) => const GuideScreen()));
+    }
+
     return Scaffold(
       body: Stack(
         children: [
-          // İlk açılışta tanıtım turunu (bir kez) başlatır; kendisi çizmez.
-          const HomeTourTrigger(),
           // Üstte İstanbul arka planı; altı tema rengine gradient geçişli.
           const Positioned(
             top: 0,
@@ -125,10 +129,7 @@ class HomeScreen extends ConsumerWidget {
                       child: _TopBar(nickname: nickname, dateText: _todayText)),
                   const SizedBox(height: 24),
                   EntranceFade(
-                      delayMs: 60,
-                      child: KeyedSubtree(
-                          key: TourKeys.search,
-                          child: _SearchRow(onTap: goToStops))),
+                      delayMs: 60, child: _SearchRow(onTap: goToStops)),
                   const SizedBox(height: 20),
                   EntranceFade(
                     delayMs: 120,
@@ -152,9 +153,9 @@ class HomeScreen extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(height: 20),
-                  // Bağlamsal akıllı ipucu (saate göre): tek dokunuşla alarma götürür.
+                  // Akıllı ipucu kartı — dokununca "Nasıl Kullanılır" rehberi.
                   EntranceFade(
-                      delayMs: 220, child: _SmartTipCard(onTap: goToStops)),
+                      delayMs: 220, child: _SmartTipCard(onTap: openGuide)),
                   const SizedBox(height: 24),
                   // ---- Alt kısım: mockup'ın üstünde yok ama işlevler korunuyor ----
                   // Şehir trafik yoğunluğu (İstanbul canlı, İBB servisi).
@@ -643,9 +644,7 @@ class _TopBar extends ConsumerWidget {
             ],
           ),
         ),
-        KeyedSubtree(
-          key: TourKeys.bell,
-          child: SizedBox(
+        SizedBox(
           width: 48,
           height: 48,
           child: Stack(
@@ -673,7 +672,6 @@ class _TopBar extends ConsumerWidget {
                 ),
             ],
           ),
-        ),
         ),
       ],
     );
@@ -794,9 +792,7 @@ class _NearbyCard extends ConsumerWidget {
         _HomeCarousel(onStart: onStart, onOpenStop: onOpenStop, onMap: onMap),
         const SizedBox(height: 14),
         // Kategoriler AYRI kart olarak altta.
-        KeyedSubtree(
-            key: TourKeys.categories,
-            child: _CategoryRow(onTap: onCategory)),
+        _CategoryRow(onTap: onCategory),
       ],
     );
   }
@@ -1062,7 +1058,7 @@ class _NearbyStopsPage extends ConsumerWidget {
           ),
           const Spacer(),
           const SizedBox(height: 8),
-          KeyedSubtree(key: TourKeys.alarm, child: _PrimaryCta(onTap: onStart)),
+          _PrimaryCta(onTap: onStart),
         ],
       ),
     );

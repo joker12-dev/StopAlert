@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/app_localizations.dart';
-import '../state/tour_keys.dart';
 import '../screens/favorites_screen.dart';
 import '../screens/home_screen.dart';
 import '../screens/profile_screen.dart';
@@ -100,12 +99,9 @@ class _BottomNavShellState extends ConsumerState<BottomNavShell> {
       // uygulamanın en çok dokunulan yeri, hemen üstüne reklam koymak yanlış
       // dokunuşa davetiye çıkarıyor. Reklam artık yalnızca sayfa içlerinde,
       // içeriğin sonunda ve çerçeveli (bkz. `NativeAdSlot`).
-      bottomNavigationBar: KeyedSubtree(
-        key: TourKeys.nav,
-        child: ClipRRect(
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-          child: _navBar(context),
-        ),
+      bottomNavigationBar: ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+        child: _navBar(context),
       ),
     );
   }

@@ -22,6 +22,7 @@ import '../util/insets.dart';
 import '../util/haptics.dart';
 import '../util/turkish.dart';
 import 'alarm_setup_screen.dart';
+import 'guide_screen.dart';
 import 'line_detail_screen.dart';
 import 'live_bus_screen.dart';
 import 'nearby_map_screen.dart';
@@ -522,6 +523,17 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
                       color: VigilantColors.onSurfaceVariant),
                 ),
                 const Spacer(),
+                // "Nasıl durak seçilir / alarm kurulur?" bilgi butonu.
+                IconButton(
+                  tooltip: 'Nasıl kullanılır?',
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                        builder: (_) =>
+                            const GuideScreen(section: GuideSection.stop)),
+                  ),
+                  icon: const Icon(Icons.help_outline_rounded,
+                      color: VigilantColors.onSurfaceVariant),
+                ),
               ],
             ),
           ),

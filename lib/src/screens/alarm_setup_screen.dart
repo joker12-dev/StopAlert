@@ -26,6 +26,7 @@ import '../widgets/map_style_sheet.dart';
 import '../widgets/mascot.dart';
 import '../widgets/permission_required_sheet.dart';
 import '../widgets/route_map.dart';
+import 'guide_screen.dart';
 import 'live_tracking_screen.dart';
 
 /// Alarm Kur — Stitch "Alarm Kur (Harita Odaklı)" portu.
@@ -329,6 +330,17 @@ class _AlarmSetupScreenState extends ConsumerState<AlarmSetupScreen> {
                                     ),
                                   ),
                                 ),
+                                // "Nasıl kurulur?" bilgi butonu → rehberin
+                                // alarm bölümü.
+                                _CircleButton(
+                                  icon: Icons.help_outline_rounded,
+                                  onTap: () => Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                        builder: (_) => const GuideScreen(
+                                            section: GuideSection.alarm)),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
                                 // Harita görünümü — öteki haritalarda vardı,
                                 // burada yoktu ve kullanıcı uydu görünümünü
                                 // tam da durak seçerken istiyor.
