@@ -122,8 +122,11 @@ abstract final class AppMapStyle {
 
   /// Aktif stilin ZEMİN döşeme URL şablonu. Token varsa Mapbox; yoksa güvenlik
   /// için OSM standart (kırık harita gösterme).
+  ///
+  /// `{r}` → yüksek yoğunluklu ekranda flutter_map bunu `@2x` yapar; Mapbox
+  /// 1024 px döşeme döndürür → NETLİK belirgin artar (bitmap büyütme azalır).
   static String get urlTemplate => hasMapbox
-      ? 'https://api.mapbox.com/styles/v1/mapbox/${_mapboxId(style)}/tiles/512/{z}/{x}/{y}?access_token=$mapboxToken'
+      ? 'https://api.mapbox.com/styles/v1/mapbox/${_mapboxId(style)}/tiles/512/{z}/{x}/{y}{r}?access_token=$mapboxToken'
       : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 
   /// Mapbox {s} alt alan adı kullanmaz.
@@ -134,8 +137,8 @@ abstract final class AppMapStyle {
   static int get tileDimension => hasMapbox ? 512 : 256;
   static double get zoomOffset => hasMapbox ? -1 : 0;
 
-  /// Retina (@2x) — kullanılmıyor (512 döşeme zaten yüksek çözünürlük).
-  static bool get supportsRetina => false;
+  /// Retina (@2x): Mapbox destekler → yüksek yoğunluklu ekranda keskin.
+  static bool get supportsRetina => hasMapbox;
 
   /// Döşeme sağlayıcı atfı (lisans şartı).
   static String get attribution =>
