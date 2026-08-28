@@ -14,7 +14,7 @@ enum GuideSection { alarm, stop, bus, extras }
 /// Örn. `https://youtu.be/dQw4w9WgXcQ` → `'dQw4w9WgXcQ'`.
 /// ID null iken kartlar "yakında" görünür; dolunca dokununca video açılır.
 abstract final class GuideVideos {
-  static const String? intro = null; // Uygulama tanıtımı
+  static const intro = 'RE33qVWkCHQ'; // Uygulama tanıtımı (Shorts)
   static const String? alarm = null; // Nasıl alarm kurulur
   static const String? stop = null; // Nasıl durak seçilir
   static const String? bus = null; // Yaklaşan otobüs / canlı takip
