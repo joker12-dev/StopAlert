@@ -60,7 +60,8 @@ class StopAlertWidgetProvider : HomeWidgetProvider() {
     ) {
         views.setViewVisibility(R.id.widget_active, View.GONE)
         views.setViewVisibility(R.id.widget_idle, View.VISIBLE)
-        views.setImageViewBitmap(R.id.idle_icon, idleBitmap(context))
+        // "Aktif alarm yok" yanındaki yuvarlağa STOP ALERT logosu.
+        views.setImageViewResource(R.id.idle_icon, R.mipmap.ic_launcher)
         // Sade "Alarm kur" düğmesi UYGULAMAYI açar (durak seçilecek).
         val open = launchIntent(context, "/alarm/new")
         views.setOnClickPendingIntent(R.id.widget_root, open)
@@ -130,27 +131,6 @@ class StopAlertWidgetProvider : HomeWidgetProvider() {
         canvas.drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
         })
-        return bmp
-    }
-
-    /** Boş durum simgesi: marka renginde içi boş halka + çan. */
-    private fun idleBitmap(context: Context): Bitmap {
-        val density = context.resources.displayMetrics.density
-        val size = (34 * density).toInt().coerceAtLeast(48)
-        val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bmp)
-        val stroke = 3f * density
-        val inset = stroke / 2f + 1f
-        canvas.drawArc(
-            RectF(inset, inset, size - inset, size - inset), 0f, 360f, false,
-            Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                style = Paint.Style.STROKE
-                strokeWidth = stroke
-                color = Color.argb(70, 255, 69, 58)
-            }
-        )
-        val dot = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = BRAND }
-        canvas.drawCircle(size / 2f, size / 2f, size / 7f, dot)
         return bmp
     }
 

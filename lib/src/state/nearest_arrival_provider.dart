@@ -1,21 +1,24 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/models.dart';
+import '../data/timetable.dart';
 import '../data/transit_db.dart';
 import '../engine/arrival_estimator.dart';
 import '../services/bus_data_service.dart';
 import '../services/live_bus_service.dart';
 import '../services/segment_learning_store.dart';
+import '../services/timetable_service.dart';
 import 'city_provider.dart';
 import 'journey_provider.dart';
 
-/// En yakın durağa YAKLAŞAN en erken otobüs — ana sayfa kartı için.
+/// En yakın durağa yaklaşan en erken sefer — ana sayfa kartı için.
 class NearestBus {
   const NearestBus({
     required this.code,
     required this.direction,
     required this.minutes,
     required this.imminent,
+    this.scheduled = false,
   });
 
   /// Hat kodu (ör. "34A").
@@ -29,22 +32,52 @@ class NearestBus {
 
   /// ~2 dk içindeyse "şimdi" gösterilir.
   final bool imminent;
+
+  /// Canlı araç yerine TARİFEYE dayalı (ray/vapur). UI takvim ikonu gösterir.
+  final bool scheduled;
 }
 
-/// En yakın OTOBÜS durağına yaklaşan en erken canlı otobüs (yoksa null).
+/// En yakın durağa yaklaşan en erken sefer (yoksa null).
 ///
-/// [nearbyStopsProvider] ile en yakın durak alınır; durak otobüs durağıysa
-/// geçen lastikli hatların canlı araçlarından bu durağa varış hesaplanır
-/// (bkz. [ArrivalEstimator]) ve en erken olanı döndürülür. Ray/vapur durağı
-/// ya da canlı araç yoksa null. Ağ hatası akışı bozmaz; null döner.
+/// OTOBÜS durağında: geçen lastikli hatların CANLI araçlarından varış hesaplanır
+/// (bkz. [ArrivalEstimator]). RAY/VAPUR durağında: o hattın TARİFESİNDEN sıradaki
+/// sefer bulunur. Veri yoksa null; ağ hatası akışı bozmaz.
 final nearestApproachingBusProvider = FutureProvider<NearestBus?>((ref) async {
   final hits = await ref.watch(nearbyStopsProvider.future);
   if (hits.isEmpty) return null;
-  final stop = hits.first.stop;
-  // Yalnızca otobüs durağı: ray/vapur durağında "yaklaşan otobüs" olmaz.
-  if (!isBusId(stop.id)) return null;
-
+  final hit = hits.first;
+  final stop = hit.stop;
   final city = ref.read(activeCityProvider);
+
+  // RAY/VAPUR durağı: canlı konum yok → sıradaki tarifeli sefer.
+  if (!isBusId(stop.id)) {
+    final line = hit.line;
+    if (line == null) return null;
+    try {
+      final table = await TimetableService.instance
+          .forLine(line.code, city: city, type: line.type);
+      if (table.isEmpty) return null;
+      final rows = table.forDay(DayType.forDate(DateTime.now()),
+          outbound: line.id.contains('_G'));
+      if (rows.isEmpty) return null;
+      final next = ScheduledArrivals.fromSchedule(
+        line: line,
+        targetStopId: stop.id,
+        departures: rows,
+        limit: 1,
+      );
+      if (next.isEmpty) return null;
+      return NearestBus(
+        code: line.code,
+        direction: line.name,
+        minutes: (next.first.secondsAway / 60).round(),
+        imminent: next.first.secondsAway <= 90,
+        scheduled: true,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
 
   List<TransitLineBrief> briefs;
   try {

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart' show TemplateType;
@@ -18,6 +20,7 @@ import '../state/nearest_arrival_provider.dart';
 import '../state/settings_provider.dart';
 import '../state/weather_provider.dart';
 import '../theme/app_theme.dart';
+import '../util/anim_config.dart';
 import '../util/insets.dart';
 import '../util/duration_label.dart';
 import '../util/greeting.dart';
@@ -34,6 +37,7 @@ import '../widgets/widget_promo.dart';
 import 'alarm_setup_screen.dart';
 import 'announcements_screen.dart';
 import 'guide_screen.dart';
+import 'line_detail_screen.dart';
 import 'lines_by_type_screen.dart';
 import 'live_tracking_screen.dart';
 import 'nearby_map_screen.dart';
@@ -817,14 +821,52 @@ class _HomeCarousel extends ConsumerStatefulWidget {
 class _HomeCarouselState extends ConsumerState<_HomeCarousel> {
   final _controller = PageController();
   int _page = 0;
+  int _pageCount = 1;
+  Timer? _auto;
 
   /// Tüm sayfaların ortak yüksekliği (en yüksek sayfa = Yakındaki Duraklar).
   static const _height = 236.0;
 
   @override
+  void initState() {
+    super.initState();
+    _scheduleAuto();
+  }
+
+  @override
   void dispose() {
+    _auto?.cancel();
     _controller.dispose();
     super.dispose();
+  }
+
+  /// Belirli aralıklarla bir sonraki sayfaya geç (LOOP döngü). Kullanıcı elle
+  /// kaydırınca sıfırlanır. AppAnim kapalıyken (testler) çalışmaz.
+  void _scheduleAuto() {
+    _auto?.cancel();
+    if (!AppAnim.enabled) return;
+    _auto = Timer(const Duration(seconds: 5), () {
+      if (mounted && _pageCount > 1 && _controller.hasClients) {
+        final next = (_page + 1) % _pageCount;
+        _controller.animateToPage(next,
+            duration: const Duration(milliseconds: 450),
+            curve: Curves.easeInOut);
+      }
+      _scheduleAuto();
+    });
+  }
+
+  /// En sık inilen durağı ADINDAN çözüp aç (alarm kurmaya götürür).
+  Future<void> _openStopByName(BuildContext context, String name) async {
+    Haptics.light();
+    try {
+      await BusDataService.instance.openAllForLookup();
+      final matches = await TransitDb.instance.searchStops(name, limit: 1);
+      if (!context.mounted || matches.isEmpty) return;
+      widget.onOpenStop(null, matches.first);
+    } catch (_) {
+      // Durak çözülemedi: sessizce geç.
+    }
   }
 
   List<({String code, String name, LineType type, int count})> _topLines(
@@ -875,44 +917,65 @@ class _HomeCarouselState extends ConsumerState<_HomeCarousel> {
         _InsightCard(
           title: l.mostUsedLines,
           icon: Icons.alt_route_rounded,
-          onTap: () {
+          onSeeAll: () {
             Haptics.light();
             ref.read(bottomNavIndexProvider.notifier).state = NavTab.lines;
           },
           children: [
             for (final ln in lines)
               _InsightLineRow(
-                  code: ln.code,
-                  name: ln.name,
-                  type: ln.type,
-                  count: ln.count),
+                code: ln.code,
+                name: ln.name,
+                type: ln.type,
+                count: ln.count,
+                // Dokununca O HATTI aç.
+                onTap: () {
+                  Haptics.light();
+                  Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) =>
+                          LineDetailScreen(code: ln.code, type: ln.type)));
+                },
+              ),
           ],
         ),
       if (stops.isNotEmpty)
         _InsightCard(
           title: l.mostUsedStops,
           icon: Icons.location_on_rounded,
-          onTap: () {
+          onSeeAll: () {
             Haptics.light();
             ref.read(bottomNavIndexProvider.notifier).state = NavTab.stops;
           },
           children: [
             for (final s in stops)
-              _InsightStopRow(name: s.name, count: s.count),
+              _InsightStopRow(
+                name: s.name,
+                count: s.count,
+                // Dokununca O DURAĞI aç.
+                onTap: () => _openStopByName(context, s.name),
+              ),
           ],
         ),
     ];
+    _pageCount = pages.length;
     final active = _page.clamp(0, pages.length - 1);
 
     return Column(
       children: [
         SizedBox(
           height: _height,
-          child: PageView(
-            controller: _controller,
-            onPageChanged: (i) => setState(() => _page = i),
-            // SizedBox.expand: her sayfa kartı aynı yüksekliği doldursun.
-            children: [for (final p in pages) SizedBox.expand(child: p)],
+          // Kullanıcı elle kaydırınca otomatik döngü zamanlayıcısını sıfırla.
+          child: NotificationListener<ScrollStartNotification>(
+            onNotification: (n) {
+              if (n.dragDetails != null) _scheduleAuto();
+              return false;
+            },
+            child: PageView(
+              controller: _controller,
+              onPageChanged: (i) => setState(() => _page = i),
+              // SizedBox.expand: her sayfa kartı aynı yüksekliği doldursun.
+              children: [for (final p in pages) SizedBox.expand(child: p)],
+            ),
           ),
         ),
         if (pages.length > 1) ...[
@@ -1093,7 +1156,7 @@ class _ApproachingBusRow extends ConsumerWidget {
               size: 16, color: VigilantColors.onSurfaceVariant),
           const SizedBox(width: 8),
           Expanded(
-            child: Text('Yaklaşan otobüs aranıyor…',
+            child: Text('Sefer bilgisi aranıyor…',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: text.labelMedium
@@ -1106,11 +1169,11 @@ class _ApproachingBusRow extends ConsumerWidget {
         if (bus == null) {
           return shell(Row(
             children: [
-              const Icon(Icons.directions_bus_outlined,
+              const Icon(Icons.schedule_outlined,
                   size: 16, color: VigilantColors.onSurfaceVariant),
               const SizedBox(width: 8),
               Expanded(
-                child: Text('Yaklaşan otobüs bilgisi yok',
+                child: Text('Sefer bilgisi yok',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: text.labelMedium
@@ -1122,8 +1185,13 @@ class _ApproachingBusRow extends ConsumerWidget {
         final eta = bus.imminent ? 'şimdi' : '${bus.minutes} dk';
         return shell(Row(
           children: [
-            const Icon(Icons.directions_bus_filled_rounded,
-                size: 16, color: VigilantColors.primary),
+            // Ray/vapur TARİFELİ → takvim; otobüs CANLI → otobüs ikonu.
+            Icon(
+                bus.scheduled
+                    ? Icons.schedule_rounded
+                    : Icons.directions_bus_filled_rounded,
+                size: 16,
+                color: VigilantColors.primary),
             const SizedBox(width: 8),
             // Hat kodu rozeti.
             Container(
@@ -1232,145 +1300,221 @@ class _NearbyRow extends StatelessWidget {
   }
 }
 
-/// İçgörü kartı iskeleti — başlık + satırlar (kaydırılabilir sayfa).
+/// İçgörü kartı iskeleti — renkli ikon başlık + "Tümü" + tıklanabilir satırlar.
 class _InsightCard extends StatelessWidget {
   const _InsightCard({
     required this.title,
     required this.icon,
     required this.children,
-    required this.onTap,
+    required this.onSeeAll,
   });
 
   final String title;
   final IconData icon;
   final List<Widget> children;
-  final VoidCallback onTap;
+
+  /// Başlıktaki "Tümü" — ilgili sekmeye götürür.
+  final VoidCallback onSeeAll;
 
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: HomeScreen._cardDark,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withValues(alpha: 0.5),
-                blurRadius: 16,
-                offset: const Offset(0, 8)),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(icon, size: 18, color: VigilantColors.primary),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style:
-                          text.bodyLarge?.copyWith(fontWeight: FontWeight.w600)),
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+      decoration: BoxDecoration(
+        color: HomeScreen._cardDark,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.5),
+              blurRadius: 16,
+              offset: const Offset(0, 8)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              // Renkli ikon çipi.
+              Container(
+                width: 32,
+                height: 32,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: VigilantColors.primary.withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                const Icon(Icons.chevron_right,
-                    size: 20, color: VigilantColors.onSurfaceVariant),
-              ],
-            ),
-            const SizedBox(height: 10),
-            for (final c in children) ...[
-              c,
-              if (c != children.last) const SizedBox(height: 8),
+                child: Icon(icon, size: 18, color: VigilantColors.primary),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: text.titleSmall
+                        ?.copyWith(fontWeight: FontWeight.w800)),
+              ),
+              // "Tümü" — sekmeye git.
+              GestureDetector(
+                onTap: onSeeAll,
+                behavior: HitTestBehavior.opaque,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('Tümü',
+                        style: text.labelMedium?.copyWith(
+                            color: VigilantColors.primary,
+                            fontWeight: FontWeight.w700)),
+                    const Icon(Icons.chevron_right_rounded,
+                        size: 18, color: VigilantColors.primary),
+                  ],
+                ),
+              ),
             ],
+          ),
+          const SizedBox(height: 12),
+          for (final c in children) ...[
+            c,
+            if (c != children.last) const SizedBox(height: 8),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Tıklanabilir satır kabuğu — hafif zemin + ripple + sağda chevron.
+class _InsightRowShell extends StatelessWidget {
+  const _InsightRowShell({required this.onTap, required this.child});
+  final VoidCallback onTap;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+          decoration: BoxDecoration(
+            color: VigilantColors.surfaceContainer.withValues(alpha: 0.55),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              Expanded(child: child),
+              const SizedBox(width: 6),
+              const Icon(Icons.chevron_right_rounded,
+                  size: 18, color: VigilantColors.onSurfaceVariant),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-/// "En sık kullanılan hat" satırı: renkli kod rozeti + ad + kullanım sayısı.
+/// "En sık kullanılan hat" satırı — dokununca hattı açar.
 class _InsightLineRow extends StatelessWidget {
   const _InsightLineRow({
     required this.code,
     required this.name,
     required this.type,
     required this.count,
+    required this.onTap,
   });
 
   final String code;
   final String name;
   final LineType type;
   final int count;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     final color = lineTypeColor(type);
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.9),
-            borderRadius: BorderRadius.circular(7),
+    return _InsightRowShell(
+      onTap: onTap,
+      child: Row(
+        children: [
+          Container(
+            constraints: const BoxConstraints(minWidth: 44),
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(code,
+                style: text.labelMedium?.copyWith(
+                    color: Colors.white, fontWeight: FontWeight.w800)),
           ),
-          child: Text(code,
-              style: text.labelSmall?.copyWith(
-                  color: Colors.white, fontWeight: FontWeight.w800)),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(name.isEmpty ? '—' : name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: text.labelLarge?.copyWith(
-                  color: VigilantColors.onSurface,
-                  fontWeight: FontWeight.w600)),
-        ),
-        const SizedBox(width: 8),
-        _UsagePill(count: count),
-      ],
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(name.isEmpty ? '—' : name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: text.labelLarge?.copyWith(
+                    color: VigilantColors.onSurface,
+                    fontWeight: FontWeight.w600)),
+          ),
+          const SizedBox(width: 8),
+          _UsagePill(count: count),
+        ],
+      ),
     );
   }
 }
 
-/// "En sık inilen durak" satırı: durak simgesi + ad + kullanım sayısı.
+/// "En sık inilen durak" satırı — dokununca durağı açar.
 class _InsightStopRow extends StatelessWidget {
-  const _InsightStopRow({required this.name, required this.count});
+  const _InsightStopRow(
+      {required this.name, required this.count, required this.onTap});
 
   final String name;
   final int count;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    return Row(
-      children: [
-        const Icon(Icons.place_rounded,
-            size: 18, color: VigilantColors.onSurfaceVariant),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: text.labelLarge?.copyWith(
-                  color: VigilantColors.onSurface,
-                  fontWeight: FontWeight.w600)),
-        ),
-        const SizedBox(width: 8),
-        _UsagePill(count: count),
-      ],
+    return _InsightRowShell(
+      onTap: onTap,
+      child: Row(
+        children: [
+          Container(
+            width: 30,
+            height: 30,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: VigilantColors.primary.withValues(alpha: 0.14),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.place_rounded,
+                size: 17, color: VigilantColors.primary),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: text.labelLarge?.copyWith(
+                    color: VigilantColors.onSurface,
+                    fontWeight: FontWeight.w600)),
+          ),
+          const SizedBox(width: 8),
+          _UsagePill(count: count),
+        ],
+      ),
     );
   }
 }
 
-/// Kullanım sayısı rozeti — dile bağlı olmayan "↻ N".
+/// Kullanım sayısı rozeti — "↻ N".
 class _UsagePill extends StatelessWidget {
   const _UsagePill({required this.count});
 
@@ -1382,18 +1526,18 @@ class _UsagePill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: VigilantColors.surfaceContainer,
+        color: VigilantColors.primary.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           const Icon(Icons.repeat_rounded,
-              size: 12, color: VigilantColors.onSurfaceVariant),
+              size: 12, color: VigilantColors.primary),
           const SizedBox(width: 3),
           Text('$count',
               style: text.labelSmall?.copyWith(
-                  color: VigilantColors.onSurfaceVariant,
+                  color: VigilantColors.primary,
                   fontWeight: FontWeight.w800)),
         ],
       ),
@@ -1401,33 +1545,18 @@ class _UsagePill extends StatelessWidget {
   }
 }
 
-/// Bağlamsal akıllı ipucu kartı — saate göre alarm önerisi.
+/// "Nasıl kullanılır?" kartı — dokununca rehber (GuideScreen) açılır.
 ///
-/// Mockup'taki "Akşam saatleri yoğun; alarmını erkenden kur." kartı. Metin
-/// günün saatine göre değişir; dokununca durak aramaya (alarm kurmaya) götürür.
+/// Eskiden saate göre "alarm kur" ipucu gösteriyordu ama dokununca rehbere
+/// gidiyordu (söz/eylem uyuşmuyordu). Artık ne yaptığı ne söylediği ile aynı.
 class _SmartTipCard extends StatelessWidget {
   const _SmartTipCard({required this.onTap});
 
   final VoidCallback onTap;
 
-  ({String title, IconData icon}) _tip(AppLocalizations l) {
-    final h = DateTime.now().hour;
-    if (h >= 7 && h < 10) {
-      return (title: l.tipMorning, icon: Icons.wb_twilight_rounded);
-    }
-    if (h >= 17 && h < 20) {
-      return (title: l.tipEvening, icon: Icons.alarm_rounded);
-    }
-    if (h >= 22 || h < 5) {
-      return (title: l.tipLateNight, icon: Icons.bedtime_rounded);
-    }
-    return (title: l.tipDefault, icon: Icons.alarm_add_rounded);
-  }
-
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    final tip = _tip(AppLocalizations.of(context));
     return GestureDetector(
       onTap: () {
         Haptics.light();
@@ -1452,12 +1581,26 @@ class _SmartTipCard extends StatelessWidget {
                 color: VigilantColors.primary.withValues(alpha: 0.14),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(tip.icon, size: 22, color: VigilantColors.primary),
+              child: const Icon(Icons.menu_book_rounded,
+                  size: 22, color: VigilantColors.primary),
             ),
             const SizedBox(width: 14),
             Expanded(
-              child: Text(tip.title,
-                  style: text.bodyMedium?.copyWith(height: 1.3)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('StopAlert nasıl kullanılır?',
+                      style:
+                          text.bodyMedium?.copyWith(fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 2),
+                  Text('Alarm kurmayı ve tüm özellikleri öğren',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: text.labelMedium?.copyWith(
+                          color: VigilantColors.onSurfaceVariant)),
+                ],
+              ),
             ),
             const SizedBox(width: 6),
             const Icon(Icons.chevron_right_rounded,

@@ -3,7 +3,7 @@
     <!-- Ana ekran widget'ı (bkz. StopAlertWidgetProvider) -->
     <string name="widget_description">Kalan durak, mesafe ve sonraki durak</string>
     <string name="widget_idle_title">Aktif alarm yok</string>
-    <string name="widget_idle_subtitle">Durağını seç, uyandıralım</string>
+    <string name="widget_idle_subtitle">Henüz yolculuk yapılmadı — başlamak için dokun</string>
     <string name="widget_create_alarm">Alarm kur</string>
     <string name="widget_ring_desc">Kalan durak göstergesi</string>
     <string name="widget_start_alarm">Alarmı başlat</string>
