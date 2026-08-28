@@ -32,7 +32,7 @@ abstract final class AppAnnouncementsService {
   ///   https://raw.githubusercontent.com/KULLANICI/REPO/main/announcements.json
   /// (Firebase Hosting'e koyacaksan onun URL'sini de verebilirsin.)
   static const url =
-      'https://raw.githubusercontent.com/KULLANICI/REPO/main/announcements.json';
+      'https://raw.githubusercontent.com/joker12-dev/Duyurular/main/duyurular.json';
 
   /// Ağ isteği bu kadar bekletilir; aşılırsa önbellek/boş liste döner.
   static const _timeout = Duration(seconds: 10);
