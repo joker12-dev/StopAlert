@@ -17,9 +17,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 
 enum MapTileStyle {
-  /// MapTiler Streets — Apple/Google tarzı temiz, POI ETİKETLİ (petrol,
-  /// dükkan, restoran…). API anahtarı gerektirir (ücretsiz; bkz. [AppMapStyle]).
-  /// Anahtar yoksa seçicide GÖRÜNMEZ.
+  /// Mapbox Streets — Apple/Google tarzı temiz, POI ETİKETLİ (petrol,
+  /// dükkan, restoran…). Mapbox token'ı gerektirir (bkz. [AppMapStyle]).
+  /// Token yoksa seçicide GÖRÜNMEZ.
   sokak('Sokak'),
 
   /// OpenStreetMap standart — renkli, detaylı, modern (anahtarsız VARSAYILAN).
@@ -47,10 +47,10 @@ enum MapTileStyle {
 }
 
 abstract final class AppMapStyle {
-  /// Aktif stil (Ayarlar'dan değişir). Anahtar varsa VARSAYILAN "Sokak"
-  /// (Apple tarzı, POI etiketli); yoksa OSM standart.
+  /// Aktif stil (Ayarlar'dan değişir). Token varsa VARSAYILAN "Sokak"
+  /// (Mapbox Streets, Apple tarzı, POI etiketli); yoksa OSM standart.
   static MapTileStyle style =
-      maptilerKey.isEmpty ? MapTileStyle.standart : MapTileStyle.sokak;
+      mapboxToken.isEmpty ? MapTileStyle.standart : MapTileStyle.sokak;
 
   /// Görünen alanın ÖTESİNDE kaç halka karo tutulsun.
   ///
@@ -113,38 +113,28 @@ abstract final class AppMapStyle {
 
   static const _esri = 'https://server.arcgisonline.com/ArcGIS/rest/services';
 
-  /// MapTiler ÜCRETSİZ API anahtarı — "Sokak" (Apple tarzı, POI etiketli)
-  /// stilini açar.
+  /// Mapbox genel erişim token'ı (pk.…) — "Sokak" stilini (Mapbox Streets,
+  /// Apple/Google tarzı, POI etiketli) açar.
   ///
-  /// ⚠️ NASIL ALINIR (KART GEREKMEZ): maptiler.com → ücretsiz kaydol (yalnızca
-  /// e-posta) → Account → API keys → anahtarı kopyala ve BURAYA yapıştır.
-  /// Boşken "Sokak" stili seçicide görünmez; anahtar girilince görünür ve
-  /// petrol/dükkan/restoran isimleriyle temiz bir harita gelir.
-  ///
-  /// NOT: Bu anahtar MapTiler tarafında User-Agent kısıtlamalı —
-  /// yalnızca `flutter_map (com.originstudios.stopalert)` başlığıyla çalışır
-  /// (flutter_map bunu `userAgentPackageName` ile otomatik gönderiyor).
-  static const maptilerKey = 'i3wSQI4QZkjxI1pXpYS9';
+  /// Boşken "Sokak" stili seçicide görünmez. Mapbox token'ları uygulamada
+  /// açık taşınmak üzere tasarlıdır (pk = public); güvenlik için Mapbox
+  /// panelinden URL/kullanım kısıtı eklenebilir (mobil Origin göndermez, o
+  /// yüzden URL kısıtı yerine kullanım limiti tercih edilir).
+  static const mapboxToken =
+      'pk.eyJ1IjoiY2MyYW5uIiwiYSI6ImNtdGNyaXJ2bDBpb2wyd3I2bXF3MWZnbWUifQ.ejRQoOPwOEKB5QwoljeJxg';
 
-  /// MapTiler anahtarı girildi mi (→ "Sokak" stili kullanılabilir).
-  static bool get hasMaptiler => maptilerKey.isNotEmpty;
+  /// Mapbox token'ı girildi mi (→ "Sokak" stili kullanılabilir).
+  static bool get hasMapbox => mapboxToken.isNotEmpty;
 
-  /// MapTiler stili için hangi harita.
-  ///
-  /// "basic-v2": temiz/sade — ZEMİN kendi otobüs/durak simgelerini BASMAZ,
-  /// bu yüzden uygulamanın kendi durak işaretçileriyle karışmaz (SEÇİLEN).
-  /// "streets-v2" daha çok POI (petrol/dükkan) gösterir ama toplu taşıma
-  /// duraklarını da bastığından işaretçilerle çakışıyordu.
-  /// Petrol/dükkanı da isteyip yalnızca durakları gizlemek için MapTiler
-  /// panelinden özel bir stil (Transit katmanı kapalı) yapıp ID'sini buraya
-  /// yazabiliriz.
-  static const _maptilerMap = 'basic-v2';
+  /// "Sokak" için Mapbox stili. "streets-v12" POI'li (petrol/dükkan),
+  /// Apple/Google benzeri. Alternatif: 'light-v11' (daha sade, çakışma yok).
+  static const _mapboxStyle = 'streets-v12';
 
-  /// Aktif stilin ZEMİN döşeme URL şablonu. "Sokak" MapTiler (anahtarlı);
+  /// Aktif stilin ZEMİN döşeme URL şablonu. "Sokak" Mapbox (token'lı);
   /// gerisi anahtarsız (OSM + Esri).
   static String get urlTemplate => switch (style) {
         MapTileStyle.sokak =>
-          'https://api.maptiler.com/maps/$_maptilerMap/{z}/{x}/{y}.png?key=$maptilerKey',
+          'https://api.mapbox.com/styles/v1/mapbox/$_mapboxStyle/tiles/512/{z}/{x}/{y}?access_token=$mapboxToken',
         MapTileStyle.standart =>
           'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
         MapTileStyle.bisiklet =>
@@ -164,9 +154,8 @@ abstract final class AppMapStyle {
         _ => const [],
       };
 
-  /// MapTiler raster döşemeleri 512 px; 256'lık şemaya oturması için
-  /// tileDimension 512 + zoomOffset -1 (MapTiler'ın önerdiği ayar). Öteki
-  /// sağlayıcılar 256/0.
+  /// Mapbox raster döşemeleri 512 px; 256'lık şemaya oturması için
+  /// tileDimension 512 + zoomOffset -1. Öteki sağlayıcılar 256/0.
   static int get tileDimension => style == MapTileStyle.sokak ? 512 : 256;
   static double get zoomOffset => style == MapTileStyle.sokak ? -1 : 0;
 
@@ -175,7 +164,7 @@ abstract final class AppMapStyle {
 
   /// Döşeme sağlayıcı atfı (lisans şartı).
   static String get attribution => switch (style) {
-        MapTileStyle.sokak => '© MapTiler © OpenStreetMap',
+        MapTileStyle.sokak => '© Mapbox © OpenStreetMap',
         MapTileStyle.gece || MapTileStyle.uydu => '© Esri',
         _ => '© OpenStreetMap',
       };

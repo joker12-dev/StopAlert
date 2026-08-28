@@ -25,7 +25,7 @@ class AppSettings {
     this.defaultDistanceIndex = 1, // 500m
     this.defaultStopsIndex = 1, // 2 durak
     this.contributeToCloud = false, // KVKK: anonim kalabalık öğrenmeye katkı
-    this.mapStyle = 'sokak', // MapTileStyle adi (varsayilan: Sokak/MapTiler)
+    this.mapStyle = 'sokak', // MapTileStyle adi (varsayilan: Sokak/Mapbox)
     this.searchFilter = 'tumu', // SearchFilter.id (varsayilan: Tumu)
   });
 
@@ -48,8 +48,8 @@ class AppSettings {
       'dark' => MapTileStyle.gece,
       _ => MapTileStyle.fromName(mapStyle),
     };
-    // MapTiler anahtarı yoksa "Sokak" kullanılamaz → OSM standart'a düş.
-    if (s == MapTileStyle.sokak && !AppMapStyle.hasMaptiler) {
+    // Mapbox token'ı yoksa "Sokak" kullanılamaz → OSM standart'a düş.
+    if (s == MapTileStyle.sokak && !AppMapStyle.hasMapbox) {
       return MapTileStyle.standart;
     }
     return s;

@@ -45,8 +45,8 @@ Future<bool> pickMapStyle(BuildContext context, WidgetRef ref) async {
                   style: t.headlineSmall?.copyWith(fontSize: 20)),
               const SizedBox(height: 12),
               for (final s in MapTileStyle.values)
-                // "Sokak" (MapTiler) yalnızca API anahtarı girildiyse görünür.
-                if (s != MapTileStyle.sokak || AppMapStyle.hasMaptiler)
+                // "Sokak" (Mapbox) yalnızca token girildiyse görünür.
+                if (s != MapTileStyle.sokak || AppMapStyle.hasMapbox)
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: Icon(
