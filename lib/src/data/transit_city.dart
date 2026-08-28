@@ -126,7 +126,27 @@ abstract final class TransitCities {
     hasTimetable: true,
   );
 
-  static const all = [istanbul, kocaeli];
+  static const izmir = TransitCity(
+    id: 'izmir',
+    // CC BY 4.0 lisansı atfı ZORUNLU kılıyor.
+    attribution: 'Veri: İzmir Büyükşehir Belediyesi / ESHOT (CC BY 4.0)',
+    name: 'İzmir',
+    // ESHOT durak dağılımı: enlem 37,88–39,34 / boylam 26,30–28,22 (biraz payla).
+    minLat: 37.80,
+    maxLat: 39.40,
+    minLon: 26.20,
+    maxLon: 28.30,
+    centerLat: 38.4237, // Konak
+    centerLon: 27.1428,
+    // Canlı otobüs konumu VAR (ESHOT openapi) ama adaptör henüz yazılmadı;
+    // şimdilik tarifeden çalışır. Sonraki adımda hasLiveBus=true olacak.
+    hasLiveBus: false,
+    hasTraffic: false,
+    // GTFS'te stop_times + calendar var → kalkış saatleri pakete gömülü.
+    hasTimetable: true,
+  );
+
+  static const all = [istanbul, kocaeli, izmir];
 
   static const fallback = istanbul;
 

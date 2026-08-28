@@ -66,3 +66,6 @@ tools/kocaeli/*.sqlite
 android/key.properties
 *.jks
 *.keystore
+
+# İzmir GTFS ham dosyaları (stop_times 88MB) — git'e girmez
+tools/izmir/raw/
