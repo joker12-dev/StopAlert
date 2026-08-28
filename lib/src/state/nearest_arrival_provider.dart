@@ -2,9 +2,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/models.dart';
 import '../data/timetable.dart';
+import '../data/transit_city.dart';
 import '../data/transit_db.dart';
 import '../engine/arrival_estimator.dart';
 import '../services/bus_data_service.dart';
+import '../services/izmir_live_service.dart';
 import '../services/live_bus_service.dart';
 import '../services/segment_learning_store.dart';
 import '../services/timetable_service.dart';
@@ -77,6 +79,21 @@ final nearestApproachingBusProvider = FutureProvider<NearestBus?>((ref) async {
     } catch (_) {
       return null;
     }
+  }
+
+  // İZMİR OTOBÜS DURAĞI: ESHOT canlı "durağa yaklaşan otobüsler" (hazır
+  // KalanDurakSayisi → gerçek segment süresiyle ETA). İETT'den farklı uç.
+  if (city.id == TransitCities.izmir.id) {
+    await BusDataService.instance.openAllForLookup();
+    final arrivals = await IzmirLiveService.arrivalsForStop(stop);
+    if (arrivals.isEmpty) return null;
+    final a = arrivals.first;
+    return NearestBus(
+      code: a.line.code,
+      direction: a.line.name,
+      minutes: (a.estimate.seconds / 60).round(),
+      imminent: a.estimate.maxSeconds <= 120,
+    );
   }
 
   List<TransitLineBrief> briefs;

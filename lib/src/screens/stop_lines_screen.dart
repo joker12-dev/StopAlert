@@ -11,6 +11,7 @@ import '../data/transit_db.dart';
 import '../services/bus_data_service.dart';
 import '../engine/arrival_estimator.dart';
 import '../data/timetable.dart';
+import '../services/izmir_live_service.dart';
 import '../services/live_bus_service.dart';
 import '../services/timetable_service.dart';
 import '../services/segment_learning_store.dart';
@@ -139,6 +140,33 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
     ];
 
     setState(() => _loadingArrivals = true);
+
+    // İZMİR: ESHOT canlı "durağa yaklaşan otobüsler" — tek durak çağrısı,
+    // paketten çözülen hat + gerçek segment süresiyle varış. Ardından tarife.
+    if (lineCity.id == TransitCities.izmir.id && rubber.isNotEmpty) {
+      final iz = await IzmirLiveService.arrivalsForStop(stop);
+      if (!mounted) return;
+      setState(() {
+        _arrivals = [
+          for (final a in iz)
+            _Arrival(
+              brief: TransitLineBrief(
+                  id: a.line.id,
+                  code: a.line.code,
+                  name: a.line.name,
+                  type: a.line.type),
+              line: a.line,
+              estimate: a.estimate),
+        ];
+        _loadingArrivals = false;
+        _arrivalsAt = DateTime.now();
+      });
+      if (lineCity.hasTimetable) {
+        await _loadScheduled(lineCity, [...rail, ...rubber]);
+      }
+      return;
+    }
+
     final learner = await SegmentLearningStore.load();
     final found = <_Arrival>[];
 

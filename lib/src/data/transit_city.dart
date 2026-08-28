@@ -138,9 +138,8 @@ abstract final class TransitCities {
     maxLon: 28.30,
     centerLat: 38.4237, // Konak
     centerLon: 27.1428,
-    // Canlı otobüs konumu VAR (ESHOT openapi) ama adaptör henüz yazılmadı;
-    // şimdilik tarifeden çalışır. Sonraki adımda hasLiveBus=true olacak.
-    hasLiveBus: false,
+    // Canlı otobüs: ESHOT "durağa yaklaşan otobüsler" (bkz. IzmirLiveService).
+    hasLiveBus: true,
     hasTraffic: false,
     // GTFS'te stop_times + calendar var → kalkış saatleri pakete gömülü.
     hasTimetable: true,
