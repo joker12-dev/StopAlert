@@ -1,40 +1,33 @@
 /// Harita döşeme stilleri — [RouteMap] ve harita ekranları statik olarak okur
 /// (Ayarlar ile senkron; [Haptics] / [AppAnim] ile aynı desen).
 ///
-/// Hepsi ÜCRETSİZ ve API ANAHTARI GEREKTİRMEZ:
-/// - Standart: OpenStreetMap standart (renkli, modern; VARSAYILAN)
-/// - Bisiklet: CyclOSM
-/// - Sade: Humanitarian (HOT) — açık/temiz
-/// - Gece: Esri Dark Gray Canvas (+ referans etiket katmanı)
-/// - Uydu: Esri World Imagery (+ sınır/yer etiketleri)
+/// KATMANLAR (hepsi Mapbox — tek sağlayıcı, tutarlı görünüm):
+/// - Standart: Mapbox Streets (renkli, POI etiketli; VARSAYILAN)
+/// - Açık: Mapbox Light (sade, açık)
+/// - Koyu: Mapbox Dark
+/// - Uydu: Mapbox Satellite Streets
 ///
-/// NOT: CARTO (basemaps.cartocdn.com) artık anahtar zorunlu kıldığı için
-/// bırakıldı. Google Maps'e geçiş faturalandırma + anahtar hazır olunca
-/// yapılacak (kullanıcının Google Cloud tarafında).
+/// NOT: flutter_map RASTER (düz) döşeme kullanır. Mapbox'ın yeni "Standard/
+/// Faded/Monochrome" stilleri 3D/vektördür ve raster (Static Tiles) API'sinde
+/// çalışmaz (400 döner) — yalnızca KLASİK stiller raster olur. Faded/Monochrome
+/// istenirse Mapbox Studio'da KLASİK tabanlı özel stil yayımlanıp ID'si buraya
+/// eklenmeli.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 
 enum MapTileStyle {
-  /// Mapbox Streets — Apple/Google tarzı temiz, POI ETİKETLİ (petrol,
-  /// dükkan, restoran…). Mapbox token'ı gerektirir (bkz. [AppMapStyle]).
-  /// Token yoksa seçicide GÖRÜNMEZ.
-  sokak('Sokak'),
-
-  /// OpenStreetMap standart — renkli, detaylı, modern (anahtarsız VARSAYILAN).
+  /// Mapbox Streets — renkli, POI etiketli (VARSAYILAN).
   standart('Standart'),
 
-  /// CyclOSM — canlı renkli, sokak/bisiklet detaylı.
-  bisiklet('Bisiklet'),
+  /// Mapbox Light — sade, açık.
+  acik('Açık'),
 
-  /// Humanitarian (HOT) — açık, temiz, sade.
-  sade('Sade'),
+  /// Mapbox Dark — koyu.
+  koyu('Koyu'),
 
-  /// Koyu, minimal (Esri Dark Gray).
-  gece('Gece'),
-
-  /// Uydu görüntüsü (Esri World Imagery).
+  /// Mapbox Satellite Streets — uydu + etiket.
   uydu('Uydu');
 
   const MapTileStyle(this.label);
@@ -47,10 +40,8 @@ enum MapTileStyle {
 }
 
 abstract final class AppMapStyle {
-  /// Aktif stil (Ayarlar'dan değişir). Token varsa VARSAYILAN "Sokak"
-  /// (Mapbox Streets, Apple tarzı, POI etiketli); yoksa OSM standart.
-  static MapTileStyle style =
-      mapboxToken.isEmpty ? MapTileStyle.standart : MapTileStyle.sokak;
+  /// Aktif stil (Ayarlar'dan değişir).
+  static MapTileStyle style = MapTileStyle.standart;
 
   /// Görünen alanın ÖTESİNDE kaç halka karo tutulsun.
   ///
@@ -108,80 +99,50 @@ abstract final class AppMapStyle {
       );
 
   /// Eski API — true = açık tema. Ayarlardaki 'light'/'dark' ile uyum için.
-  static bool get light => style == MapTileStyle.sade;
-  static set light(bool v) => style = v ? MapTileStyle.sade : MapTileStyle.gece;
+  static bool get light => style == MapTileStyle.acik;
+  static set light(bool v) => style = v ? MapTileStyle.acik : MapTileStyle.koyu;
 
-  static const _esri = 'https://server.arcgisonline.com/ArcGIS/rest/services';
-
-  /// Mapbox genel erişim token'ı (pk.…) — "Sokak" stilini (Mapbox Streets,
-  /// Apple/Google tarzı, POI etiketli) açar.
+  /// Mapbox genel erişim token'ı (pk.…).
   ///
-  /// Boşken "Sokak" stili seçicide görünmez. Mapbox token'ları uygulamada
-  /// açık taşınmak üzere tasarlıdır (pk = public); güvenlik için Mapbox
-  /// panelinden URL/kullanım kısıtı eklenebilir (mobil Origin göndermez, o
-  /// yüzden URL kısıtı yerine kullanım limiti tercih edilir).
+  /// Mapbox token'ları uygulamada açık taşınmak üzere tasarlıdır (pk = public);
+  /// güvenlik için Mapbox panelinden kullanım limiti/URL kısıtı eklenebilir.
+  /// Boşsa haritalar OSM standart'a düşer (kırık kalmaz).
   static const mapboxToken =
       'pk.eyJ1IjoiY2MyYW5uIiwiYSI6ImNtdGNyaXJ2bDBpb2wyd3I2bXF3MWZnbWUifQ.ejRQoOPwOEKB5QwoljeJxg';
 
-  /// Mapbox token'ı girildi mi (→ "Sokak" stili kullanılabilir).
   static bool get hasMapbox => mapboxToken.isNotEmpty;
 
-  /// "Sokak" için Mapbox stili. "streets-v12" POI'li (petrol/dükkan),
-  /// Apple/Google benzeri. Alternatif: 'light-v11' (daha sade, çakışma yok).
-  static const _mapboxStyle = 'streets-v12';
-
-  /// Aktif stilin ZEMİN döşeme URL şablonu. "Sokak" Mapbox (token'lı);
-  /// gerisi anahtarsız (OSM + Esri).
-  static String get urlTemplate => switch (style) {
-        MapTileStyle.sokak =>
-          'https://api.mapbox.com/styles/v1/mapbox/$_mapboxStyle/tiles/512/{z}/{x}/{y}?access_token=$mapboxToken',
-        MapTileStyle.standart =>
-          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-        MapTileStyle.bisiklet =>
-          'https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png',
-        MapTileStyle.sade =>
-          'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
-        MapTileStyle.gece =>
-          '$_esri/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
-        MapTileStyle.uydu =>
-          '$_esri/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+  /// Stilin Mapbox klasik stil kimliği (raster Static Tiles API ile uyumlu).
+  static String _mapboxId(MapTileStyle s) => switch (s) {
+        MapTileStyle.standart => 'streets-v12',
+        MapTileStyle.acik => 'light-v11',
+        MapTileStyle.koyu => 'dark-v11',
+        MapTileStyle.uydu => 'satellite-streets-v12',
       };
 
-  /// {s} alt alan adları — yalnızca ilgili OSM sunucularında.
-  static List<String> get subdomains => switch (style) {
-        MapTileStyle.bisiklet => const ['a', 'b', 'c'],
-        MapTileStyle.sade => const ['a', 'b'],
-        _ => const [],
-      };
+  /// Aktif stilin ZEMİN döşeme URL şablonu. Token varsa Mapbox; yoksa güvenlik
+  /// için OSM standart (kırık harita gösterme).
+  static String get urlTemplate => hasMapbox
+      ? 'https://api.mapbox.com/styles/v1/mapbox/${_mapboxId(style)}/tiles/512/{z}/{x}/{y}?access_token=$mapboxToken'
+      : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+
+  /// Mapbox {s} alt alan adı kullanmaz.
+  static List<String> get subdomains => const [];
 
   /// Mapbox raster döşemeleri 512 px; 256'lık şemaya oturması için
-  /// tileDimension 512 + zoomOffset -1. Öteki sağlayıcılar 256/0.
-  static int get tileDimension => style == MapTileStyle.sokak ? 512 : 256;
-  static double get zoomOffset => style == MapTileStyle.sokak ? -1 : 0;
+  /// tileDimension 512 + zoomOffset -1. Token yoksa (OSM) 256/0.
+  static int get tileDimension => hasMapbox ? 512 : 256;
+  static double get zoomOffset => hasMapbox ? -1 : 0;
 
-  /// Retina (@2x) — bu sağlayıcıların hiçbirinde güvenli değil.
+  /// Retina (@2x) — kullanılmıyor (512 döşeme zaten yüksek çözünürlük).
   static bool get supportsRetina => false;
 
   /// Döşeme sağlayıcı atfı (lisans şartı).
-  static String get attribution => switch (style) {
-        MapTileStyle.sokak => '© Mapbox © OpenStreetMap',
-        MapTileStyle.gece || MapTileStyle.uydu => '© Esri',
-        _ => '© OpenStreetMap',
-      };
+  static String get attribution =>
+      hasMapbox ? '© Mapbox © OpenStreetMap' : '© OpenStreetMap';
 
-  /// Yalnızca Esri gri/uydu zeminlerinde etiketler AYRI referans katmanında;
-  /// OSM tabanlı zeminler (standart/bisiklet/sade) etiketleri zaten içerir.
-  static bool get needsLabelOverlay =>
-      style == MapTileStyle.gece || style == MapTileStyle.uydu;
-
-  /// Aktif stilin etiket (referans) katmanı — zemine göre değişir.
-  static String get labelOverlayUrl => switch (style) {
-        MapTileStyle.gece =>
-          '$_esri/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
-        MapTileStyle.uydu =>
-          '$_esri/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
-        _ => '',
-      };
-
+  /// Mapbox stilleri etiketleri zaten içerir — ayrı katman gerekmez.
+  static bool get needsLabelOverlay => false;
+  static String get labelOverlayUrl => '';
   static List<String> get labelSubdomains => const [];
 }

@@ -45,17 +45,13 @@ Future<bool> pickMapStyle(BuildContext context, WidgetRef ref) async {
                   style: t.headlineSmall?.copyWith(fontSize: 20)),
               const SizedBox(height: 12),
               for (final s in MapTileStyle.values)
-                // "Sokak" (Mapbox) yalnızca token girildiyse görünür.
-                if (s != MapTileStyle.sokak || AppMapStyle.hasMapbox)
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: Icon(
                     switch (s) {
-                      MapTileStyle.sokak => Icons.storefront_rounded,
                       MapTileStyle.standart => Icons.map_rounded,
-                      MapTileStyle.bisiklet => Icons.directions_bike_rounded,
-                      MapTileStyle.sade => Icons.light_mode_rounded,
-                      MapTileStyle.gece => Icons.dark_mode_rounded,
+                      MapTileStyle.acik => Icons.light_mode_rounded,
+                      MapTileStyle.koyu => Icons.dark_mode_rounded,
                       MapTileStyle.uydu => Icons.satellite_alt_rounded,
                     },
                     color: AppMapStyle.style == s

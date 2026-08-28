@@ -25,7 +25,7 @@ class AppSettings {
     this.defaultDistanceIndex = 1, // 500m
     this.defaultStopsIndex = 1, // 2 durak
     this.contributeToCloud = false, // KVKK: anonim kalabalık öğrenmeye katkı
-    this.mapStyle = 'sokak', // MapTileStyle adi (varsayilan: Sokak/Mapbox)
+    this.mapStyle = 'standart', // MapTileStyle adi (varsayilan: Standart/Mapbox)
     this.searchFilter = 'tumu', // SearchFilter.id (varsayilan: Tumu)
   });
 
@@ -41,19 +41,13 @@ class AppSettings {
   /// Eski sürümlerden gelen 'dark'/'light' değerleri de desteklenir.
   final String mapStyle;
 
-  /// Kayıtlı değeri (eski 'dark'/'light' dâhil) stil enum'una çevirir.
-  MapTileStyle get mapTileStyle {
-    final s = switch (mapStyle) {
-      'light' => MapTileStyle.sade,
-      'dark' => MapTileStyle.gece,
-      _ => MapTileStyle.fromName(mapStyle),
-    };
-    // Mapbox token'ı yoksa "Sokak" kullanılamaz → OSM standart'a düş.
-    if (s == MapTileStyle.sokak && !AppMapStyle.hasMapbox) {
-      return MapTileStyle.standart;
-    }
-    return s;
-  }
+  /// Kayıtlı değeri (eski 'dark'/'light' ve artık geçersiz adlar dâhil) stil
+  /// enum'una çevirir. Bilinmeyen/eski ad → Standart.
+  MapTileStyle get mapTileStyle => switch (mapStyle) {
+        'light' => MapTileStyle.acik,
+        'dark' => MapTileStyle.koyu,
+        _ => MapTileStyle.fromName(mapStyle),
+      };
 
   /// Kullanıcı-dostu harita stili etiketi.
   String get mapStyleLabel => mapTileStyle.label;
