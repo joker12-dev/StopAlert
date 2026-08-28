@@ -47,8 +47,10 @@ enum MapTileStyle {
 }
 
 abstract final class AppMapStyle {
-  /// Aktif stil (Ayarlar'dan değişir).
-  static MapTileStyle style = MapTileStyle.standart;
+  /// Aktif stil (Ayarlar'dan değişir). Anahtar varsa VARSAYILAN "Sokak"
+  /// (Apple tarzı, POI etiketli); yoksa OSM standart.
+  static MapTileStyle style =
+      maptilerKey.isEmpty ? MapTileStyle.standart : MapTileStyle.sokak;
 
   /// Görünen alanın ÖTESİNDE kaç halka karo tutulsun.
   ///
@@ -118,7 +120,11 @@ abstract final class AppMapStyle {
   /// e-posta) → Account → API keys → anahtarı kopyala ve BURAYA yapıştır.
   /// Boşken "Sokak" stili seçicide görünmez; anahtar girilince görünür ve
   /// petrol/dükkan/restoran isimleriyle temiz bir harita gelir.
-  static const maptilerKey = '';
+  ///
+  /// NOT: Bu anahtar MapTiler tarafında User-Agent kısıtlamalı —
+  /// yalnızca `flutter_map (com.originstudios.stopalert)` başlığıyla çalışır
+  /// (flutter_map bunu `userAgentPackageName` ile otomatik gönderiyor).
+  static const maptilerKey = 'i3wSQI4QZkjxI1pXpYS9';
 
   /// MapTiler anahtarı girildi mi (→ "Sokak" stili kullanılabilir).
   static bool get hasMaptiler => maptilerKey.isNotEmpty;
