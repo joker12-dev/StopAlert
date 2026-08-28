@@ -53,6 +53,9 @@ abstract final class AppAnnouncementsService {
       return cached;
     }
     try {
+      // NOT: raw.githubusercontent (Fastly) ~5 dk CDN önbelleği tutar ve
+      // sorgu parametresini YOK SAYAR (cache-buster çalışmaz). Yeni duyuru
+      // en geç ~5 dk içinde görünür; bu bizim için kabul edilebilir.
       final res = await http.get(Uri.parse(url)).timeout(_timeout);
       if (res.statusCode != 200) return cached ?? const [];
       final decoded = jsonDecode(utf8.decode(res.bodyBytes));

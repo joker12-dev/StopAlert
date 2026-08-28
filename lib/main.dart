@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:home_widget/home_widget.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'l10n/app_localizations.dart';
 
@@ -116,6 +117,16 @@ class _RootGateState extends ConsumerState<_RootGate>
   /// (ilk açılış indirme), true=devam. Mobil dışında hep true (atlanır).
   bool? _dataReady = isMobileDevice ? null : true;
 
+  /// İzin kapısı "Devam et" ile TAMAMLANDI mı — KALICI (SharedPreferences).
+  ///
+  /// Bu bayrak olmadan kapı yalnızca `criticalGranted`'e bakıyordu: kullanıcı
+  /// izinleri vermeden uygulamadan çıkıp girince (süreç yeniden başlayınca
+  /// `_permissionsOk` null'a döner) kapı atlanıp indirme ekranına düşülebiliyordu.
+  /// Artık kapı, kullanıcı "Devam et"e basana kadar (bayrak yazılana kadar)
+  /// hep önde durur.
+  bool _gateDone = false;
+  static const _gateDoneKey = 'permission_gate_done_v1';
+
   StreamSubscription<Uri?>? _widgetClicks;
 
   @override
@@ -125,9 +136,23 @@ class _RootGateState extends ConsumerState<_RootGate>
     // Veri kontrolü izin kapısından SONRA yapılır (bkz. build): şehir tahmini
     // konum gerektiriyor ve izin henüz istenmemiş olabilir.
     if (!isMobileDevice) _dataReady = true;
-    _refreshPermissionStatus();
+    _initGate();
     _flushCloudLearning();
     _listenHomeWidget();
+  }
+
+  /// Kalıcı "kapı tamamlandı" bayrağını yükleyip izin durumunu okur.
+  Future<void> _initGate() async {
+    if (isMobileDevice) {
+      final prefs = await SharedPreferences.getInstance();
+      _gateDone = prefs.getBool(_gateDoneKey) ?? false;
+    }
+    await _refreshPermissionStatus();
+  }
+
+  Future<void> _persistGateDone() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_gateDoneKey, true);
   }
 
   /// Ana ekran widget'ından gelen dokunuşlar.
@@ -274,9 +299,12 @@ class _RootGateState extends ConsumerState<_RootGate>
     setState(() {
       final current = _permissionsOk;
       if (current == null) {
-        // İlk açılış: izinler tamsa kapıyı hiç gösterme.
-        _permissionsOk = report.criticalGranted;
-        justBecameReady = report.criticalGranted;
+        // Kapı DAHA ÖNCE "Devam et" ile tamamlandıysa VE izinler hâlâ tamsa geç.
+        // Tamamlanmadıysa izinler tam olsa BİLE kapıyı göster — yeniden başlatma
+        // kapıyı atlayıp indirmeye düşürmesin (kullanıcı butonla ilerlesin).
+        final pass = _gateDone && report.criticalGranted;
+        _permissionsOk = pass;
+        justBecameReady = pass;
       } else if (current && !report.criticalGranted) {
         // Kullanımdayken izin geri alındı: kapı yeniden öne gelsin.
         _permissionsOk = false;
@@ -325,6 +353,10 @@ class _RootGateState extends ConsumerState<_RootGate>
           return PermissionGateScreen(
             onCompleted: () {
               if (!mounted) return;
+              // Kapı tamamlandı — KALICI işaretle ki yeniden başlatmada atlanmasın
+              // ama geri de gelmesin.
+              _gateDone = true;
+              unawaited(_persistGateDone());
               setState(() => _permissionsOk = true);
               // İzin verildi: şehri şimdi konumdan belirle, paketi ona göre in.
               unawaited(_afterPermissions());
