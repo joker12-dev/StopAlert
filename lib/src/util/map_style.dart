@@ -1,45 +1,49 @@
 /// Harita döşeme stilleri — [RouteMap] ve harita ekranları statik olarak okur
 /// (Ayarlar ile senkron; [Haptics] / [AppAnim] ile aynı desen).
 ///
-/// Hepsi ÜCRETSİZ ve API ANAHTARI GEREKTİRMEZ — tümü Esri ArcGIS Online:
-/// - World Street Map (canlı, renkli + etiketli)
-/// - Dark/Light Gray Canvas (gece/sade; etiketler ayrı referans katmanında)
-/// - World Imagery (uydu)
+/// Hepsi ÜCRETSİZ ve API ANAHTARI GEREKTİRMEZ:
+/// - Standart: OpenStreetMap standart (renkli, modern; VARSAYILAN)
+/// - Bisiklet: CyclOSM
+/// - Sade: Humanitarian (HOT) — açık/temiz
+/// - Gece: Esri Dark Gray Canvas (+ referans etiket katmanı)
+/// - Uydu: Esri World Imagery (+ sınır/yer etiketleri)
 ///
-/// NOT: Eskiden CartoDB (basemaps.cartocdn.com) kullanılıyordu; CARTO artık
-/// zemin döşemeleri için API anahtarı zorunlu kıldığından ("api key required")
-/// harita üstünde uyarı döşemesi çıkıyordu. Esri'nin klasik REST döşeme uçları
-/// anahtarsız çalışır.
+/// NOT: CARTO (basemaps.cartocdn.com) artık anahtar zorunlu kıldığı için
+/// bırakıldı. Google Maps'e geçiş faturalandırma + anahtar hazır olunca
+/// yapılacak (kullanıcının Google Cloud tarafında).
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 
 enum MapTileStyle {
-  /// Renkli, POI ve arazi detaylı — VARSAYILAN (harita sade durmasın).
-  canli('Canlı'),
+  /// OpenStreetMap standart — renkli, detaylı, modern (VARSAYILAN).
+  standart('Standart'),
 
-  /// Koyu, minimal (marka rengiyle en uyumlu).
+  /// CyclOSM — canlı renkli, sokak/bisiklet detaylı.
+  bisiklet('Bisiklet'),
+
+  /// Humanitarian (HOT) — açık, temiz, sade.
+  sade('Sade'),
+
+  /// Koyu, minimal (Esri Dark Gray).
   gece('Gece'),
 
   /// Uydu görüntüsü (Esri World Imagery).
-  uydu('Uydu'),
-
-  /// Açık/sade.
-  sade('Sade');
+  uydu('Uydu');
 
   const MapTileStyle(this.label);
   final String label;
 
   static MapTileStyle fromName(String name) => MapTileStyle.values.firstWhere(
         (s) => s.name == name,
-        orElse: () => MapTileStyle.canli,
+        orElse: () => MapTileStyle.standart,
       );
 }
 
 abstract final class AppMapStyle {
   /// Aktif stil (Ayarlar'dan değişir).
-  static MapTileStyle style = MapTileStyle.canli;
+  static MapTileStyle style = MapTileStyle.standart;
 
   /// Görünen alanın ÖTESİNDE kaç halka karo tutulsun.
   ///
@@ -102,40 +106,49 @@ abstract final class AppMapStyle {
 
   static const _esri = 'https://server.arcgisonline.com/ArcGIS/rest/services';
 
-  /// Aktif stilin ZEMİN döşeme URL şablonu (hepsi Esri, anahtar gerekmez).
+  /// Aktif stilin ZEMİN döşeme URL şablonu. Hepsi ANAHTAR GEREKTİRMEZ:
+  /// OSM tabanlılar (standart/bisiklet/sade) + Esri (gece/uydu).
   static String get urlTemplate => switch (style) {
-        MapTileStyle.canli =>
-          '$_esri/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+        MapTileStyle.standart =>
+          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+        MapTileStyle.bisiklet =>
+          'https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png',
+        MapTileStyle.sade =>
+          'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
         MapTileStyle.gece =>
           '$_esri/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
-        MapTileStyle.sade =>
-          '$_esri/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
         MapTileStyle.uydu =>
           '$_esri/World_Imagery/MapServer/tile/{z}/{y}/{x}',
       };
 
-  /// Esri döşemeleri {s} alt alan adı kullanmaz.
-  static List<String> get subdomains => const [];
+  /// {s} alt alan adları — yalnızca ilgili OSM sunucularında.
+  static List<String> get subdomains => switch (style) {
+        MapTileStyle.bisiklet => const ['a', 'b', 'c'],
+        MapTileStyle.sade => const ['a', 'b'],
+        _ => const [],
+      };
 
-  /// Retina (@2x) desteği — Esri raster tile'da yok.
+  /// Retina (@2x) — bu sağlayıcıların hiçbirinde güvenli değil.
   static bool get supportsRetina => false;
 
   /// Döşeme sağlayıcı atfı (lisans şartı).
-  static String get attribution => '© Esri';
+  static String get attribution => switch (style) {
+        MapTileStyle.gece || MapTileStyle.uydu => '© Esri',
+        _ => '© OpenStreetMap',
+      };
 
-  /// Gri kanvas ve uydu zemininde etiketler AYRI referans katmanında; "canli"
-  /// (World Street Map) etiketleri zaten içeriyor.
-  static bool get needsLabelOverlay => style != MapTileStyle.canli;
+  /// Yalnızca Esri gri/uydu zeminlerinde etiketler AYRI referans katmanında;
+  /// OSM tabanlı zeminler (standart/bisiklet/sade) etiketleri zaten içerir.
+  static bool get needsLabelOverlay =>
+      style == MapTileStyle.gece || style == MapTileStyle.uydu;
 
   /// Aktif stilin etiket (referans) katmanı — zemine göre değişir.
   static String get labelOverlayUrl => switch (style) {
         MapTileStyle.gece =>
           '$_esri/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
-        MapTileStyle.sade =>
-          '$_esri/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
         MapTileStyle.uydu =>
           '$_esri/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
-        MapTileStyle.canli => '',
+        _ => '',
       };
 
   static List<String> get labelSubdomains => const [];

@@ -49,10 +49,11 @@ Future<bool> pickMapStyle(BuildContext context, WidgetRef ref) async {
                   contentPadding: EdgeInsets.zero,
                   leading: Icon(
                     switch (s) {
-                      MapTileStyle.gece => Icons.dark_mode_rounded,
-                      MapTileStyle.canli => Icons.palette_rounded,
-                      MapTileStyle.uydu => Icons.satellite_alt_rounded,
+                      MapTileStyle.standart => Icons.map_rounded,
+                      MapTileStyle.bisiklet => Icons.directions_bike_rounded,
                       MapTileStyle.sade => Icons.light_mode_rounded,
+                      MapTileStyle.gece => Icons.dark_mode_rounded,
+                      MapTileStyle.uydu => Icons.satellite_alt_rounded,
                     },
                     color: AppMapStyle.style == s
                         ? VigilantColors.primary
