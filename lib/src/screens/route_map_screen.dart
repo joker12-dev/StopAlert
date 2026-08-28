@@ -342,6 +342,8 @@ class _RouteMapScreenState extends ConsumerState<RouteMapScreen> {
                   keepBuffer: AppMapStyle.keepBuffer,
                   panBuffer: AppMapStyle.panBuffer,
                   urlTemplate: AppMapStyle.urlTemplate,
+                  tileDimension: AppMapStyle.tileDimension,
+                  zoomOffset: AppMapStyle.zoomOffset,
                   subdomains: AppMapStyle.subdomains,
                   userAgentPackageName: 'com.originstudios.stopalert',
                   retinaMode: AppMapStyle.supportsRetina &&

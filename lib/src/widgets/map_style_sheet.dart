@@ -45,10 +45,13 @@ Future<bool> pickMapStyle(BuildContext context, WidgetRef ref) async {
                   style: t.headlineSmall?.copyWith(fontSize: 20)),
               const SizedBox(height: 12),
               for (final s in MapTileStyle.values)
+                // "Sokak" (MapTiler) yalnızca API anahtarı girildiyse görünür.
+                if (s != MapTileStyle.sokak || AppMapStyle.hasMaptiler)
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: Icon(
                     switch (s) {
+                      MapTileStyle.sokak => Icons.storefront_rounded,
                       MapTileStyle.standart => Icons.map_rounded,
                       MapTileStyle.bisiklet => Icons.directions_bike_rounded,
                       MapTileStyle.sade => Icons.light_mode_rounded,

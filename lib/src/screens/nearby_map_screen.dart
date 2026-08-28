@@ -611,6 +611,8 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
                       keepBuffer: AppMapStyle.keepBuffer,
                       panBuffer: AppMapStyle.panBuffer,
                       urlTemplate: AppMapStyle.urlTemplate,
+                      tileDimension: AppMapStyle.tileDimension,
+                      zoomOffset: AppMapStyle.zoomOffset,
                       subdomains: AppMapStyle.subdomains,
                       userAgentPackageName: 'com.originstudios.stopalert',
                       retinaMode: AppMapStyle.supportsRetina &&

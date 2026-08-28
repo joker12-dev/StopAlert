@@ -17,7 +17,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 
 enum MapTileStyle {
-  /// OpenStreetMap standart — renkli, detaylı, modern (VARSAYILAN).
+  /// MapTiler Streets — Apple/Google tarzı temiz, POI ETİKETLİ (petrol,
+  /// dükkan, restoran…). API anahtarı gerektirir (ücretsiz; bkz. [AppMapStyle]).
+  /// Anahtar yoksa seçicide GÖRÜNMEZ.
+  sokak('Sokak'),
+
+  /// OpenStreetMap standart — renkli, detaylı, modern (anahtarsız VARSAYILAN).
   standart('Standart'),
 
   /// CyclOSM — canlı renkli, sokak/bisiklet detaylı.
@@ -106,9 +111,27 @@ abstract final class AppMapStyle {
 
   static const _esri = 'https://server.arcgisonline.com/ArcGIS/rest/services';
 
-  /// Aktif stilin ZEMİN döşeme URL şablonu. Hepsi ANAHTAR GEREKTİRMEZ:
-  /// OSM tabanlılar (standart/bisiklet/sade) + Esri (gece/uydu).
+  /// MapTiler ÜCRETSİZ API anahtarı — "Sokak" (Apple tarzı, POI etiketli)
+  /// stilini açar.
+  ///
+  /// ⚠️ NASIL ALINIR (KART GEREKMEZ): maptiler.com → ücretsiz kaydol (yalnızca
+  /// e-posta) → Account → API keys → anahtarı kopyala ve BURAYA yapıştır.
+  /// Boşken "Sokak" stili seçicide görünmez; anahtar girilince görünür ve
+  /// petrol/dükkan/restoran isimleriyle temiz bir harita gelir.
+  static const maptilerKey = '';
+
+  /// MapTiler anahtarı girildi mi (→ "Sokak" stili kullanılabilir).
+  static bool get hasMaptiler => maptilerKey.isNotEmpty;
+
+  /// MapTiler stili için hangi harita — "streets-v2" POI etiketli, Apple/Google
+  /// benzeri. (Alternatif: 'basic-v2', 'bright-v2'.)
+  static const _maptilerMap = 'streets-v2';
+
+  /// Aktif stilin ZEMİN döşeme URL şablonu. "Sokak" MapTiler (anahtarlı);
+  /// gerisi anahtarsız (OSM + Esri).
   static String get urlTemplate => switch (style) {
+        MapTileStyle.sokak =>
+          'https://api.maptiler.com/maps/$_maptilerMap/{z}/{x}/{y}.png?key=$maptilerKey',
         MapTileStyle.standart =>
           'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
         MapTileStyle.bisiklet =>
@@ -128,11 +151,18 @@ abstract final class AppMapStyle {
         _ => const [],
       };
 
+  /// MapTiler raster döşemeleri 512 px; 256'lık şemaya oturması için
+  /// tileDimension 512 + zoomOffset -1 (MapTiler'ın önerdiği ayar). Öteki
+  /// sağlayıcılar 256/0.
+  static int get tileDimension => style == MapTileStyle.sokak ? 512 : 256;
+  static double get zoomOffset => style == MapTileStyle.sokak ? -1 : 0;
+
   /// Retina (@2x) — bu sağlayıcıların hiçbirinde güvenli değil.
   static bool get supportsRetina => false;
 
   /// Döşeme sağlayıcı atfı (lisans şartı).
   static String get attribution => switch (style) {
+        MapTileStyle.sokak => '© MapTiler © OpenStreetMap',
         MapTileStyle.gece || MapTileStyle.uydu => '© Esri',
         _ => '© OpenStreetMap',
       };
