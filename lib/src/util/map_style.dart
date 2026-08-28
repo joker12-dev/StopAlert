@@ -129,9 +129,16 @@ abstract final class AppMapStyle {
   /// MapTiler anahtarı girildi mi (→ "Sokak" stili kullanılabilir).
   static bool get hasMaptiler => maptilerKey.isNotEmpty;
 
-  /// MapTiler stili için hangi harita — "streets-v2" POI etiketli, Apple/Google
-  /// benzeri. (Alternatif: 'basic-v2', 'bright-v2'.)
-  static const _maptilerMap = 'streets-v2';
+  /// MapTiler stili için hangi harita.
+  ///
+  /// "basic-v2": temiz/sade — ZEMİN kendi otobüs/durak simgelerini BASMAZ,
+  /// bu yüzden uygulamanın kendi durak işaretçileriyle karışmaz (SEÇİLEN).
+  /// "streets-v2" daha çok POI (petrol/dükkan) gösterir ama toplu taşıma
+  /// duraklarını da bastığından işaretçilerle çakışıyordu.
+  /// Petrol/dükkanı da isteyip yalnızca durakları gizlemek için MapTiler
+  /// panelinden özel bir stil (Transit katmanı kapalı) yapıp ID'sini buraya
+  /// yazabiliriz.
+  static const _maptilerMap = 'basic-v2';
 
   /// Aktif stilin ZEMİN döşeme URL şablonu. "Sokak" MapTiler (anahtarlı);
   /// gerisi anahtarsız (OSM + Esri).
