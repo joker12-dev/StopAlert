@@ -29,6 +29,7 @@
   "categoryMetrobus": "Métrobus",
   "categoryMarmaray": "Marmaray",
   "categoryMetro": "Métro",
+  "categoryTram": "Tramway",
   "categoryFerry": "Ferry",
 
   "actionUnderstood": "Compris",

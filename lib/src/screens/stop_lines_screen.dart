@@ -75,6 +75,13 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
   bool _loadingArrivals = false;
   DateTime? _arrivalsAt;
 
+  /// "Yaklaşan Araçlar" katlanır bölümü VARSAYILAN KAPALI. Kullanıcı durak
+  /// sayfasına alarm kurmaya gelir; canlı araç sorgusu (İETT/ESHOT çağrısı)
+  /// yalnızca kullanıcı bu bölümü AÇINCA yapılır — ilgilenmeyenler boşuna
+  /// veri indirmez.
+  bool _arrivalsExpanded = false;
+  bool _arrivalsLoadedOnce = false;
+
   /// Kaç hat için canlı konum sorgulanacağı.
   ///
   /// Bir duraktan 30 hat geçebiliyor; hepsi için ayrı çağrı yapmak hem
@@ -92,7 +99,7 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
   @override
   void initState() {
     super.initState();
-    _loadArrivals();
+    // Yaklaşan araçlar VARSAYILAN KAPALI → açılışta canlı veri çekilmez.
   }
 
   @override
@@ -108,6 +115,22 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
       _arrivals = const [];
       _scheduled = const [];
       _arrivalsAt = null;
+      _arrivalsLoadedOnce = false;
+      // Bölüm zaten açıksa yeni durak için yeniden yükle; kapalıysa dokunma.
+      if (_arrivalsExpanded) {
+        _arrivalsLoadedOnce = true;
+        _loadArrivals();
+      }
+    }
+  }
+
+  /// Katlanır "Yaklaşan Araçlar" başlığına dokununca aç/kapat. İlk açılışta
+  /// canlı veriyi bir kez yükler.
+  void _toggleArrivals() {
+    Haptics.light();
+    setState(() => _arrivalsExpanded = !_arrivalsExpanded);
+    if (_arrivalsExpanded && !_arrivalsLoadedOnce) {
+      _arrivalsLoadedOnce = true;
       _loadArrivals();
     }
   }
@@ -393,7 +416,7 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
         )
       else
         for (final a in _scheduled.take(6)) ...[
-          _ScheduledRow(item: a, onAlarm: () => _pick(context, ref, a.brief)),
+          _ScheduledRow(item: a),
           const SizedBox(height: 8),
         ],
       if (_scheduled.isNotEmpty)
@@ -435,6 +458,71 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
     ));
   }
 
+  /// "Alarm kurmak için hattını seç" — durak sayfasının BİRİNCİL eylemi.
+  ///
+  /// Yaklaşan araç ve tarife kartlarındaki alarm düğmeleri kaldırıldı;
+  /// kullanıcı onları "şu otobüse/sefere alarm" sanıyordu. Alarm HEP buradan,
+  /// bineceği hattı seçerek kurulur. Başlık + tek cümlelik yönlendirme,
+  /// kafasını bulandırmadan sonuca götürür.
+  List<Widget> _chooseLineSection(TextTheme text) {
+    return [
+      Container(
+        padding: const EdgeInsets.fromLTRB(14, 14, 16, 14),
+        decoration: BoxDecoration(
+          // Uygulamanın çoğunlukla kullandığı standart koyu kart rengi.
+          color: VigilantColors.surfaceContainer,
+          borderRadius: BorderRadius.circular(18),
+          border:
+              Border.all(color: VigilantColors.primary.withValues(alpha: 0.30)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: VigilantColors.primary.withValues(alpha: 0.20),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.alarm_add_rounded,
+                  color: VigilantColors.primary, size: 22),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Alarm kurmak için hattını seç',
+                      style: text.titleSmall?.copyWith(
+                          color: VigilantColors.onSurface,
+                          fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 3),
+                  Text(
+                    'İçinde olduğun ya da bineceğin aracı seç; durağına '
+                    'yaklaşınca seni uyaralım.',
+                    style: text.labelMedium?.copyWith(
+                        color: VigilantColors.onSurfaceVariant, height: 1.3),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 14),
+      // 3 sütunlu ızgara; 9'dan fazla hat varsa yana kaydırmalı sayfalar.
+      _LineGrid(
+        lines: lines,
+        onPick: (b) => _pick(context, ref, b),
+        onInfo: _openLinePage,
+      ),
+      const SizedBox(height: 18),
+    ];
+  }
+
   /// "Yaklaşan araçlar" bloğu.
   ///
   /// İKİSİ BİRDEN ÇİZİLİR: bir durakta hem otobüs hem metro/Marmaray olabilir.
@@ -446,59 +534,82 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
     // yoksa bölüm kendini gizler. TARİFE bölümü kendi kaydı doldukça çıkar.
     final hasRubber = lines.any((b) => _isRubberTyred(b.type));
     return [
-      // Yaklaşan araçların ÜSTÜNE yerel reklam. Tam ekran değil, içeriği
-      // kesmez; yüklenmezse hiç yer kaplamaz.
-      const NativeAdSlot(
-        key: ValueKey('stop-info-native-ad'),
-        margin: EdgeInsets.only(bottom: 14),
-        template: TemplateType.small,
+      // KATLANIR BAŞLIK (varsayılan kapalı): dokununca açılır ve canlı veri
+      // ilk kez o an yüklenir.
+      Material(
+        color: VigilantColors.surfaceContainer,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          onTap: _toggleArrivals,
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 14, 8, 14),
+            child: Row(
+              children: [
+                const Icon(Icons.directions_bus_filled_rounded,
+                    size: 18, color: VigilantColors.secondary),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text('Yaklaşan Araçlar',
+                      style: text.titleSmall
+                          ?.copyWith(fontWeight: FontWeight.w700)),
+                ),
+                if (_arrivalsExpanded && _loadingArrivals)
+                  const Padding(
+                    padding: EdgeInsets.only(right: 8),
+                    child: SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2)),
+                  )
+                else if (_arrivalsExpanded)
+                  IconButton(
+                    onPressed: () {
+                      Haptics.light();
+                      _loadArrivals();
+                    },
+                    visualDensity: VisualDensity.compact,
+                    tooltip: 'Yenile',
+                    icon: const Icon(Icons.refresh_rounded,
+                        size: 20, color: VigilantColors.onSurfaceVariant),
+                  ),
+                AnimatedRotation(
+                  turns: _arrivalsExpanded ? 0.5 : 0,
+                  duration: const Duration(milliseconds: 200),
+                  child: const Padding(
+                    padding: EdgeInsets.only(right: 6),
+                    child: Icon(Icons.expand_more_rounded,
+                        color: VigilantColors.onSurfaceVariant),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
-      if (hasRubber) ..._liveSection(text),
-      ..._scheduledSection(text, lineCity),
+      if (_arrivalsExpanded) ...[
+        const SizedBox(height: 12),
+        // Yaklaşan araçların ÜSTÜNE yerel reklam. Tam ekran değil, içeriği
+        // kesmez; yüklenmezse hiç yer kaplamaz.
+        const NativeAdSlot(
+          key: ValueKey('stop-info-native-ad'),
+          margin: EdgeInsets.only(bottom: 14),
+          template: TemplateType.small,
+        ),
+        if (hasRubber) ..._liveSection(text),
+        ..._scheduledSection(text, lineCity),
+      ],
+      const SizedBox(height: 18),
     ];
   }
 
-  /// Canlı filodan yaklaşanlar (yalnızca lastikli hatlar).
+  /// Canlı filodan yaklaşanlar (yalnızca lastikli hatlar). Başlık/yenile
+  /// katlanır bölümün kendisinde; burada yalnızca liste + dipnot.
   List<Widget> _liveSection(TextTheme text) {
     if (!_loadingArrivals && _arrivals.isEmpty && _arrivalsAt == null) {
       return const [];
     }
     return [
-      Row(
-        children: [
-          const Icon(Icons.directions_bus_filled_rounded,
-              size: 16, color: VigilantColors.secondary),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text('YAKLAŞAN ARAÇLAR',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: text.labelSmall?.copyWith(
-                    color: VigilantColors.onSurfaceVariant,
-                    letterSpacing: 1.2)),
-          ),
-          if (_loadingArrivals)
-            const SizedBox(
-              width: 14,
-              height: 14,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          else
-            InkResponse(
-              onTap: () {
-                Haptics.light();
-                _loadArrivals();
-              },
-              radius: 20,
-              child: const Padding(
-                padding: EdgeInsets.all(4),
-                child: Icon(Icons.refresh_rounded,
-                    size: 18, color: VigilantColors.onSurfaceVariant),
-              ),
-            ),
-        ],
-      ),
-      const SizedBox(height: 10),
       if (_arrivals.isEmpty && !_loadingArrivals)
         Padding(
           padding: const EdgeInsets.only(bottom: 6),
@@ -513,7 +624,6 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
           _ArrivalRow(
             arrival: a,
             onLive: () => _openBusOnMap(a),
-            onAlarm: () => _pick(context, ref, a.brief),
             onInfo: () => _openLinePage(a.brief),
           ),
           const SizedBox(height: 8),
@@ -662,22 +772,7 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
             ),
           ),
         ),
-        // Bu duraktan geçen hatların kodları — dokununca o hatla alarm.
-        if (lines.isNotEmpty)
-          SizedBox(
-            height: 54,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-              itemCount: lines.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 8),
-              itemBuilder: (context, i) => _LineChip(
-                code: lines[i].code,
-                onTap: () => _pick(context, ref, lines[i]),
-              ),
-            ),
-          ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         Expanded(
           child: RefreshIndicator(
             color: VigilantColors.primary,
@@ -701,32 +796,13 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
                     ? AppInsets.listBottom(context)
                     : AppInsets.pageBottom(context)),
             children: [
+              // ÖNCE "hattını seç": kullanıcı durak sayfasına alarm kurmaya
+              // gelir. Yaklaşan araç kartındaki "Alarm kur" düğmesi "şu
+              // otobüse alarm" gibi anlaşılıyordu; alarm kurmanın TEK yeri
+              // artık bu başlıklı hat listesi. Yaklaşan araçlar altında
+              // yalnızca BİLGİ olarak durur.
+              if (lines.isNotEmpty) ..._chooseLineSection(text),
               ..._arrivalsSection(text),
-              // Başlık BÖLÜMLERDEN BAĞIMSIZ: yaklaşan otobüs / tarife
-              // bölümü çizilmediğinde (canlı veri yok, şehir
-              // desteklemiyor) hat listesi başlıksız kalıyordu.
-              if (lines.isNotEmpty) ...[
-                Row(
-                  children: [
-                    const Icon(Icons.alt_route_rounded,
-                        size: 16, color: VigilantColors.primary),
-                    const SizedBox(width: 8),
-                    Text('BU DURAKTAN GEÇEN HATLAR',
-                        style: text.labelSmall?.copyWith(
-                            color: VigilantColors.onSurfaceVariant,
-                            letterSpacing: 1.2)),
-                  ],
-                ),
-                const SizedBox(height: 10),
-              ],
-              for (var i = 0; i < lines.length; i++) ...[
-                if (i > 0) const SizedBox(height: 10),
-                _LineCard(
-                  brief: lines[i],
-                  onTap: () => _pick(context, ref, lines[i]),
-                  onInfo: () => _openLinePage(lines[i]),
-                ),
-              ],
             ],
           ),
           ),
@@ -740,19 +816,158 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
   }
 }
 
-class _LineCard extends StatelessWidget {
-  const _LineCard({
+/// "Alarm kurmak için hattını seç" ızgarası: 3 sütun, satır başına 3 hat.
+///
+/// Alt alta uzun liste yerine kompakt 3×N ızgara; 9'dan fazla hat olduğunda
+/// sayfalara bölünüp YANA KAYDIRILIR (dikey yer kaplamaz). Bir kutucuğa
+/// dokunmak o hatla alarm kurar; köşedeki "i" hattın sayfasını açar.
+class _LineGrid extends StatefulWidget {
+  const _LineGrid({
+    required this.lines,
+    required this.onPick,
+    required this.onInfo,
+  });
+
+  final List<TransitLineBrief> lines;
+  final void Function(TransitLineBrief) onPick;
+  final void Function(TransitLineBrief) onInfo;
+
+  @override
+  State<_LineGrid> createState() => _LineGridState();
+}
+
+class _LineGridState extends State<_LineGrid> {
+  final _controller = PageController();
+  int _page = 0;
+  bool _nudged = false;
+
+  static const _cols = 2; // 2×3
+  static const _perPage = _cols * 3; // 6
+  static const _tileH = 66.0;
+  static const _gap = 8.0;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  /// İLK GİRİŞTE kaydırma ipucu: sayfa yana biraz kayar, sonra yerine döner —
+  /// kullanıcı daha fazla hat için yana kaydırabileceğini anlar.
+  void _maybeNudge(bool multi) {
+    if (_nudged || !multi) return;
+    _nudged = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || !_controller.hasClients) return;
+      await Future<void>.delayed(const Duration(milliseconds: 450));
+      if (!mounted || !_controller.hasClients) return;
+      try {
+        await _controller.animateTo(36,
+            duration: const Duration(milliseconds: 360), curve: Curves.easeOut);
+        if (!mounted || !_controller.hasClients) return;
+        await _controller.animateTo(0,
+            duration: const Duration(milliseconds: 460), curve: Curves.easeOut);
+      } catch (_) {}
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final lines = widget.lines;
+    final pages = <List<TransitLineBrief>>[];
+    for (var i = 0; i < lines.length; i += _perPage) {
+      final end = i + _perPage < lines.length ? i + _perPage : lines.length;
+      pages.add(lines.sublist(i, end));
+    }
+    if (pages.isEmpty) return const SizedBox.shrink();
+
+    final multi = pages.length > 1;
+    _maybeNudge(multi);
+    // Tek sayfada satır sayısı hat sayısına göre; çok sayfada hep 3 satır.
+    final rows = multi ? 3 : ((lines.length + 1) ~/ _cols).clamp(1, 3);
+    final gridHeight = rows * _tileH + (rows - 1) * _gap;
+    final active = _page.clamp(0, pages.length - 1);
+
+    return Column(
+      children: [
+        SizedBox(
+          height: gridHeight,
+          child: multi
+              ? PageView(
+                  controller: _controller,
+                  onPageChanged: (i) => setState(() => _page = i),
+                  children: [
+                    // Sayfa değişirken kutucuklar birbirine sıfır görünmesin
+                    // diye her sayfaya yatay boşluk.
+                    for (final pg in pages)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 5),
+                        child: _grid(pg),
+                      ),
+                  ],
+                )
+              : _grid(pages.first),
+        ),
+        if (multi) ...[
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              for (var i = 0; i < pages.length; i++)
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  margin: const EdgeInsets.symmetric(horizontal: 3),
+                  width: i == active ? 20 : 7,
+                  height: 7,
+                  decoration: BoxDecoration(
+                    color: i == active
+                        ? VigilantColors.primary
+                        : VigilantColors.surfaceVariant,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// Bir sayfayı 2 sütunlu satırlara dizer (boş hücreler boşlukla dolar).
+  Widget _grid(List<TransitLineBrief> pg) {
+    final rowWidgets = <Widget>[];
+    for (var r = 0; r * _cols < pg.length; r++) {
+      final cells = <Widget>[];
+      for (var c = 0; c < _cols; c++) {
+        if (c > 0) cells.add(const SizedBox(width: _gap));
+        final idx = r * _cols + c;
+        cells.add(Expanded(
+          child: idx < pg.length
+              ? _LineTile(
+                  brief: pg[idx],
+                  onTap: () => widget.onPick(pg[idx]),
+                  onInfo: () => widget.onInfo(pg[idx]),
+                )
+              : const SizedBox.shrink(),
+        ));
+      }
+      if (r > 0) rowWidgets.add(const SizedBox(height: _gap));
+      rowWidgets.add(SizedBox(height: _tileH, child: Row(children: cells)));
+    }
+    return Column(mainAxisSize: MainAxisSize.min, children: rowWidgets);
+  }
+}
+
+/// Izgaradaki tek hat kutucuğu — dokun: alarm; köşedeki "i": hat sayfası.
+class _LineTile extends StatelessWidget {
+  const _LineTile({
     required this.brief,
     required this.onTap,
     required this.onInfo,
   });
 
   final TransitLineBrief brief;
-
-  /// Karta dokunmak: bu hatla alarm kur (birincil eylem).
   final VoidCallback onTap;
-
-  /// "Otobüs bilgisi" düğmesi: hattın sayfası (duraklar, yön, canlı konum).
   final VoidCallback onInfo;
 
   @override
@@ -760,51 +975,51 @@ class _LineCard extends StatelessWidget {
     final text = Theme.of(context).textTheme;
     return Material(
       color: VigilantColors.surfaceContainer,
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(14),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 14, 8, 14),
-          child: Row(
-            children: [
-              Container(
-                constraints: const BoxConstraints(minWidth: 52),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: VigilantColors.primary.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
+        child: Stack(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // Kod sağdaki "i" simgesinin altına girmesin diye sağ boşluk.
+                  Padding(
+                    padding: const EdgeInsets.only(right: 16),
+                    child: Text(brief.code,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: text.titleMedium?.copyWith(
+                            color: VigilantColors.primary,
+                            fontWeight: FontWeight.w800)),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(brief.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: text.labelSmall?.copyWith(
+                          color: VigilantColors.onSurfaceVariant)),
+                ],
+              ),
+            ),
+            Positioned(
+              top: 0,
+              right: 0,
+              child: InkResponse(
+                onTap: onInfo,
+                radius: 16,
+                child: const Padding(
+                  padding: EdgeInsets.all(5),
+                  child: Icon(Icons.info_outline_rounded,
+                      size: 15, color: VigilantColors.onSurfaceVariant),
                 ),
-                child: Text(brief.code,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: text.titleMedium?.copyWith(
-                        color: VigilantColors.primary,
-                        fontWeight: FontWeight.w800)),
               ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Text(brief.name,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: text.bodyMedium),
-              ),
-              // OTOBÜS BİLGİSİ: hattın sayfası (duraklar, yön, canlı konum).
-              // Karta dokunmak alarm kuruyor; hattı incelemek isteyen buraya.
-              IconButton(
-                onPressed: onInfo,
-                tooltip: 'Otobüs bilgisi',
-                visualDensity: VisualDensity.compact,
-                icon: const Icon(Icons.directions_bus_filled_rounded,
-                    color: VigilantColors.onSurfaceVariant, size: 20),
-              ),
-              const Icon(Icons.alarm_add_rounded,
-                  color: VigilantColors.primary, size: 22),
-              const SizedBox(width: 6),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -824,47 +1039,11 @@ class _Arrival {
   final ArrivalEstimate estimate;
 }
 
-/// Bu duraktan geçen bir hattın kod çipi.
-class _LineChip extends StatelessWidget {
-  const _LineChip({required this.code, required this.onTap});
-
-  final String code;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final text = Theme.of(context).textTheme;
-    return Material(
-      color: VigilantColors.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          constraints: const BoxConstraints(minWidth: 76),
-          alignment: Alignment.center,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-                color: VigilantColors.surfaceVariant.withValues(alpha: 0.5)),
-          ),
-          child: Text(
-            code,
-            style: text.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 /// Yaklaşan tek otobüs kartı.
 class _ArrivalRow extends StatelessWidget {
   const _ArrivalRow({
     required this.arrival,
     required this.onLive,
-    required this.onAlarm,
     required this.onInfo,
   });
 
@@ -872,9 +1051,6 @@ class _ArrivalRow extends StatelessWidget {
 
   /// Aracın canlı konumunu haritada aç.
   final VoidCallback onLive;
-
-  /// Bu hatla bu durağa alarm kur.
-  final VoidCallback onAlarm;
 
   /// Hattın kendi sayfasını aç (duraklar, yön, sefer saatleri).
   final VoidCallback onInfo;
@@ -980,25 +1156,18 @@ class _ArrivalRow extends StatelessWidget {
               children: [
                 Expanded(
                   child: _ArrivalAction(
-                    icon: Icons.alarm_add_rounded,
-                    label: 'Alarm kur',
-                    filled: true,
-                    onTap: onAlarm,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _ArrivalAction(
                     icon: Icons.my_location_rounded,
                     label: 'Canlı konum',
                     onTap: onLive,
                   ),
                 ),
                 const SizedBox(width: 8),
-                _ArrivalAction(
-                  icon: Icons.info_outline_rounded,
-                  tooltip: 'Hat sayfası',
-                  onTap: onInfo,
+                Expanded(
+                  child: _ArrivalAction(
+                    icon: Icons.directions_bus_filled_rounded,
+                    label: 'Hat sayfası',
+                    onTap: onInfo,
+                  ),
                 ),
               ],
             ),
@@ -1017,24 +1186,18 @@ class _ArrivalAction extends StatelessWidget {
     required this.icon,
     required this.onTap,
     this.label,
-    this.tooltip,
-    this.filled = false,
   });
 
   final IconData icon;
   final String? label;
-  final String? tooltip;
-  final bool filled;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    final fg = filled ? VigilantColors.onPrimary : VigilantColors.primary;
+    const fg = VigilantColors.primary;
     final button = Material(
-      color: filled
-          ? VigilantColors.primary
-          : VigilantColors.primary.withValues(alpha: 0.12),
+      color: VigilantColors.primary.withValues(alpha: 0.12),
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: () {
@@ -1065,7 +1228,7 @@ class _ArrivalAction extends StatelessWidget {
         ),
       ),
     );
-    return tooltip == null ? button : Tooltip(message: tooltip!, child: button);
+    return button;
   }
 }
 
@@ -1126,23 +1289,21 @@ class _Scheduled {
 
 /// Tarifeye göre sıradaki sefer satırı.
 class _ScheduledRow extends StatelessWidget {
-  const _ScheduledRow({required this.item, required this.onAlarm});
+  const _ScheduledRow({required this.item});
 
   final _Scheduled item;
-  final VoidCallback onAlarm;
 
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     final a = item.arrival;
+    // BİLGİ satırı: tıklanmaz. Alarm, yukarıdaki "hattını seç" listesinden
+    // kurulur; buradaki eski alarm düğmesi "şu sefere alarm" sanılıyordu.
     return Material(
       color: VigilantColors.surfaceContainer,
       borderRadius: BorderRadius.circular(18),
-      child: InkWell(
-        onTap: onAlarm,
-        borderRadius: BorderRadius.circular(18),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+      child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
           child: Row(
             children: [
               Expanded(
@@ -1186,17 +1347,9 @@ class _ScheduledRow extends StatelessWidget {
                           ?.copyWith(color: VigilantColors.onSurfaceVariant)),
                 ],
               ),
-              IconButton(
-                onPressed: onAlarm,
-                visualDensity: VisualDensity.compact,
-                tooltip: 'Bu hatla alarm kur',
-                icon: const Icon(Icons.alarm_add_rounded,
-                    size: 20, color: VigilantColors.primary),
-              ),
             ],
           ),
         ),
-      ),
     );
   }
 }

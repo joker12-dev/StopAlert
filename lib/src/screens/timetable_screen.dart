@@ -63,8 +63,17 @@ class _TimetableScreenState extends State<TimetableScreen> {
     setState(() {
       _table = t;
       _loading = false;
+      // TEK YÖNLÜ HAT: vapur/İZBAN servislerinin çoğu tek yönde tarifelenir
+      // (gidiş-dönüş round-trip ya da ayrı güzergâh). Boş yön sekmesi "sefer
+      // yok" gösteriyordu; dolu yönü seç, boş sekmeyi gizle (aşağıda).
+      final hasOut = t.departures.any((d) => d.outbound);
+      final hasIn = t.departures.any((d) => !d.outbound);
+      if (hasOut != hasIn) _outbound = hasOut;
     });
   }
+
+  bool get _hasOutbound => _table?.departures.any((d) => d.outbound) ?? false;
+  bool get _hasInbound => _table?.departures.any((d) => !d.outbound) ?? false;
 
   @override
   Widget build(BuildContext context) {
@@ -115,7 +124,9 @@ class _TimetableScreenState extends State<TimetableScreen> {
               ],
             ),
           ),
-          // Yön seçimi
+          // Yön seçimi — YALNIZCA iki yön de doluysa. Tek yönlü hatlarda boş
+          // sekme ("sefer yok") gösterilmez.
+          if (_hasOutbound && _hasInbound)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
             child: Row(

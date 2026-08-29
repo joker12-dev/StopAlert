@@ -29,7 +29,7 @@ class Weather {
 }
 
 final weatherProvider = FutureProvider<Weather?>((ref) async {
-  final loc = (await ref.watch(currentLocationProvider.future)).point;
+  final loc = await ref.watch(currentPositionProvider.future);
   if (loc == null) return null; // konum yok -> ağ isteği YOK (test güvenli)
   try {
     final uri = Uri.parse(

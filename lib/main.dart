@@ -25,6 +25,7 @@ import 'src/services/firebase_bootstrap.dart';
 import 'src/services/home_widget_launcher.dart';
 import 'src/services/home_widget_service.dart';
 import 'src/services/permission_service.dart';
+import 'src/services/push_messaging.dart';
 import 'src/services/telemetry.dart';
 import 'src/services/tracking_service.dart';
 import 'src/state/city_provider.dart';
@@ -52,6 +53,9 @@ Future<void> main() async {
   // sağlayıcıları hazır olmayan FirebaseAuth'a düşmesin. Anonim giriş (ağ)
   // bunun içinde bloklamadan yapılır.
   await bootstrapFirebase();
+  // Push bildirimler (Firebase Messaging): gönderilen mesajlar uygulama içi
+  // "Bildirimler" geçmişine düşer. Bloklamadan başlatılır.
+  unawaited(PushMessaging.init());
   // Çökme raporlama + analitik (Firebase'den sonra; alarm güvenilirlik ölçümü).
   await Telemetry.init();
   // DİKEY KİLİT: uygulama alarm/harita odaklı; yatay düzen tasarlanmadı ve

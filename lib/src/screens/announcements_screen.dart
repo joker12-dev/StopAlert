@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/app_announcement.dart';
 import '../state/app_announcements_provider.dart';
+import '../state/notification_history_provider.dart';
 import '../theme/app_theme.dart';
 import '../util/insets.dart';
 import '../util/haptics.dart';
@@ -28,6 +29,10 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen> {
     final text = Theme.of(context).textTheme;
     final async = ref.watch(appAnnouncementsProvider);
     final items = async.valueOrNull ?? const <AppAnnouncement>[];
+    // Firebase Messaging ile gelen push bildirim geçmişi.
+    final pushItems =
+        ref.watch(notificationHistoryProvider).valueOrNull ?? const <NotifItem>[];
+    final unreadPush = pushItems.where((n) => !n.read).length;
 
     // İlk yüklemede en yeni duyuruyu "okundu" işaretle (zil rozeti sönsün).
     if (!_markedSeen && items.isNotEmpty) {
@@ -85,7 +90,7 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen> {
             const OfflineBanner(
                 message: 'Bağlantı yok — duyurular güncellenemiyor.'),
             Expanded(
-              child: async.isLoading && items.isEmpty
+              child: async.isLoading && items.isEmpty && pushItems.isEmpty
                   ? const Center(
                       child: CircularProgressIndicator(
                           color: VigilantColors.primary))
@@ -96,10 +101,13 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen> {
                         ref
                             .read(appAnnouncementsRefreshProvider.notifier)
                             .state++;
+                        await ref
+                            .read(notificationHistoryProvider.notifier)
+                            .refresh();
                         await Future<void>.delayed(
                             const Duration(milliseconds: 500));
                       },
-                      child: items.isEmpty
+                      child: (items.isEmpty && pushItems.isEmpty)
                           ? ListView(
                               physics: const AlwaysScrollableScrollPhysics(),
                               children: [
@@ -117,15 +125,55 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen> {
                                     : _empty(text),
                               ],
                             )
-                          : ListView.separated(
+                          : ListView(
                               physics: const AlwaysScrollableScrollPhysics(),
                               padding: EdgeInsets.fromLTRB(
                                   20, 4, 20, AppInsets.pageBottom(context)),
-                              itemCount: items.length,
-                              separatorBuilder: (_, __) =>
-                                  const SizedBox(height: 10),
-                              itemBuilder: (context, i) =>
-                                  _AnnouncementCard(item: items[i]),
+                              children: [
+                                // BİLDİRİMLER (push geçmişi) — okundu/okunmadı.
+                                if (pushItems.isNotEmpty) ...[
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text('Bildirimler',
+                                            style: text.titleSmall?.copyWith(
+                                                fontWeight: FontWeight.w800)),
+                                      ),
+                                      if (unreadPush > 0)
+                                        TextButton(
+                                          onPressed: () {
+                                            Haptics.light();
+                                            ref
+                                                .read(notificationHistoryProvider
+                                                    .notifier)
+                                                .markAllRead();
+                                          },
+                                          child: const Text(
+                                              'Tümünü okundu işaretle'),
+                                        ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  for (final n in pushItems) ...[
+                                    _PushCard(item: n),
+                                    const SizedBox(height: 10),
+                                  ],
+                                  const SizedBox(height: 8),
+                                ],
+                                // UYGULAMA DUYURULARI.
+                                if (items.isNotEmpty) ...[
+                                  if (pushItems.isNotEmpty) ...[
+                                    Text('Duyurular',
+                                        style: text.titleSmall?.copyWith(
+                                            fontWeight: FontWeight.w800)),
+                                    const SizedBox(height: 6),
+                                  ],
+                                  for (final a in items) ...[
+                                    _AnnouncementCard(item: a),
+                                    const SizedBox(height: 10),
+                                  ],
+                                ],
+                              ],
                             ),
                     ),
             ),
@@ -249,5 +297,81 @@ class _AnnouncementCard extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// Push bildirim geçmişi kartı — okunmadıysa kırmızı nokta + çerçeve.
+class _PushCard extends StatelessWidget {
+  const _PushCard({required this.item});
+
+  final NotifItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: VigilantColors.surfaceContainer,
+        borderRadius: BorderRadius.circular(16),
+        border: item.read
+            ? null
+            : Border.all(color: VigilantColors.primary.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 5, right: 10),
+            child: Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color:
+                    item.read ? Colors.transparent : VigilantColors.primary,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(item.title,
+                          style: text.titleSmall?.copyWith(
+                              fontWeight: item.read
+                                  ? FontWeight.w600
+                                  : FontWeight.w800)),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(_ago(item.date),
+                        style: text.labelSmall?.copyWith(
+                            color: VigilantColors.onSurfaceVariant)),
+                  ],
+                ),
+                if (item.body.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(item.body,
+                      style: text.bodyMedium?.copyWith(
+                          color: VigilantColors.onSurfaceVariant, height: 1.3)),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String _ago(DateTime d) {
+    final diff = DateTime.now().difference(d);
+    if (diff.inMinutes < 1) return 'şimdi';
+    if (diff.inMinutes < 60) return '${diff.inMinutes} dk';
+    if (diff.inHours < 24) return '${diff.inHours} sa';
+    return '${diff.inDays} gün';
   }
 }

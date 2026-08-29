@@ -92,6 +92,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get categoryMetro => 'Metro';
 
   @override
+  String get categoryTram => 'Tranvía';
+
+  @override
   String get categoryFerry => 'Ferry';
 
   @override

@@ -6,10 +6,12 @@ import '../data/journey_payload.dart';
 import '../data/models.dart';
 import '../state/journey_provider.dart';
 import '../theme/app_theme.dart';
+import '../util/haptics.dart';
 import '../util/insets.dart';
 import '../widgets/native_ad_slot.dart';
 import '../widgets/glass_panel.dart';
 import '../widgets/mascot.dart';
+import 'announcements_screen.dart';
 import 'live_tracking_screen.dart';
 import 'search_screen.dart';
 
@@ -69,11 +71,12 @@ class FavoritesScreen extends ConsumerWidget {
                       style: text.headlineSmall?.copyWith(letterSpacing: -0.5)),
                 ),
                 IconButton(
-                  onPressed: () => ScaffoldMessenger.of(context)
-                    ..hideCurrentSnackBar()
-                    ..showSnackBar(const SnackBar(
-                      content: Text('Bildirim merkezi yakında.'),
-                    )),
+                  tooltip: 'Bildirimler',
+                  onPressed: () {
+                    Haptics.light();
+                    Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => const AnnouncementsScreen()));
+                  },
                   icon: const Icon(Icons.notifications_none_rounded,
                       color: VigilantColors.onSurfaceVariant),
                 ),

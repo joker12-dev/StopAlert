@@ -69,3 +69,5 @@ android/key.properties
 
 # İzmir GTFS ham dosyaları (stop_times 88MB) — git'e girmez
 tools/izmir/raw/
+tools/izmir/raw_rail/
+tools/izmir/izmir.sqlite

@@ -100,13 +100,36 @@ class UserLocation {
   final String? name;
 }
 
-/// Konumu alır ve semt adına çevirir. İzin yoksa boş UserLocation döner
-/// (uygulama yine çalışır; konum kritik akış değil).
-final currentLocationProvider = FutureProvider<UserLocation>((ref) async {
+/// SADECE KONUM NOKTASI — yakın duraklar/harita/hava durumu bunu bekler.
+///
+/// Semt adı çözümlemesinden (Nominatim HTTP, ~8 sn) AYRI tutulur: ana sayfadaki
+/// "yakındaki duraklar" yalnızca noktaya ihtiyaç duyar ve isim için ağ çağrısını
+/// beklemesi listeyi 10 sn'ye kadar geciktiriyordu.
+///
+/// İLK KURULUM SOĞUK GPS: izin yeni verilince ilk fix null gelebiliyor; izin
+/// varken kısa aralıklarla birkaç kez denenir (uygulama kapatılıp açılmadan
+/// düzelsin).
+final currentPositionProvider = FutureProvider<LatLng?>((ref) async {
   final service = LocationService();
-  final point = await service.currentLocation();
+  for (var attempt = 0; attempt < 3; attempt++) {
+    final point = await service.currentLocation();
+    if (point != null) return point;
+    if (attempt < 2 && await service.isGranted()) {
+      await Future<void>.delayed(const Duration(seconds: 2));
+      continue;
+    }
+    break;
+  }
+  return null;
+});
+
+/// Konum + semt adı. İzin yoksa boş UserLocation döner. Yalnızca ADI
+/// gösterenler (ana sayfa selamlaması) bunu izler; nokta yeterli olanlar
+/// [currentPositionProvider] kullanır ki ağ çağrısını beklemesinler.
+final currentLocationProvider = FutureProvider<UserLocation>((ref) async {
+  final point = await ref.watch(currentPositionProvider.future);
   if (point == null) return const UserLocation();
-  final name = await service.reverseGeocode(point);
+  final name = await LocationService().reverseGeocode(point);
   return UserLocation(point: point, name: name);
 });
 
@@ -131,7 +154,7 @@ class NearbyStopHit {
 /// Konum yoksa boş liste döner (ekranlar bilgilendirici boş durum gösterir).
 final nearbyStopsProvider = FutureProvider<List<NearbyStopHit>>((ref) async {
   final lines = await ref.watch(linesProvider.future);
-  final loc = (await ref.watch(currentLocationProvider.future)).point;
+  final loc = await ref.watch(currentPositionProvider.future);
   if (loc == null) return const [];
   const distance = Distance();
   final best = <String, NearbyStopHit>{};
@@ -192,7 +215,7 @@ class MapStop {
 /// genişler ve ray/vapur her hâlükârda en yakınlardan doldurulur. Ekran
 /// mesafeyi zaten gösterir; uzaklık kararını kullanıcı verir.
 final nearbyMapProvider = FutureProvider<List<MapStop>>((ref) async {
-  final loc = (await ref.watch(currentLocationProvider.future)).point;
+  final loc = await ref.watch(currentPositionProvider.future);
   if (loc == null) return const [];
   const distance = Distance();
   final out = <MapStop>[];

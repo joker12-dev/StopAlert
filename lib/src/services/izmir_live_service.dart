@@ -229,6 +229,78 @@ abstract final class IzmirLiveService {
     out.sort((x, y) => x.estimate.seconds.compareTo(y.estimate.seconds));
     return out;
   }
+
+  /// Bir hattın canlı araçları — HARİTA için (gerçek koordinatlı [BusVehicle]).
+  ///
+  /// İzmir açık verisinde İETT'deki gibi "hattın tüm araçları" ucu YOK; resmî
+  /// "Otobüsüm Nerede" uygulaması bile durak-bazlı `duragayaklasanotobusler`
+  /// ucunu kullanıyor. Bu yüzden araçları o uçtan toplarız:
+  ///
+  ///  - [focusStopId] verilmişse (kullanıcı bir duraktan "Canlı konum"a
+  ///    bastığında) YALNIZCA o durağa yaklaşan araçlar — tek istek, kullanıcının
+  ///    az önce gördüğü otobüsler haritada belirir.
+  ///  - Verilmemişse hat üzerinde birkaç durak ÖRNEKLENİR ve benzersiz araçlar
+  ///    (OtobusId) birleştirilir. Her durak sorgusu `live_izmir` paylaşımlı
+  ///    önbelleğinden geçer; ilk açılışta en çok ~6 istek gider.
+  ///
+  /// Yön ayrımı yapılmaz: HattinYonu↔G/D eşlemesi belirsiz (bkz.
+  /// [arrivalsForStop]) ve harita için amaç "araçlar nerede"; koordinatlar yön
+  /// ne olursa olsun gerçek. routeCode geçerli hattın yönüne göre damgalanır ki
+  /// haritanın yön süzgecinden geçsin.
+  static Future<List<BusVehicle>> vehiclesForLine(
+    String lineId, {
+    int? focusStopId,
+  }) async {
+    if (lineId.isEmpty) return const [];
+    final line = await TransitDb.instance.buildLine(lineId, cityId: 'izmir');
+    if (line == null || line.stops.isEmpty) return const [];
+    final code = line.code.trim();
+    final isGidis = line.id.endsWith('_G');
+    final dirTag = isGidis ? 'G' : 'D';
+    final headingTo =
+        line.name.contains(' - ') ? line.name.split(' - ').last : line.name;
+
+    int? durakOf(Stop s) {
+      final raw =
+          s.id.startsWith(kBusPrefix) ? s.id.substring(kBusPrefix.length) : s.id;
+      return int.tryParse(raw);
+    }
+
+    // Sorgulanacak durak kimlikleri.
+    final durakIds = <int>[];
+    if (focusStopId != null) {
+      durakIds.add(focusStopId);
+    } else {
+      const sample = 6;
+      final stops = line.stops;
+      final step = (stops.length / sample).ceil().clamp(1, stops.length);
+      for (var i = 0; i < stops.length; i += step) {
+        final d = durakOf(stops[i]);
+        if (d != null) durakIds.add(d);
+      }
+    }
+
+    // PARALEL: durakları ardışık sorgulamak (6× ağ+Firestore) canlı haritayı
+    // diğer illere göre yavaşlatıyordu; hepsini aynı anda çek.
+    final byBus = <String, BusVehicle>{};
+    final results = await Future.wait(durakIds.map(forStop));
+    for (final approaches in results) {
+      for (final a in approaches) {
+        if (a.busId.isEmpty || a.lat == 0 || a.lon == 0) continue;
+        if (a.code != code) continue;
+        byBus[a.busId] = BusVehicle(
+          plate: a.busId,
+          lat: a.lat,
+          lon: a.lon,
+          headingTo: headingTo,
+          routeCode: '${a.code}_${dirTag}_',
+          lastSeen: '',
+          nearestStopCode: '',
+        );
+      }
+    }
+    return byBus.values.toList();
+  }
 }
 
 class _Local {

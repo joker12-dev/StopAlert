@@ -260,6 +260,12 @@ abstract class AppLocalizations {
   /// **'Metro'**
   String get categoryMetro;
 
+  /// No description provided for @categoryTram.
+  ///
+  /// In en, this message translates to:
+  /// **'Tram'**
+  String get categoryTram;
+
   /// No description provided for @categoryFerry.
   ///
   /// In en, this message translates to:

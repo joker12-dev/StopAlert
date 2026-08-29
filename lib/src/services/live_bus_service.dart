@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../data/transit_city.dart';
 import 'ekomobil_service.dart';
 import 'iett_service.dart';
+import 'izmir_live_service.dart';
 
 /// e-Komobil canlı otobüs çağrısı YALNIZCA bu bayrak açıkken yapılır.
 ///
@@ -56,10 +57,26 @@ class LiveBusService {
     String lineCode, {
     TransitCity? city,
     String? lineId,
+    int? focusStopId,
   }) async {
     final code = lineCode.trim().toUpperCase();
     if (code.isEmpty) return const [];
     final targetCity = city ?? TransitCities.istanbul;
+
+    // İZMİR: hat-bazlı araç yayını YOK (açık veride yalnızca durak-bazlı
+    // yaklaşan otobüsler var). İzmir'in kendi `live_izmir` paylaşımlı
+    // önbelleğinden araçları durak örnekleyerek toplar; buradaki `live_bus`
+    // önbelleğini kullanmaz.
+    if (targetCity.id == TransitCities.izmir.id) {
+      if (lineId == null || lineId.isEmpty) return const [];
+      try {
+        return await IzmirLiveService.vehiclesForLine(lineId,
+            focusStopId: focusStopId);
+      } catch (_) {
+        return const [];
+      }
+    }
+
     final direction = targetCity.id == TransitCities.kocaeli.id
         ? _directionForLineId(lineId)
         : null;

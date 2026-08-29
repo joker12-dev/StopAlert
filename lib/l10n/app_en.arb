@@ -30,6 +30,7 @@
   "categoryMetrobus": "Metrobus",
   "categoryMarmaray": "Marmaray",
   "categoryMetro": "Metro",
+  "categoryTram": "Tram",
   "categoryFerry": "Ferry",
 
   "actionUnderstood": "Got it",

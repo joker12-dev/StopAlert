@@ -1,9 +1,9 @@
 {
-  "version": "20260828",
-  "file": "izmir_20260828.sqlite",
-  "bytes": 4964352,
-  "sha256": "7dd912dc6f056edf46e4fbfc237dd7663058fe5f625e722bd79fd1e6f8580bcb",
-  "lines": 858,
-  "stops": 11597,
-  "source": "Veri: İzmir Büyükşehir Belediyesi / ESHOT (CC BY 4.0)"
+  "version": "20260830",
+  "file": "izmir_20260830.sqlite",
+  "bytes": 5304320,
+  "sha256": "d76a574c74c9215deacca44315bb5ec6eddfa8413e16dddb3831daf930bbf04a",
+  "lines": 892,
+  "stops": 11723,
+  "source": "Veri: İzmir Büyükşehir Belediyesi / ESHOT · İzmir Metro · Tramİzmir · İZBAN · İzdeniz (CC BY 4.0)"
 }

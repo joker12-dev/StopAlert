@@ -75,10 +75,15 @@ void main() {
     // yakalıyor, tür simgesi ise durağın türüne göre değişiyor.
     await tester.tap(find.text('İstanbul').first);
     await tester.pumpAndSettle();
-    expect(find.text('BU DURAKTAN GEÇEN HATLAR'), findsOneWidget);
+    // Alarm kurmanın TEK yolu artık başlıklı "hattını seç" ızgarası (yaklaşan
+    // araç kartındaki alarm düğmesi kaldırıldı).
+    expect(find.text('Alarm kurmak için hattını seç'), findsOneWidget);
 
-    // Hattı seçince Alarm Kur açılır.
-    await tester.tap(find.byIcon(Icons.alarm_add_rounded).first);
+    // Izgaradaki ilk hat kutucuğuna dokununca Alarm Kur açılır (kutucuğa
+    // dokunmak = o hatla alarm; köşedeki "i" hat sayfasını açar).
+    await tester.tap(find
+        .byWidgetPredicate((w) => w.runtimeType.toString() == '_LineTile')
+        .first);
     await tester.pumpAndSettle();
     expect(find.text('Alarm Kur'), findsOneWidget);
     expect(find.text('ALARM TETİKLEME'), findsOneWidget);

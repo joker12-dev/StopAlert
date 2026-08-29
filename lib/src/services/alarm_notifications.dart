@@ -174,4 +174,35 @@ class AlarmNotifications {
     await init();
     await _plugin.cancel(id: _alarmId);
   }
+
+  /// Bilgi/duyuru bildirimi (Firebase Messaging FOREGROUND mesajları için).
+  ///
+  /// Alarmdan AYRI, sıradan öncelikli kanal: ses çalar ama tam ekran/insistent
+  /// değil. Uygulama açıkken FCM bildirimi otomatik gösterilmez; bunu çağırırız.
+  static Future<void> showInfo({
+    required int id,
+    required String title,
+    required String body,
+  }) async {
+    if (!isAndroidDevice) return;
+    await init();
+    try {
+      await _plugin.show(
+        id: id,
+        title: title,
+        body: body,
+        notificationDetails: const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'stopalert_push_v1',
+            'Bildirimler',
+            channelDescription: 'Uygulama duyuruları ve bildirimleri',
+            importance: Importance.high,
+            priority: Priority.high,
+            playSound: true,
+            visibility: NotificationVisibility.public,
+          ),
+        ),
+      );
+    } catch (_) {}
+  }
 }

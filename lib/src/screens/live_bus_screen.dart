@@ -74,6 +74,14 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen> {
   /// Hattın kendi şehri (yoksa aktif şehir) — duraksız/koordinatsız durumda
   /// haritanın açılacağı yer. Sabit İstanbul koordinatı gömülüydü.
   TransitCity get _fallbackCity => widget.city ?? ref.read(activeCityProvider);
+
+  /// Canlı verinin kaynağı — şehre göre. İzmir'de "İETT" yazmak yanlıştı.
+  String get _liveSourceLabel {
+    final id = _fallbackCity.id;
+    if (id == TransitCities.izmir.id) return 'ESHOT canlı konum verisi';
+    if (id == TransitCities.istanbul.id) return 'İETT canlı filo verisi';
+    return 'Canlı konum verisi';
+  }
   bool _mapReady = false;
 
   /// Harita hareket ederken yoğun katmanlar çizilmez (bkz. [MapSettle]).
@@ -170,12 +178,22 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen> {
   Future<void> _load() async {
     if (!mounted) return;
     setState(() => _loading = true);
+    // İZMİR: hat-bazlı araç yayını olmadığından, kullanıcı bir duraktan
+    // "Canlı konum"a bastıysa o durağa yaklaşan araçları göster (highlightStopId
+    // → durakId). Diğer şehirler bu değeri yok sayar.
+    int? focusStopId;
+    final hid = widget.highlightStopId;
+    if (hid != null && hid.isNotEmpty) {
+      final raw = hid.contains(':') ? hid.split(':').last : hid;
+      focusStopId = int.tryParse(raw);
+    }
     final list = _scheduledOnly
         ? await _fromTimetable()
         : await LiveBusService.instance.vehicles(
             _code,
             city: _fallbackCity,
             lineId: _line.id,
+            focusStopId: focusStopId,
           );
     if (!mounted) return;
     setState(() {
@@ -636,6 +654,7 @@ class _LiveBusScreenState extends ConsumerState<LiveBusScreen> {
               switchingDirection: _switchingDirection,
               updatedAt: _updatedAt,
               scheduled: _scheduledOnly,
+              sourceLabel: _liveSourceLabel,
               selected: _selected,
               selectedStop: _selectedStop,
               directionLabel: _line.stops.isEmpty ? '' : _line.stops.last.name,
@@ -997,6 +1016,7 @@ class _InfoCard extends StatelessWidget {
     required this.switchingDirection,
     required this.updatedAt,
     required this.scheduled,
+    required this.sourceLabel,
     required this.directionLabel,
     required this.onSwitchDirection,
     required this.onRefresh,
@@ -1015,6 +1035,9 @@ class _InfoCard extends StatelessWidget {
   /// Konumlar tarifeden üretildiyse ARAYÜZ BUNU SÖYLER
   /// (bkz. `ScheduledVehicles`).
   final bool scheduled;
+
+  /// Canlı verinin kaynağı etiketi ("İETT canlı filo verisi" / "ESHOT…").
+  final String sourceLabel;
 
   /// Hattın gittiği son durak — "→ Kadıköy" biçiminde yön göstergesi.
   final String directionLabel;
@@ -1181,7 +1204,7 @@ class _InfoCard extends StatelessWidget {
                   // beklememeli — bu, tarifenin okunmuş hâli.
                   ? 'Tarifeye göre tahmini konum'
                   : updatedAt == null
-                      ? 'İETT canlı filo verisi'
+                      ? sourceLabel
                       : 'Güncellendi: $_ago',
               style: text.labelSmall
                   ?.copyWith(color: VigilantColors.onSurfaceVariant),

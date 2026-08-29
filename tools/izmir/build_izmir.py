@@ -222,8 +222,10 @@ def build(version):
         if len(seq_stops) < 2:
             continue
 
-        long_name = (route.get('route_long_name') or '').strip()
-        lname = long_name or f'{seq_stops[0][1]} - {seq_stops[-1][1]}'
+        # AD YÖNE ÖZEL: route_long_name gidiş/dönüşte AYNI ("A - B") oluyor ve
+        # kullanıcı iki yönü ayırt edemiyordu; bu yönün GERÇEK ilk→son durağını
+        # yaz (gidiş "A - B", dönüş "B - A").
+        lname = f'{seq_stops[0][1]} - {seq_stops[-1][1]}'
         line_rows.append((lid, code, lname, norm(lname), yon, 0, 'bus', '',
                           'ESHOT'))
         prev_dep = seq_stops[0][5] or seq_stops[0][4]

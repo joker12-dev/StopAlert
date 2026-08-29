@@ -88,6 +88,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get categoryMetro => 'مترو';
 
   @override
+  String get categoryTram => 'ترام';
+
+  @override
   String get categoryFerry => 'عبّارة';
 
   @override

@@ -17,6 +17,7 @@ import '../state/city_provider.dart';
 import '../state/hero_image_provider.dart';
 import '../state/journey_provider.dart';
 import '../state/nearest_arrival_provider.dart';
+import '../state/notification_history_provider.dart';
 import '../state/settings_provider.dart';
 import '../state/weather_provider.dart';
 import '../theme/app_theme.dart';
@@ -38,6 +39,7 @@ import 'alarm_setup_screen.dart';
 import 'announcements_screen.dart';
 import 'guide_screen.dart';
 import 'line_detail_screen.dart';
+import 'most_used_screen.dart';
 import 'lines_by_type_screen.dart';
 import 'live_tracking_screen.dart';
 import 'nearby_map_screen.dart';
@@ -114,6 +116,9 @@ class HomeScreen extends ConsumerWidget {
               color: VigilantColors.primary,
               onRefresh: () async {
                 Haptics.light();
+                // Konum NOKTASINI tazele: hem yakın duraklar hem semt adı
+                // (currentLocationProvider) buna bağlı.
+                ref.invalidate(currentPositionProvider);
                 ref.invalidate(nearbyStopsProvider);
                 ref.invalidate(currentLocationProvider);
                 ref.invalidate(weatherProvider);
@@ -667,8 +672,9 @@ class _TopBar extends ConsumerWidget {
                       color: VigilantColors.onSurface),
                 ),
               ),
-              // Kırmızı nokta yalnızca OKUNMAMIŞ duyuru varken.
-              if (ref.watch(hasUnreadAnnouncementsProvider))
+              // Kırmızı nokta: okunmamış duyuru VEYA okunmamış push bildirim.
+              if (ref.watch(hasUnreadAnnouncementsProvider) ||
+                  ref.watch(unreadPushCountProvider) > 0)
                 const Positioned(
                   top: 12,
                   right: 12,
@@ -919,7 +925,12 @@ class _HomeCarouselState extends ConsumerState<_HomeCarousel> {
           icon: Icons.alt_route_rounded,
           onSeeAll: () {
             Haptics.light();
-            ref.read(bottomNavIndexProvider.notifier).state = NavTab.lines;
+            Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => MostUsedScreen(
+                mode: MostUsedMode.lines,
+                onOpenStop: widget.onOpenStop,
+              ),
+            ));
           },
           children: [
             for (final ln in lines)
@@ -944,7 +955,12 @@ class _HomeCarouselState extends ConsumerState<_HomeCarousel> {
           icon: Icons.location_on_rounded,
           onSeeAll: () {
             Haptics.light();
-            ref.read(bottomNavIndexProvider.notifier).state = NavTab.stops;
+            Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => MostUsedScreen(
+                mode: MostUsedMode.stops,
+                onOpenStop: widget.onOpenStop,
+              ),
+            ));
           },
           children: [
             for (final s in stops)
@@ -1693,6 +1709,7 @@ class _CategoryRow extends StatelessWidget {
     (icon: Icons.airport_shuttle_rounded, type: LineType.metrobus),
     (icon: Icons.directions_railway_filled_rounded, type: LineType.marmaray),
     (icon: Icons.subway_rounded, type: LineType.metro),
+    (icon: Icons.tram_rounded, type: LineType.tram),
     (icon: Icons.directions_boat_rounded, type: LineType.ferry),
   ];
 
@@ -1701,6 +1718,7 @@ class _CategoryRow extends StatelessWidget {
         LineType.metrobus => l.categoryMetrobus,
         LineType.marmaray => l.categoryMarmaray,
         LineType.metro => l.categoryMetro,
+        LineType.tram => l.categoryTram,
         LineType.ferry => l.categoryFerry,
         _ => l.categoryBus,
       };

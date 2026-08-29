@@ -46,6 +46,18 @@ class LocationService {
     }
   }
 
+  /// Konum izni şu an verilmiş mi (servis açık + izin var).
+  Future<bool> isGranted() async {
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) return false;
+      final p = await Geolocator.checkPermission();
+      return p == LocationPermission.always ||
+          p == LocationPermission.whileInUse;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<LatLng?> currentLocation() async {
     try {
       if (!await Geolocator.isLocationServiceEnabled()) return null;
@@ -59,12 +71,24 @@ class LocationService {
         return null;
       }
 
-      final pos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-        ),
-      );
-      return LatLng(pos.latitude, pos.longitude);
+      // TAZE, ANLIK KONUM ÖNCE: yakın duraklar kullanıcının ŞU ANKİ yerine göre
+      // bulunur; son bilinen konum (getLastKnownPosition) Android'de çok
+      // uzaktaki eski bir konumu döndürebiliyor ve "en yakın durak"ı bambaşka
+      // bir yerde gösteriyordu. Yüksek doğruluk + makul süre sınırı; süre
+      // dolarsa (soğuk GPS) son bilinen konuma düşülür — hiç göstermemekten iyi.
+      try {
+        final pos = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.high,
+            timeLimit: Duration(seconds: 8),
+          ),
+        );
+        return LatLng(pos.latitude, pos.longitude);
+      } catch (_) {
+        final last = await Geolocator.getLastKnownPosition();
+        if (last != null) return LatLng(last.latitude, last.longitude);
+        return null;
+      }
     } catch (_) {
       return null;
     }

@@ -140,7 +140,8 @@ abstract final class TransitCities {
     centerLon: 27.1428,
     // Canlı otobüs: ESHOT "durağa yaklaşan otobüsler" (bkz. IzmirLiveService).
     hasLiveBus: true,
-    hasTraffic: false,
+    // İZUM travel-times (level + delay/time) → şehir geneli yüzde.
+    hasTraffic: true,
     // GTFS'te stop_times + calendar var → kalkış saatleri pakete gömülü.
     hasTimetable: true,
   );
