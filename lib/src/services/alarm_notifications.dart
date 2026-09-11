@@ -126,17 +126,24 @@ class AlarmNotifications {
   /// Flutter assets yetmez. Xcode'da Runner hedefine bir `.caf` eklendiğinde
   /// buraya `sound: 'dosya.caf'` yazılır; o zamana kadar varsayılan bildirim
   /// sesi çalar.
-  static const _darwinAlarm = DarwinNotificationDetails(
-    presentAlert: true,
-    presentSound: true,
-    presentBanner: true,
-    presentList: true,
-    // iOS bildirim sesi: uygulama paketine EKLENEN dosya (Flutter assets değil).
-    // wav geçerli, mp3 GEÇMEZ, ≤30 sn. Dosya Xcode'da Runner'a eklenene kadar
-    // iOS sessizce varsayılan sese düşer (zararsız).
-    sound: 'stopalert_alarm.wav',
-    interruptionLevel: InterruptionLevel.timeSensitive,
-  );
+  static DarwinNotificationDetails get _darwinAlarm {
+    // iOS bildirim sesi uygulama paketindeki bir .wav olmak zorunda (Flutter
+    // assets değil, mp3 GEÇMEZ, ≤30 sn). Kullanıcının SEÇTİĞİ ses paket
+    // dosyasıysa onu çal (Radar→stopalert_alarm.wav, Klasik→klasik_zil.wav);
+    // sistem sesiyse iOS'ta karşılığı olmadığından varsayılan alarm wav'ına
+    // düş. Dosya Xcode'da Runner'a eklenene kadar iOS varsayılan sese düşer.
+    final file = _sound.source == AlarmSoundSource.system
+        ? '${AlarmSound.fallback}.wav'
+        : '${_sound.resource}.wav';
+    return DarwinNotificationDetails(
+      presentAlert: true,
+      presentSound: true,
+      presentBanner: true,
+      presentList: true,
+      sound: file,
+      interruptionLevel: InterruptionLevel.timeSensitive,
+    );
+  }
 
   /// iOS bildirim davranışı — bilgi/duyuru (alarm değil).
   static const _darwinInfo = DarwinNotificationDetails(
