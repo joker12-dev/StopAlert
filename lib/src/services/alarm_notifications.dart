@@ -131,6 +131,10 @@ class AlarmNotifications {
     presentSound: true,
     presentBanner: true,
     presentList: true,
+    // iOS bildirim sesi: uygulama paketine EKLENEN dosya (Flutter assets değil).
+    // wav geçerli, mp3 GEÇMEZ, ≤30 sn. Dosya Xcode'da Runner'a eklenene kadar
+    // iOS sessizce varsayılan sese düşer (zararsız).
+    sound: 'stopalert_alarm.wav',
     interruptionLevel: InterruptionLevel.timeSensitive,
   );
 
