@@ -550,9 +550,34 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
                     size: 18, color: VigilantColors.secondary),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: Text('Yaklaşan Araçlar',
-                      style: text.titleSmall
-                          ?.copyWith(fontWeight: FontWeight.w700)),
+                  child: Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          'Yaklaşan Araçlar',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: text.titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                      if (!_arrivalsExpanded) ...[
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            'görmek için tıklayın',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: text.labelMedium?.copyWith(
+                              color: VigilantColors.onSurfaceVariant
+                                  .withValues(alpha: 0.55),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
                 if (_arrivalsExpanded && _loadingArrivals)
                   const Padding(
@@ -816,11 +841,11 @@ class _StopLinesScreenState extends ConsumerState<StopLinesScreen> {
   }
 }
 
-/// "Alarm kurmak için hattını seç" ızgarası: 3 sütun, satır başına 3 hat.
+/// "Alarm kurmak için hattını seç" ızgarası: 2 sütun, satır başına 2 hat.
 ///
-/// Alt alta uzun liste yerine kompakt 3×N ızgara; 9'dan fazla hat olduğunda
-/// sayfalara bölünüp YANA KAYDIRILIR (dikey yer kaplamaz). Bir kutucuğa
-/// dokunmak o hatla alarm kurar; köşedeki "i" hattın sayfasını açar.
+/// Alt alta uzun liste yerine kompakt 2×N ızgara; 6'dan fazla hat olduğunda
+/// sayfalara bölünüp YANA KAYDIRILIR (dikey yer kaplamaz). Kutucuğun sol tarafı
+/// alarm kurar; sağdaki bilgi alanı hattın sayfasını açar.
 class _LineGrid extends StatefulWidget {
   const _LineGrid({
     required this.lines,
@@ -958,7 +983,7 @@ class _LineGridState extends State<_LineGrid> {
   }
 }
 
-/// Izgaradaki tek hat kutucuğu — dokun: alarm; köşedeki "i": hat sayfası.
+/// Izgaradaki tek hat kutucuğu — kart alarm, sağ üstte küçük kare hat bilgisi.
 class _LineTile extends StatelessWidget {
   const _LineTile({
     required this.brief,
@@ -973,54 +998,62 @@ class _LineTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
+    final radius = BorderRadius.circular(14);
     return Material(
       color: VigilantColors.surfaceContainer,
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Stack(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // Kod sağdaki "i" simgesinin altına girmesin diye sağ boşluk.
-                  Padding(
-                    padding: const EdgeInsets.only(right: 16),
-                    child: Text(brief.code,
+      borderRadius: radius,
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: InkWell(
+              onTap: onTap,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(10, 8, 36, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(brief.code,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: text.titleMedium?.copyWith(
                             color: VigilantColors.primary,
                             fontWeight: FontWeight.w800)),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(brief.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: text.labelSmall?.copyWith(
-                          color: VigilantColors.onSurfaceVariant)),
-                ],
-              ),
-            ),
-            Positioned(
-              top: 0,
-              right: 0,
-              child: InkResponse(
-                onTap: onInfo,
-                radius: 16,
-                child: const Padding(
-                  padding: EdgeInsets.all(5),
-                  child: Icon(Icons.info_outline_rounded,
-                      size: 15, color: VigilantColors.onSurfaceVariant),
+                    const SizedBox(height: 2),
+                    Text(brief.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: text.labelSmall
+                            ?.copyWith(color: VigilantColors.onSurfaceVariant)),
+                  ],
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+          Positioned(
+            top: 6,
+            right: 6,
+            child: InkWell(
+              onTap: onInfo,
+              borderRadius: BorderRadius.circular(7),
+              child: Container(
+                width: 27,
+                height: 27,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: VigilantColors.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(7),
+                  border: Border.all(
+                    color: VigilantColors.primary.withValues(alpha: 0.24),
+                  ),
+                ),
+                child: const Icon(Icons.info_outline_rounded,
+                    size: 15, color: VigilantColors.primary),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

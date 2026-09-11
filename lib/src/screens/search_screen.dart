@@ -219,7 +219,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     const SizedBox(width: 48),
                   Expanded(
                     child: Text(
-                      'Nerede İneceksin?',
+                      'Hat Ara',
                       textAlign: TextAlign.center,
                       style: text.headlineSmall?.copyWith(fontSize: 20),
                     ),
@@ -248,7 +248,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                           border: InputBorder.none,
                           hintText: _listening
                               ? 'Dinliyorum…'
-                              : 'İneceğin durağı veya hattı ara...',
+                              : 'Hat kodu ya da adı ara...',
                           hintStyle: text.bodyLarge?.copyWith(
                             color: _listening
                                 ? VigilantColors.primary

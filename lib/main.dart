@@ -17,6 +17,7 @@ import 'src/screens/consent_screen.dart';
 import 'src/screens/onboarding_screen.dart';
 import 'src/screens/permission_gate_screen.dart';
 import 'src/services/ad_service.dart';
+import 'src/services/daily_reminders.dart';
 import 'src/services/app_open_ad_service.dart';
 import 'src/services/alarm_notifications.dart';
 import 'src/services/bus_data_service.dart';
@@ -56,6 +57,8 @@ Future<void> main() async {
   // Push bildirimler (Firebase Messaging): gönderilen mesajlar uygulama içi
   // "Bildirimler" geçmişine düşer. Bloklamadan başlatılır.
   unawaited(PushMessaging.init());
+  // Günlük sabah/akşam yolculuk hatırlatmaları (yerel, açıksa).
+  unawaited(DailyReminders.init());
   // Çökme raporlama + analitik (Firebase'den sonra; alarm güvenilirlik ölçümü).
   await Telemetry.init();
   // DİKEY KİLİT: uygulama alarm/harita odaklı; yatay düzen tasarlanmadı ve

@@ -4,6 +4,7 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
+import '../../l10n/app_localizations.dart';
 import '../theme/app_theme.dart';
 import '../util/haptics.dart';
 import '../widgets/slide_to_action.dart';
@@ -83,6 +84,7 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
+    final l = AppLocalizations.of(context);
     return PopScope(
       canPop: _allowPop,
       child: Scaffold(
@@ -116,7 +118,7 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
                         ),
                       ),
                       Text(
-                        'ALARM',
+                        l.ringAlarmLabel,
                         style: text.labelSmall?.copyWith(
                           color: VigilantColors.primary,
                           letterSpacing: 4,
@@ -192,7 +194,7 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
                     ),
                     const SizedBox(height: 32),
                     Text(
-                      'DURAĞINA YAKLAŞTIN!',
+                      l.ringApproaching,
                       textAlign: TextAlign.center,
                       style: text.headlineMedium
                           ?.copyWith(color: VigilantColors.tertiaryContainer),
@@ -221,7 +223,8 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
                               size: 18, color: VigilantColors.primary),
                           const SizedBox(width: 8),
                           Text(
-                            'Kalan Mesafe: ${widget.distanceText ?? 'Alarm aktif'}',
+                            l.ringRemainingDistance(
+                                widget.distanceText ?? l.ringActive),
                             style: text.labelLarge
                                 ?.copyWith(color: VigilantColors.primary),
                           ),
@@ -230,7 +233,7 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      'İnme zamanı geldi, kapılar açılıyor.',
+                      l.ringGetOff,
                       textAlign: TextAlign.center,
                       style: text.bodyLarge
                           ?.copyWith(color: VigilantColors.onSurfaceVariant),
@@ -248,7 +251,7 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
                 children: [
                   // Kaydırarak durdur — kaza ile kapanmayı önler.
                   SlideToAction(
-                    label: 'Alarmı durdurmak için kaydır',
+                    label: l.ringSlideToStop,
                     icon: Icons.alarm_off,
                     height: 64,
                     fillColor: VigilantColors.primary,
@@ -277,7 +280,7 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
                           onPressed: () => _finish('snooze'),
                           icon: const Icon(Icons.snooze,
                               size: 20, color: VigilantColors.onSurfaceVariant),
-                          label: Text('${widget.snoozeMinutes} Dakika Ertele'),
+                          label: Text(l.ringSnooze(widget.snoozeMinutes)),
                         ),
                       ),
                     ),

@@ -25,7 +25,7 @@ void main() {
       expect(vehicles.first.lat, 40.889038);
       expect(vehicles.first.lon, 29.237083);
       expect(vehicles.first.plate, '41 AUJ 804');
-      expect(vehicles.first.routeCode, '200_G_EKOMOBIL');
+      expect(vehicles.first.routeCode, '200_G_STOPALERT');
       expect(vehicles.first.isGidis, isTrue);
       expect(vehicles.first.nearestStopCode, isEmpty);
     });
@@ -42,7 +42,7 @@ void main() {
 
       expect(vehicles, hasLength(2));
       expect(vehicles.first.plate, '41 AIG 604');
-      expect(vehicles.last.routeCode, '200_G_EKOMOBIL');
+      expect(vehicles.last.routeCode, '200_G_STOPALERT');
     });
 
     test('adds fresh token headers to vehicle request', () async {
@@ -69,7 +69,7 @@ void main() {
         requestedHeaders['X-Security-Token'],
         '6e1a86052be38410729aaba59025662b',
       );
-      expect(vehicles.first.routeCode, '200_D_EKOMOBIL');
+      expect(vehicles.first.routeCode, '200_D_STOPALERT');
     });
   });
 }

@@ -100,7 +100,7 @@ class EkomobilService {
         lat: lat,
         lon: lon,
         headingTo: direction == 1 ? 'D\u00f6n\u00fc\u015f' : 'Gidi\u015f',
-        routeCode: '${routeCode}_${dirCode}_EKOMOBIL',
+        routeCode: '${routeCode}_${dirCode}_STOPALERT',
         lastSeen: lastSeen,
         nearestStopCode: '',
       ));

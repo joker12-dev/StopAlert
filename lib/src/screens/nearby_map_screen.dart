@@ -785,7 +785,7 @@ class _NearbyMapScreenState extends ConsumerState<NearbyMapScreen> {
                   width: 44,
                   height: 5,
                   decoration: BoxDecoration(
-                    color: VigilantColors.surfaceVariant,
+                    color: VigilantColors.primary,
                     borderRadius: BorderRadius.circular(3),
                   ),
                 ),

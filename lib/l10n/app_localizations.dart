@@ -331,6 +331,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'System default'**
   String get systemDefault;
+
+  /// No description provided for @ringAlarmLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'ALARM'**
+  String get ringAlarmLabel;
+
+  /// No description provided for @ringApproaching.
+  ///
+  /// In en, this message translates to:
+  /// **'YOU\'RE ALMOST THERE!'**
+  String get ringApproaching;
+
+  /// No description provided for @ringRemainingDistance.
+  ///
+  /// In en, this message translates to:
+  /// **'Distance left: {value}'**
+  String ringRemainingDistance(String value);
+
+  /// No description provided for @ringActive.
+  ///
+  /// In en, this message translates to:
+  /// **'Alarm active'**
+  String get ringActive;
+
+  /// No description provided for @ringGetOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Time to get off — doors are opening.'**
+  String get ringGetOff;
+
+  /// No description provided for @ringSlideToStop.
+  ///
+  /// In en, this message translates to:
+  /// **'Slide to stop the alarm'**
+  String get ringSlideToStop;
+
+  /// No description provided for @ringSnooze.
+  ///
+  /// In en, this message translates to:
+  /// **'Snooze {minutes} min'**
+  String ringSnooze(int minutes);
 }
 
 class _AppLocalizationsDelegate

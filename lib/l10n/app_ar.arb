@@ -5,7 +5,6 @@
   "navStops": "المحطات",
   "navFavorites": "المفضلة",
   "navProfile": "الملف الشخصي",
-
   "homeSearchTitle": "أين ستنزل؟",
   "homeSearchHint": "اكتب المحطة أو الخط الذي ستنزل عنده...",
   "homeCurrentLocation": "الموقع الحالي: ",
@@ -19,28 +18,31 @@
   "seeAll": "الكل",
   "mostUsedLines": "الخطوط الأكثر استخدامًا",
   "mostUsedStops": "المحطات الأكثر تكرارًا",
-
   "tipMorning": "بدأ ازدحام الصباح؛ اضبط المنبه لمحطتك الآن.",
   "tipEvening": "المساء مزدحم؛ اضبط منبهك مبكرًا.",
   "tipLateNight": "لا تفوّت آخر الرحلات؛ اضبط منبهًا لمحطتك.",
   "tipDefault": "تحسّبًا للنعاس — اضبط منبهًا لمحطتك.",
-
   "categoryBus": "حافلة",
   "categoryMetrobus": "مترو باص",
   "categoryMarmaray": "مرمراي",
   "categoryMetro": "مترو",
   "categoryTram": "ترام",
   "categoryFerry": "عبّارة",
-
   "actionUnderstood": "حسنًا",
   "actionCancel": "إلغاء",
   "actionSave": "حفظ",
   "actionContinue": "متابعة",
   "actionClose": "إغلاق",
-
   "settingsTitle": "الإعدادات",
   "appSection": "التطبيق",
   "language": "اللغة",
   "languageSubtitle": "لغة عرض التطبيق",
-  "systemDefault": "لغة النظام"
+  "systemDefault": "لغة النظام",
+  "ringAlarmLabel": "تنبيه",
+  "ringApproaching": "أوشكت على الوصول!",
+  "ringRemainingDistance": "المسافة المتبقية: {value}",
+  "ringActive": "التنبيه نشط",
+  "ringGetOff": "حان وقت النزول — الأبواب تُفتح.",
+  "ringSlideToStop": "اسحب لإيقاف التنبيه",
+  "ringSnooze": "غفوة {minutes} دقيقة"
 }

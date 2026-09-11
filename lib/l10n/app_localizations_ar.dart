@@ -122,4 +122,29 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get systemDefault => 'لغة النظام';
+
+  @override
+  String get ringAlarmLabel => 'تنبيه';
+
+  @override
+  String get ringApproaching => 'أوشكت على الوصول!';
+
+  @override
+  String ringRemainingDistance(String value) {
+    return 'المسافة المتبقية: $value';
+  }
+
+  @override
+  String get ringActive => 'التنبيه نشط';
+
+  @override
+  String get ringGetOff => 'حان وقت النزول — الأبواب تُفتح.';
+
+  @override
+  String get ringSlideToStop => 'اسحب لإيقاف التنبيه';
+
+  @override
+  String ringSnooze(int minutes) {
+    return 'غفوة $minutes دقيقة';
+  }
 }

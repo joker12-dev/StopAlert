@@ -5,7 +5,6 @@
   "navStops": "Paradas",
   "navFavorites": "Favoritos",
   "navProfile": "Perfil",
-
   "homeSearchTitle": "¿Dónde te bajas?",
   "homeSearchHint": "Escribe la parada o línea donde te bajas...",
   "homeCurrentLocation": "Ubicación actual: ",
@@ -19,28 +18,31 @@
   "seeAll": "Todas",
   "mostUsedLines": "Líneas más usadas",
   "mostUsedStops": "Paradas más frecuentes",
-
   "tipMorning": "Ha empezado la hora punta de la mañana; pon la alarma para tu parada ahora.",
   "tipEvening": "Las tardes están concurridas; pon tu alarma temprano.",
   "tipLateNight": "No te pierdas los últimos viajes; pon una alarma para tu parada.",
   "tipDefault": "Por si te quedas dormido — pon una alarma para tu parada.",
-
   "categoryBus": "Autobús",
   "categoryMetrobus": "Metrobús",
   "categoryMarmaray": "Marmaray",
   "categoryMetro": "Metro",
   "categoryTram": "Tranvía",
   "categoryFerry": "Ferry",
-
   "actionUnderstood": "Entendido",
   "actionCancel": "Cancelar",
   "actionSave": "Guardar",
   "actionContinue": "Continuar",
   "actionClose": "Cerrar",
-
   "settingsTitle": "Ajustes",
   "appSection": "APLICACIÓN",
   "language": "Idioma",
   "languageSubtitle": "Idioma de la aplicación",
-  "systemDefault": "Idioma del sistema"
+  "systemDefault": "Idioma del sistema",
+  "ringAlarmLabel": "ALARMA",
+  "ringApproaching": "¡YA CASI LLEGAS!",
+  "ringRemainingDistance": "Distancia restante: {value}",
+  "ringActive": "Alarma activa",
+  "ringGetOff": "Es hora de bajar: las puertas se abren.",
+  "ringSlideToStop": "Desliza para detener la alarma",
+  "ringSnooze": "Posponer {minutes} min"
 }

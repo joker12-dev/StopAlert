@@ -242,10 +242,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
       _onPosition(first, 20);
     }
     _gpsSub = Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        distanceFilter: 5,
-      ),
+      locationSettings: _inAppLocationSettings(),
     ).listen(
       (p) => _onPosition(LatLng(p.latitude, p.longitude), p.accuracy),
       onError: (_) {},
@@ -431,7 +428,45 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
 
   // ---- Alarm + varış akışı ----
 
-  Future<void> _fireAlarmInApp() => _openAlarmScreen();
+  Future<void> _fireAlarmInApp() async {
+    // SERVİS YOKKEN BİLDİRİMİ BURADAN GÖNDER.
+    //
+    // Android'de alarm bildirimini ön plan servisi atıyor. iOS'ta (ve servis
+    // kurulamadığı durumda) kimse atmıyordu: ekran kapalıyken alarm ekranı
+    // görünmediği için kullanıcı HİÇ uyarılmıyordu. Bildirim, uygulama arka
+    // planda olsa da sistem üzerinden duyulur.
+    if (!_serviceMode) {
+      unawaited(AlarmNotifications.showAlarm(
+        stopName: _targetStopName,
+        body: _formatDistance(_status?.distanceToTargetMeters) ??
+            'İnme zamanı geldi',
+      ));
+    }
+    await _openAlarmScreen();
+  }
+
+  /// Uygulama içi GPS akışının ayarları.
+  ///
+  /// iOS'ta ön plan servisi yok (o yol Android'e özgü); konum akışı uygulama
+  /// arka plana düştüğünde de SÜRMELİ, yoksa alarm hiç çalmaz. Bunun için
+  /// `UIBackgroundModes: location` ve "Her Zaman" izninin yanında akışın
+  /// otomatik duraklatılmaması gerekiyor. Mavi arka plan göstergesi de
+  /// kullanıcıya konumun okunduğunu dürüstçe gösterir — App Review bunu bekler.
+  LocationSettings _inAppLocationSettings() {
+    if (isIosDevice) {
+      return AppleSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 5,
+        pauseLocationUpdatesAutomatically: false,
+        showBackgroundLocationIndicator: true,
+        activityType: ActivityType.otherNavigation,
+      );
+    }
+    return const LocationSettings(
+      accuracy: LocationAccuracy.high,
+      distanceFilter: 5,
+    );
+  }
 
   bool _alarmScreenOpen = false;
 
@@ -919,7 +954,7 @@ class _LiveTrackingScreenState extends ConsumerState<LiveTrackingScreen> {
                   width: 44,
                   height: 5,
                   decoration: BoxDecoration(
-                    color: VigilantColors.surfaceVariant,
+                    color: VigilantColors.primary,
                     borderRadius: BorderRadius.circular(3),
                   ),
                 ),

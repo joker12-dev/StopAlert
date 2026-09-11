@@ -126,4 +126,29 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get systemDefault => 'Idioma del sistema';
+
+  @override
+  String get ringAlarmLabel => 'ALARMA';
+
+  @override
+  String get ringApproaching => '¡YA CASI LLEGAS!';
+
+  @override
+  String ringRemainingDistance(String value) {
+    return 'Distancia restante: $value';
+  }
+
+  @override
+  String get ringActive => 'Alarma activa';
+
+  @override
+  String get ringGetOff => 'Es hora de bajar: las puertas se abren.';
+
+  @override
+  String get ringSlideToStop => 'Desliza para detener la alarma';
+
+  @override
+  String ringSnooze(int minutes) {
+    return 'Posponer $minutes min';
+  }
 }

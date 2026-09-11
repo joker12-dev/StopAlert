@@ -87,23 +87,60 @@ class AlarmNotifications {
   }
 
   static Future<void> init() async {
-    if (!isAndroidDevice || _initialized) return;
+    if (!isMobileDevice || _initialized) return;
     const settings = InitializationSettings(
       android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+      // İZİN BURADA İSTENMEZ: uygulamanın kendi "Başlamadan Önce" kapısı
+      // gerekçesiyle birlikte soruyor. Açılışta habersiz sistem penceresi
+      // çıkarsa kullanıcı neden sorulduğunu bilmeden reddediyor.
+      iOS: DarwinInitializationSettings(
+        requestAlertPermission: false,
+        requestSoundPermission: false,
+        requestBadgePermission: false,
+      ),
     );
     await _plugin.initialize(settings: settings);
     await _loadSoundChoice();
     // Donmuş eski kanalları temizle; kullanıcı kanal ayarını kaybeder ama
-    // alarmın gerçekten çalması bundan önemlidir.
-    try {
-      final android = _plugin.resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>();
-      for (final id in _legacyChannelIds) {
-        await android?.deleteNotificationChannel(channelId: id);
-      }
-    } catch (_) {}
+    // alarmın gerçekten çalması bundan önemlidir. (Kanal kavramı Android'e
+    // özgü; iOS'ta karşılığı yok.)
+    if (isAndroidDevice) {
+      try {
+        final android = _plugin.resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>();
+        for (final id in _legacyChannelIds) {
+          await android?.deleteNotificationChannel(channelId: id);
+        }
+      } catch (_) {}
+    }
     _initialized = true;
   }
+
+  /// iOS bildirim davranışı — ALARM.
+  ///
+  /// Android'in FLAG_INSISTENT ses döngüsünün iOS'ta karşılığı YOK; en yakını
+  /// "zaman duyarlı" kesinti düzeyi (Odak modlarını delebilir). Sessiz/Rahatsız
+  /// Etme'yi de delmek için Apple'dan Critical Alerts entitlement'ı gerekir.
+  ///
+  /// ÖZEL ALARM SESİ: iOS'ta bildirim sesi UYGULAMA PAKETİNDE olmak zorunda —
+  /// Flutter assets yetmez. Xcode'da Runner hedefine bir `.caf` eklendiğinde
+  /// buraya `sound: 'dosya.caf'` yazılır; o zamana kadar varsayılan bildirim
+  /// sesi çalar.
+  static const _darwinAlarm = DarwinNotificationDetails(
+    presentAlert: true,
+    presentSound: true,
+    presentBanner: true,
+    presentList: true,
+    interruptionLevel: InterruptionLevel.timeSensitive,
+  );
+
+  /// iOS bildirim davranışı — bilgi/duyuru (alarm değil).
+  static const _darwinInfo = DarwinNotificationDetails(
+    presentAlert: true,
+    presentSound: true,
+    presentBanner: true,
+    presentList: true,
+  );
 
   static AndroidNotificationDetails _details({
     required bool customSound,
@@ -143,17 +180,18 @@ class AlarmNotifications {
     required String stopName,
     required String body,
   }) async {
-    if (!isAndroidDevice) return;
+    if (!isMobileDevice) return;
     await init();
     try {
       await _plugin.show(
         id: _alarmId,
         title: 'DURAĞINA YAKLAŞTIN',
         body: '$stopName — $body',
-        notificationDetails:
-            NotificationDetails(
-                android: _details(
-                    customSound: true, soundResource: _soundResource)),
+        notificationDetails: NotificationDetails(
+          android:
+              _details(customSound: true, soundResource: _soundResource),
+          iOS: _darwinAlarm,
+        ),
       );
     } catch (_) {
       try {
@@ -161,8 +199,10 @@ class AlarmNotifications {
           id: _alarmId,
           title: 'DURAĞINA YAKLAŞTIN',
           body: '$stopName — $body',
-          notificationDetails:
-              NotificationDetails(android: _details(customSound: false)),
+          notificationDetails: NotificationDetails(
+            android: _details(customSound: false),
+            iOS: _darwinAlarm,
+          ),
         );
       } catch (_) {}
     }
@@ -170,7 +210,7 @@ class AlarmNotifications {
 
   /// Alarmı sustur (bildirimi kaldırınca insistent döngü de durur).
   static Future<void> cancelAlarm() async {
-    if (!isAndroidDevice) return;
+    if (!isMobileDevice) return;
     await init();
     await _plugin.cancel(id: _alarmId);
   }
@@ -184,7 +224,7 @@ class AlarmNotifications {
     required String title,
     required String body,
   }) async {
-    if (!isAndroidDevice) return;
+    if (!isMobileDevice) return;
     await init();
     try {
       await _plugin.show(
@@ -201,6 +241,7 @@ class AlarmNotifications {
             playSound: true,
             visibility: NotificationVisibility.public,
           ),
+          iOS: _darwinInfo,
         ),
       );
     } catch (_) {}

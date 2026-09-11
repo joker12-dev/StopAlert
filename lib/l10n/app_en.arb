@@ -1,12 +1,13 @@
 {
   "@@locale": "en",
   "navHome": "Home",
-  "@navHome": {"description": "Bottom navigation: home tab"},
+  "@navHome": {
+    "description": "Bottom navigation: home tab"
+  },
   "navLines": "Lines",
   "navStops": "Stops",
   "navFavorites": "Favorites",
   "navProfile": "Profile",
-
   "homeSearchTitle": "Where are you getting off?",
   "homeSearchHint": "Type the stop or line you'll get off at...",
   "homeCurrentLocation": "Current Location: ",
@@ -20,28 +21,45 @@
   "seeAll": "All",
   "mostUsedLines": "Most Used Lines",
   "mostUsedStops": "Most Frequent Stops",
-
   "tipMorning": "Morning rush has started; set your alarm for your stop now.",
   "tipEvening": "Evenings are busy; set your alarm early.",
   "tipLateNight": "Don't miss the last trips; set an alarm for your stop.",
   "tipDefault": "In case you doze off — set an alarm for your stop.",
-
   "categoryBus": "Bus",
   "categoryMetrobus": "Metrobus",
   "categoryMarmaray": "Marmaray",
   "categoryMetro": "Metro",
   "categoryTram": "Tram",
   "categoryFerry": "Ferry",
-
   "actionUnderstood": "Got it",
   "actionCancel": "Cancel",
   "actionSave": "Save",
   "actionContinue": "Continue",
   "actionClose": "Close",
-
   "settingsTitle": "Settings",
   "appSection": "APP",
   "language": "Language",
   "languageSubtitle": "App display language",
-  "systemDefault": "System default"
+  "systemDefault": "System default",
+  "ringAlarmLabel": "ALARM",
+  "ringApproaching": "YOU'RE ALMOST THERE!",
+  "ringRemainingDistance": "Distance left: {value}",
+  "@ringRemainingDistance": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "ringActive": "Alarm active",
+  "ringGetOff": "Time to get off — doors are opening.",
+  "ringSlideToStop": "Slide to stop the alarm",
+  "ringSnooze": "Snooze {minutes} min",
+  "@ringSnooze": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  }
 }

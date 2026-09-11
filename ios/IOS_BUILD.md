@@ -1,5 +1,10 @@
 # StopAlert — iOS Build Rehberi (Mac)
 
+> **Kod tarafı hazır (Faz 0 · 2026-09):** iOS'ta yerel bildirimler (Darwin
+> ayarları), alarm/hatırlatma yolları ve ARKA PLAN konumu artık açık —
+> ekran kapalıyken de alarm çalar. `ios/Podfile` hazır (izin makroları +
+> platform 13.0). Kalanların hepsi Apple/Mac tarafı; aşağıdaki adımlar.
+
 Windows'ta iOS derlenemez; **Mac + Xcode** şart. Aşağıdaki adımlar bu projeye
 özeldir (Firebase, AdMob, arka plan konum, Live Activity, kritik alarm).
 
@@ -27,6 +32,11 @@ Windows'ta iOS derlenemez; **Mac + Xcode** şart. Aşağıdaki adımlar bu proje
 3. `GoogleService-Info.plist` indir → Xcode'da **Runner** hedefine sürükle
    (Copy items if needed ✓, target: Runner). Dosya `ios/Runner/` içine gitmeli.
 4. (Zaten `firebase.json`'da iOS appId kayıtlı; sadece plist eksikti.)
+5. **APNs anahtarı (push için ŞART):** `firebase_messaging` eklendi; iOS'a
+   bildirim gelmesi için Apple Developer → **Keys → +** → *Apple Push
+   Notifications service (APNs)* → indir (`AuthKey_XXXX.p8`, bir kez iner).
+   Firebase Console → Proje ayarları → **Cloud Messaging** → iOS →
+   *APNs Authentication Key*: `.p8` + **Key ID** + **Team ID** yükle.
 
 ## 3) Bağımlılıklar
 ```bash
@@ -35,6 +45,8 @@ flutter pub get
 cd ios && pod install && cd ..
 ```
 Pod hatası olursa: `cd ios && pod repo update && pod install`.
+> `ios/Podfile` repoda HAZIR (izin makroları + `platform :ios, '13.0'`).
+> Elle düzenlemene gerek yok; `pod install` yeter.
 
 ## 4) Xcode imzalama + yetenekler (Capabilities)
 `open ios/Runner.xcworkspace` (`.xcodeproj` DEĞİL, **.xcworkspace**).
@@ -44,6 +56,10 @@ Runner hedefi → **Signing & Capabilities**:
   - **Background Modes** → Location updates, Background fetch, Background
     processing, Remote notifications işaretle (Info.plist zaten hazır).
   - **Push Notifications** (FCM/kritik alarm kullanacaksan).
+  - **Sign in with Apple** — ZORUNLU: uygulamada Google ile giriş var; Apple
+    başka sosyal giriş sunan uygulamada Apple girişini de şart koşuyor, yoksa
+    inceleme reddeder. App ID'de de bu yetenek işaretli olmalı.
+  - **App Groups** → Live Activity için `group.com.originstudios.stopalert.liveactivity`.
   - **Critical Alerts**: Apple'dan özel izin gerekir → form:
     developer.apple.com/contact/request/notifications-critical-alerts-entitlement
     (onaylanınca entitlement eklenir; sessiz/rahatsız-etme modunu deler).
@@ -104,5 +120,7 @@ zaten derlenir; bu blok yalnızca bildirim sorulmuyorsa gerekir.)
 - [ ] `GoogleService-Info.plist` Runner'a eklendi
 - [ ] `flutter pub get && pod install`
 - [ ] Xcode'da Team seçildi + Background Modes/Push capability
+- [ ] APNs `.p8` anahtarı Firebase Cloud Messaging'e yüklendi
+- [ ] Sign in with Apple yeteneği açık (Google girişi olduğu için zorunlu)
 - [ ] (opsiyonel) Live Activity widget target'ı
 - [ ] `flutter run --release` cihazda çalıştı

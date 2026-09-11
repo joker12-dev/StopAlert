@@ -289,10 +289,15 @@ final busSearchProvider =
     FutureProvider.autoDispose.family<BusSearchResults, String>(
   (ref, query) async {
     final q = query.trim();
-    if (q.length < 2) return const BusSearchResults();
+    if (q.isEmpty) return const BusSearchResults();
     final db = TransitDb.instance;
     if (!db.isReady) return const BusSearchResults();
     final active = ref.watch(activeCityProvider);
+
+    // TEK KARAKTER: yalnız HAT KODU aranır. Tek haneli otobüsler (1, 3, 9)
+    // eskiden 2 karakter eşiğine takılıp hiç çıkmıyordu; ama tek harfle DURAK
+    // taraması yüz binlerce satırda "%x%" olur — durakları 2+ karaktere bırak.
+    final withStops = q.length >= 2;
 
     final lines = <CityLine>[];
     final stops = <CityStop>[];
@@ -301,8 +306,10 @@ final busSearchProvider =
     for (final l in await db.searchLines(q, limit: 12)) {
       lines.add((line: l, city: active));
     }
-    for (final st in await db.searchStops(q, limit: 20)) {
-      stops.add((stop: st, city: active));
+    if (withStops) {
+      for (final st in await db.searchStops(q, limit: 20)) {
+        stops.add((stop: st, city: active));
+      }
     }
 
     // 2) İNDİRİLMİŞ DİĞER ŞEHİRLER. Filtre yok: kullanıcı hangi şehirde
@@ -316,10 +323,36 @@ final busSearchProvider =
       for (final l in await db.searchLines(q, limit: 8, cityId: c.id)) {
         lines.add((line: l, city: c));
       }
-      for (final st in await db.searchStops(q, limit: 12, cityId: c.id)) {
-        stops.add((stop: st, city: c));
+      if (withStops) {
+        for (final st in await db.searchStops(q, limit: 12, cityId: c.id)) {
+          stops.add((stop: st, city: c));
+        }
       }
     }
+
+    // RELEVANS SIRALAMASI: TAM kod eşleşmesi en üstte olsun — "1" yazınca
+    // gerçek "1" hattı, "10/11/13"ün ALTINDA değil ÜSTÜNDE çıkmalı. Sonra kod
+    // öneki (aktif şehir + kısa kod önce), en sonda yalnız ADINDA eşleşenler.
+    // (searchLines'in kendi LENGTH sıralaması tek şehir içindir; çok şehir
+    // birleşince tam eşleşme dibe düşüyordu.)
+    final cq = compactLineCode(q);
+    int rank(CityLine cl) {
+      final cc = compactLineCode(cl.line.code);
+      if (cc == cq) return 0; // tam eşleşme
+      if (cc.startsWith(cq)) return 1; // kod öneki
+      return 2; // yalnız ad eşleşmesi
+    }
+
+    lines.sort((a, b) {
+      final ra = rank(a), rb = rank(b);
+      if (ra != rb) return ra - rb;
+      final ca = a.city.id == active.id ? 0 : 1;
+      final cb = b.city.id == active.id ? 0 : 1;
+      if (ca != cb) return ca - cb; // aktif şehir önce
+      final la = a.line.code.length, lb = b.line.code.length;
+      if (la != lb) return la - lb; // kısa kod önce
+      return a.line.code.compareTo(b.line.code);
+    });
 
     return BusSearchResults(lines: lines, stops: stops);
   },

@@ -50,6 +50,6 @@ void main() {
     // Rotalar (arama) sekmesi
     await tester.tap(find.text('Hatlar'));
     await tester.pumpAndSettle();
-    expect(find.text('Nerede İneceksin?'), findsOneWidget);
+    expect(find.text('Hat Ara'), findsOneWidget);
   });
 }

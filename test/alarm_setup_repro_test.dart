@@ -100,6 +100,6 @@ void main() {
     await tester.tap(find.byIcon(Icons.add));
     await tester.pumpAndSettle();
 
-    expect(find.text('Nerede İneceksin?'), findsOneWidget);
+    expect(find.text('Hat Ara'), findsOneWidget);
   });
 }

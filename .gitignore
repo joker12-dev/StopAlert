@@ -71,3 +71,5 @@ android/key.properties
 tools/izmir/raw/
 tools/izmir/raw_rail/
 tools/izmir/izmir.sqlite
+veri.py
+devtools_options.yaml

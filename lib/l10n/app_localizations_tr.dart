@@ -124,4 +124,29 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get systemDefault => 'Sistem dili';
+
+  @override
+  String get ringAlarmLabel => 'ALARM';
+
+  @override
+  String get ringApproaching => 'DURAĞINA YAKLAŞTIN!';
+
+  @override
+  String ringRemainingDistance(String value) {
+    return 'Kalan Mesafe: $value';
+  }
+
+  @override
+  String get ringActive => 'Alarm aktif';
+
+  @override
+  String get ringGetOff => 'İnme zamanı geldi, kapılar açılıyor.';
+
+  @override
+  String get ringSlideToStop => 'Alarmı durdurmak için kaydır';
+
+  @override
+  String ringSnooze(int minutes) {
+    return '$minutes Dakika Ertele';
+  }
 }

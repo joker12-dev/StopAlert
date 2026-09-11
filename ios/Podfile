@@ -1,0 +1,80 @@
+# StopAlert — iOS Podfile
+#
+# Flutter'ın ürettiği şablona iki şey eklendi:
+#  1) platform :ios, '13.0'  → firebase / google_mobile_ads bunu şart koşuyor.
+#  2) post_install'da permission_handler makroları → iOS'ta izinler DERLEME
+#     ZAMANINDA açılır. Makro listesi verilmezse eklenti TÜM izinleri derler;
+#     o zaman Apple, kullanmadığımız izinler (kamera, kişiler, fotoğraf...) için
+#     de gerekçe metni ister ve inceleme takılır. Bu yüzden yalnızca gerçekten
+#     kullandıklarımız 1, ötekiler 0.
+platform :ios, '13.0'
+
+# CocoaPods istatistikleri derlemeyi yavaşlatıyor.
+ENV['COCOAPODS_DISABLE_STATS'] = 'true'
+
+project 'Runner', {
+  'Debug' => :debug,
+  'Profile' => :release,
+  'Release' => :release,
+}
+
+def flutter_root
+  generated_xcode_build_settings_path = File.expand_path(File.join('..', 'Flutter', 'Generated.xcconfig'), __FILE__)
+  unless File.exist?(generated_xcode_build_settings_path)
+    raise "#{generated_xcode_build_settings_path} must exist. If you're running pod install manually, make sure flutter pub get is executed first"
+  end
+
+  File.foreach(generated_xcode_build_settings_path) do |line|
+    matches = line.match(/FLUTTER_ROOT\=(.*)/)
+    return matches[1].strip if matches
+  end
+  raise "FLUTTER_ROOT not found in #{generated_xcode_build_settings_path}. Try deleting Generated.xcconfig, then run flutter pub get"
+end
+
+require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelper'), flutter_root)
+
+flutter_ios_podfile_setup
+
+target 'Runner' do
+  use_frameworks!
+  use_modular_headers!
+
+  flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
+
+  target 'RunnerTests' do
+    inherit! :search_paths
+  end
+end
+
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    flutter_additional_ios_build_settings(target)
+
+    target.build_configurations.each do |config|
+      config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= ['$(inherited)']
+      config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] += [
+        # KULLANILANLAR
+        'PERMISSION_LOCATION=1',            # yakındaki duraklar + takip
+        'PERMISSION_LOCATION_WHENINUSE=1',
+        'PERMISSION_LOCATION_ALWAYS=1',     # arka planda alarm için şart
+        'PERMISSION_NOTIFICATIONS=1',       # alarm + hatırlatmalar
+        'PERMISSION_MICROPHONE=1',          # sesle durak arama
+        'PERMISSION_SPEECH_RECOGNIZER=1',   # sesle durak arama
+        # KULLANILMAYANLAR — derlenmezse Apple gerekçe metni istemez.
+        'PERMISSION_APP_TRACKING_TRANSPARENCY=0', # ATT'yi google_mobile_ads yönetir
+        'PERMISSION_ASSISTANT=0',
+        'PERMISSION_BLUETOOTH=0',
+        'PERMISSION_CAMERA=0',
+        'PERMISSION_CONTACTS=0',
+        'PERMISSION_CRITICAL_ALERTS=0',     # Apple izni alınırsa 1 yapılır
+        'PERMISSION_EVENTS=0',
+        'PERMISSION_EVENTS_FULL_ACCESS=0',
+        'PERMISSION_MEDIA_LIBRARY=0',
+        'PERMISSION_PHOTOS=0',
+        'PERMISSION_PHOTOS_ADD_ONLY=0',
+        'PERMISSION_REMINDERS=0',
+        'PERMISSION_SENSORS=0',
+      ]
+    end
+  end
+end

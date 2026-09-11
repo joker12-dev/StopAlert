@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:battery_plus/battery_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart' show TemplateType;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -19,6 +20,7 @@ import '../data/alarm_sound.dart';
 import '../services/alarm_sound_preview.dart';
 import '../services/journey_reminder.dart';
 import '../theme/app_theme.dart';
+import '../widgets/low_battery_dialog.dart';
 import '../widgets/native_ad_slot.dart';
 import '../util/haptics.dart';
 import '../util/platform_check.dart';
@@ -145,6 +147,29 @@ class _AlarmSetupScreenState extends ConsumerState<AlarmSetupScreen> {
     return idx;
   }
 
+  /// Şarj düşükse animasyonlu uyarı göster. true → devam, false → vazgeç.
+  Future<bool> _confirmLowBattery() async {
+    try {
+      final battery = Battery();
+      final state = await battery.batteryState;
+      // Şarjdayken uyarma.
+      if (state == BatteryState.charging || state == BatteryState.full) {
+        return true;
+      }
+      final level = await battery.batteryLevel;
+      if (level > 20) return true; // yeterli şarj
+      if (!mounted) return true;
+      final proceed = await showDialog<bool>(
+        context: context,
+        builder: (_) => LowBatteryDialog(level: level),
+      );
+      return proceed ?? false;
+    } catch (_) {
+      // Pil okunamadıysa akışı ENGELLEME.
+      return true;
+    }
+  }
+
   Future<void> _startJourney() async {
     final notifier = ref.read(journeyDraftProvider.notifier);
     final draft = ref.read(journeyDraftProvider);
@@ -185,6 +210,11 @@ class _AlarmSetupScreenState extends ConsumerState<AlarmSetupScreen> {
         ));
       return;
     }
+
+    // DÜŞÜK ŞARJ UYARISI: takip arka planda pil tüketir; şarj azsa kullanıcıyı
+    // önden uyar (kulaklık/şarj/yolu izleme). Vazgeçerse başlatma.
+    if (!await _confirmLowBattery()) return;
+    if (!mounted) return;
 
     if (!await _ensureTrackingPermissions()) return;
     if (!mounted) return;
@@ -604,7 +634,7 @@ class _AlarmSetupScreenState extends ConsumerState<AlarmSetupScreen> {
                   width: 48,
                   height: 6,
                   decoration: BoxDecoration(
-                    color: VigilantColors.surfaceVariant,
+                    color: VigilantColors.primary,
                     borderRadius: BorderRadius.circular(3),
                   ),
                 ),
@@ -722,7 +752,34 @@ class _AlarmSetupScreenState extends ConsumerState<AlarmSetupScreen> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 20),
+                // KULAKLIK İPUCU: her zaman görünür. Alarm sesi USAGE_ALARM
+                // kanalından çalar → kulaklık takılıyken kulaklıktan duyulur.
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: VigilantColors.surfaceContainer,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.headphones_rounded,
+                          size: 20, color: VigilantColors.primary),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Daha iyi bir deneyim için kulaklık tak — alarm '
+                          'sesi kulaklığından da çalar, kaçırmazsın.',
+                          style: text.labelMedium?.copyWith(
+                              color: VigilantColors.onSurfaceVariant,
+                              height: 1.3),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
                 SizedBox(
                   height: 56,
                   child: FilledButton(

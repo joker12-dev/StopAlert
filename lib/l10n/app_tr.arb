@@ -5,7 +5,6 @@
   "navStops": "Duraklar",
   "navFavorites": "Favoriler",
   "navProfile": "Profil",
-
   "homeSearchTitle": "Nereye ineceksin?",
   "homeSearchHint": "İneceğin durağı veya hattı yaz...",
   "homeCurrentLocation": "Mevcut Konum: ",
@@ -19,28 +18,31 @@
   "seeAll": "Tümü",
   "mostUsedLines": "En Sık Kullanılan Hatlar",
   "mostUsedStops": "En Sık İnilen Duraklar",
-
   "tipMorning": "Sabah yoğunluğu başladı; ineceğin durağa alarmı şimdi kur.",
   "tipEvening": "Akşam saatleri yoğun; alarmını erkenden kur.",
   "tipLateNight": "Son seferleri kaçırma; ineceğin durağa alarm kur.",
   "tipDefault": "Uykun gelirse diye — ineceğin durağa alarm kur.",
-
   "categoryBus": "Otobüs",
   "categoryMetrobus": "Metrobüs",
   "categoryMarmaray": "Marmaray",
   "categoryMetro": "Metro",
   "categoryTram": "Tramvay",
   "categoryFerry": "Vapur",
-
   "actionUnderstood": "Anladım",
   "actionCancel": "Vazgeç",
   "actionSave": "Kaydet",
   "actionContinue": "Devam et",
   "actionClose": "Kapat",
-
   "settingsTitle": "Ayarlar",
   "appSection": "UYGULAMA",
   "language": "Dil",
   "languageSubtitle": "Uygulama görüntüleme dili",
-  "systemDefault": "Sistem dili"
+  "systemDefault": "Sistem dili",
+  "ringAlarmLabel": "ALARM",
+  "ringApproaching": "DURAĞINA YAKLAŞTIN!",
+  "ringRemainingDistance": "Kalan Mesafe: {value}",
+  "ringActive": "Alarm aktif",
+  "ringGetOff": "İnme zamanı geldi, kapılar açılıyor.",
+  "ringSlideToStop": "Alarmı durdurmak için kaydır",
+  "ringSnooze": "{minutes} Dakika Ertele"
 }

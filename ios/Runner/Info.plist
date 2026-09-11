@@ -102,5 +102,9 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<!-- Yalnizca standart HTTPS kullaniyoruz: App Store Connect her yuklemede
+	     "ihracat uyumlulugu" sorusunu sormasin diye onden beyan edilir. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 </dict>
 </plist>

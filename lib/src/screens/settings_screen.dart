@@ -13,6 +13,7 @@ import '../theme/app_theme.dart';
 import '../util/insets.dart';
 import '../data/alarm_sound.dart';
 import '../services/alarm_sound_preview.dart';
+import '../services/daily_reminders.dart';
 import '../services/journey_reminder.dart';
 import '../util/haptics.dart';
 import '../util/legal_links.dart';
@@ -524,6 +525,8 @@ class SettingsScreen extends ConsumerWidget {
               // ALIŞKANLIK HATIRLATMASI — alarmın kendisi değil, "yarın da
               // kuracak mısın?" hatırlatması.
               const _ReminderTile(),
+              // GÜNLÜK sabah/akşam hatırlatmaları (yerel, saat sabit).
+              const _DailyReminderTile(),
             ],
           ),
           // ÖĞRENME: uygulama yolculuklardan segment sürelerini öğrenir;
@@ -1261,6 +1264,46 @@ class _ReminderTileState extends State<_ReminderTile> {
           Haptics.selection();
           setState(() => _enabled = v);
           await JourneyReminder.setEnabled(v);
+        },
+      ),
+    );
+  }
+}
+
+/// "Günlük hatırlatmalar" anahtarı — sabah/akşam yolculuk hatırlatmaları.
+class _DailyReminderTile extends StatefulWidget {
+  const _DailyReminderTile();
+
+  @override
+  State<_DailyReminderTile> createState() => _DailyReminderTileState();
+}
+
+class _DailyReminderTileState extends State<_DailyReminderTile> {
+  bool _enabled = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final on = await DailyReminders.isEnabled();
+    if (mounted) setState(() => _enabled = on);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _SettingsTile(
+      icon: Icons.wb_twilight_rounded,
+      title: 'Günlük hatırlatmalar',
+      subtitle: 'Sabah ~07:45 ve akşam ~17:45 yolculuk hatırlatması',
+      trailing: Switch(
+        value: _enabled,
+        onChanged: (v) async {
+          Haptics.selection();
+          setState(() => _enabled = v);
+          await DailyReminders.setEnabled(v);
         },
       ),
     );
