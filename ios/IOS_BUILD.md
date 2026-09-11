@@ -3,7 +3,7 @@
 > **Kod tarafı hazır (Faz 0 · 2026-09):** iOS'ta yerel bildirimler (Darwin
 > ayarları), alarm/hatırlatma yolları ve ARKA PLAN konumu artık açık —
 > ekran kapalıyken de alarm çalar. `ios/Podfile` hazır (izin makroları +
-> platform 13.0). Kalanların hepsi Apple/Mac tarafı; aşağıdaki adımlar.
+> platform 15.0). Kalanların hepsi Apple/Mac tarafı; aşağıdaki adımlar.
 
 Windows'ta iOS derlenemez; **Mac + Xcode** şart. Aşağıdaki adımlar bu projeye
 özeldir (Firebase, AdMob, arka plan konum, Live Activity, kritik alarm).
@@ -45,7 +45,7 @@ flutter pub get
 cd ios && pod install && cd ..
 ```
 Pod hatası olursa: `cd ios && pod repo update && pod install`.
-> `ios/Podfile` repoda HAZIR (izin makroları + `platform :ios, '13.0'`).
+> `ios/Podfile` repoda HAZIR (izin makroları + `platform :ios, '15.0'`).
 > Elle düzenlemene gerek yok; `pod install` yeter.
 
 ## 4) Xcode imzalama + yetenekler (Capabilities)
@@ -110,8 +110,8 @@ zaten derlenir; bu blok yalnızca bildirim sorulmuyorsa gerekir.)
   dolu. AdMob konsolunda iOS uygulaması + reklam birimleri tanımlı olmalı.
 - **Arka plan konum**: `Info.plist`'e konum + `UIBackgroundModes` eklendi. iOS
   kullanıcıdan "Her zaman izin ver" ister; onay şart, yoksa arka plan takip yok.
-- **google_mobile_ads / firebase**: min iOS 13+ gerekir. Xcode'da deployment
-  target'ı 13.0'a çek (Podfile `platform :ios, '13.0'`).
+- **google_mobile_ads / firebase**: min iOS 15+ gerekir. Xcode'da deployment
+  target'ı 15.0'a çek (Podfile `platform :ios, '15.0'`).
 - **Bildirim sesi (alarm)**: Android'de özel ses var; iOS'ta kritik alarm izni
   alınana kadar normal bildirim sesi/varsayılan çalar.
 
