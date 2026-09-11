@@ -1,12 +1,17 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui';
 
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../data/alarm_sound.dart';
 import '../theme/app_theme.dart';
 import '../util/haptics.dart';
+import '../util/platform_check.dart';
 import '../widgets/slide_to_action.dart';
 
 /// Alarm Çalıyor — telefonun yerleşik çalar saati gibi tam ekran, çıkışsız
@@ -47,6 +52,12 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
   /// etkiler ve alarm durdurulunca ([_finish]/[dispose]) titreşim de anında biter.
   Timer? _buzz;
 
+  /// iOS'ta DÖNGÜLÜ alarm sesi. Android'de ses bildirimden (FLAG_INSISTENT
+  /// döngü) gelir; iOS bildirimi tek sefer kısa çalıp döngülemez, o yüzden
+  /// ekran açıkken sesi uygulama içinden biz çalarız. `playback` kategorisi:
+  /// sessiz anahtarı açık olsa da çalar (alarm gibi).
+  AudioPlayer? _alarmPlayer;
+
   @override
   void initState() {
     super.initState();
@@ -56,6 +67,54 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
     _pulse();
     // Her ~1.1 sn'de bir "brr-brr" çift darbe (alarm hissi).
     _buzz = Timer.periodic(const Duration(milliseconds: 1100), (_) => _pulse());
+    if (isIosDevice) unawaited(_startIosAlarmSound());
+  }
+
+  Future<void> _startIosAlarmSound() async {
+    try {
+      var sound = AlarmSound.all.first;
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString('app_settings_v1');
+      if (raw != null && raw.isNotEmpty) {
+        final map = jsonDecode(raw) as Map<String, dynamic>;
+        sound = AlarmSound.byLabel(map['alarmSound'] as String?);
+      }
+      final player = AudioPlayer();
+      _alarmPlayer = player;
+      await player.setReleaseMode(ReleaseMode.loop);
+      await player.setAudioContext(
+        AudioContext(
+          android: const AudioContextAndroid(
+            contentType: AndroidContentType.sonification,
+            usageType: AndroidUsageType.alarm,
+            audioFocus: AndroidAudioFocus.gainTransientMayDuck,
+          ),
+          iOS: AudioContextIOS(
+            category: AVAudioSessionCategory.playback,
+            options: const {AVAudioSessionOptions.duckOthers},
+          ),
+        ),
+      );
+      if (sound.source == AlarmSoundSource.system &&
+          sound.systemUri.isNotEmpty) {
+        await player.play(UrlSource(sound.systemUri));
+      } else {
+        await player.play(AssetSource(sound.assetPath));
+      }
+    } catch (_) {
+      // Ses çalınamazsa titreşim + ekran yine uyarır.
+    }
+  }
+
+  Future<void> _stopAlarmSound() async {
+    final p = _alarmPlayer;
+    _alarmPlayer = null;
+    if (p == null) return;
+    try {
+      await p.stop();
+      await p.release();
+      await p.dispose();
+    } catch (_) {}
   }
 
   /// Tek bir titreşim atımı: kısa aralıkla iki güçlü darbe.
@@ -70,6 +129,7 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
   void dispose() {
     _clock?.cancel();
     _buzz?.cancel();
+    unawaited(_stopAlarmSound());
     _ripple.dispose();
     _shake.dispose();
     super.dispose();
@@ -296,6 +356,7 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
 
   void _finish(String result) {
     _buzz?.cancel();
+    unawaited(_stopAlarmSound());
     setState(() => _allowPop = true);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) Navigator.of(context).pop(result);
